@@ -1,13 +1,8 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "gold-intelligence-terminal",
-  "main": "src/worker/index.ts",
-  "compatibility_date": "2025-01-15",
-  "assets": { "directory": "./public" },
-  "kv_namespaces": [{ "binding": "CACHE", "id": "PASTE_YOUR_KV_ID" }],
-  "d1_databases": [{ "binding": "DB", "database_name": "gold-terminal", "database_id": "PASTE_YOUR_D1_ID" }],
-  "ai": { "binding": "AI" },
-  "triggers": { "crons": ["*/5 * * * *"] },
-  "vars": { "AI_ENABLED": "true" },
-  "observability": { "enabled": true }
+  "compilerOptions": {
+    "target": "ES2022", "module": "ESNext", "moduleResolution": "Bundler",
+    "lib": ["ES2022"], "types": ["@cloudflare/workers-types"],
+    "strict": true, "noEmit": true, "skipLibCheck": true, "isolatedModules": true
+  },
+  "include": ["src/**/*.ts"]
 }
