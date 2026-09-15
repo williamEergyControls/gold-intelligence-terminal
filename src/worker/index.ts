@@ -3,6 +3,8 @@ import { AppCache } from './cache';
 import { buildBootstrap } from './bootstrap';
 import { aiAnalyst } from './ai/analyst';
 import { persistHealthRows } from './providers/provider';
+import { trainAndStore, predictAndStore, gradeOutcomes } from './ml/pipeline';
+
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff' };
 const TFS: Tf[] = ['5M', '15M', '1H', '1D', '1W'];
@@ -82,26 +84,37 @@ export default {
 
   // ---- CRON: the ONLY steady-state upstream caller. Warms KV + persists history. ----
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    // (1) warm site cache + write history — unchanged
     ctx.waitUntil((async () => {
       try {
         const boot = await buildBootstrap(env, '15M');
         await new AppCache(env.CACHE).write('boot:15M', boot, 30);
-        // D1: 1 snapshot / run + provider health upserts (≈2k writes/day — far under the 100k free cap)
         await env.DB.prepare('INSERT OR REPLACE INTO price_snapshots(ts,symbol,price,source) VALUES(?,?,?,?)')
           .bind(Date.now(), 'XAU:USD', boot.gold.price, boot.gold.source).run();
         for (const h of persistHealthRows()) {
           await env.DB.prepare('INSERT INTO provider_health(provider,last_success,last_failure,latency_ms,status) VALUES(?,?,?,?,?) ON CONFLICT(provider) DO UPDATE SET last_success=excluded.last_success,last_failure=excluded.last_failure,latency_ms=excluded.latency_ms,status=excluded.status')
             .bind(h.provider, h.last_success, h.last_failure, h.latency_ms, h.status).run();
         }
-        // previous-day close roll (used when metals.dev gives no prevClose)
         const day = new Date().toISOString().slice(0, 10);
         const cur = await env.CACHE.get('prevday:XAU:USD', 'json') as { d: string; c: number } | null;
         if (cur && cur.d !== day) await env.CACHE.put('prevclose:XAU:USD', JSON.stringify({ c: cur.c }), { expirationTtl: 259200 });
         await env.CACHE.put('prevday:XAU:USD', JSON.stringify({ d: day, c: boot.gold.price }), { expirationTtl: 259200 });
       } catch { /* cron failures are non-fatal; users still read last warm KV */ }
     })());
+
+    // (2) ML: retrain weekly, predict+grade at most every 6h — never every 5 min
+    ctx.waitUntil((async () => {
+      try {
+        const lastMl = await env.CACHE.get('ml:last', 'json') as { t: number } | null;
+        if (lastMl && Date.now() - lastMl.t < 6 * 36e5) return;   // not due yet
+        await env.CACHE.put('ml:last', JSON.stringify({ t: Date.now() }), { expirationTtl: 86400 });
+        const last = await env.DB.prepare('SELECT MAX(trained_at) t FROM ml_models WHERE active=1').first<{ t: number | null }>();
+        if (!last?.t || Date.now() - last.t > 7 * 864e5) await trainAndStore(env);
+        await predictAndStore(env);
+        await gradeOutcomes(env);
+      } catch { /* ML never breaks the site */ }
+    })());
   },
-};
 
 async function cachedBoot(env: Env, tf: Tf) {
   return new AppCache(env.CACHE).wrap(`boot:${tf}`, 30, () => buildBootstrap(env, tf));
