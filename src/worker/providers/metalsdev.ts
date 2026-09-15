@@ -1,4 +1,5 @@
-import type { Env, Delay } from '../types';
+import type { Env, Quote } from '../types';
+import { fetchJson } from './provider';
 
 export const UA = 'GoldIntelligenceTerminal/1.0 (personal research terminal; contact: you@example.com)';
 // For SEC calls use env.SEC_USER_AGENT instead — SEC asks for a real identity.
@@ -14,12 +15,16 @@ export async function fetchText(url: string, headers: Record<string, string> = {
   return r.text();
 }
 
+
+
+// Free plan, key required, provider states ≤60s delay. We label it NEAR-LIVE, never LIVE.
 export async function metalsdevQuote(env: Env, symbol: 'XAU:USD' | 'XAG:USD'): Promise<Quote> {
   if (!env.METALS_API_KEY) throw new Error('METALS_API_KEY not configured');
   const j = await fetchJson(`https://api.metals.dev/v1/latest?api_key=${env.METALS_API_KEY}&currency=USD&unit=toz`);
   const key = symbol === 'XAU:USD' ? 'gold' : 'silver';
   const price = j?.metals?.[key];
   if (typeof price !== 'number') throw new Error('metals.dev: no ' + key);
+  // metals.dev /latest carries no prevClose — bootstrap fills it from our own stored day-close.
   return { symbol, price, currency: 'USD', unit: 'troy oz', source: 'metals.dev', delay: 'near-live', ts: Date.now() };
 }
 
