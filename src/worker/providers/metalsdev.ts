@@ -14,6 +14,17 @@ export async function fetchText(url: string, headers: Record<string, string> = {
   return r.text();
 }
 
+export async function metalsdevQuote(env: Env, symbol: 'XAU:USD' | 'XAG:USD'): Promise<Quote> {
+  if (!env.METALS_API_KEY) throw new Error('METALS_API_KEY not configured');
+  const j = await fetchJson(`https://api.metals.dev/v1/latest?api_key=${env.METALS_API_KEY}&currency=USD&unit=toz`);
+  const key = symbol === 'XAU:USD' ? 'gold' : 'silver';
+  const price = j?.metals?.[key];
+  if (typeof price !== 'number') throw new Error('metals.dev: no ' + key);
+  return { symbol, price, currency: 'USD', unit: 'troy oz', source: 'metals.dev', delay: 'near-live', ts: Date.now() };
+}
+
+
+
 // ---- failover chain: try providers in order, record health for the DATA panel ----
 const healthMem = new Map<string, { lastSuccess: number | null; lastFailure: number | null; latencyMs: number | null }>();
 export function healthSnapshot(configured: Record<string, Delay | null>): { name: string; configured: boolean; delay: Delay | null; lastSuccess: number | null; lastFailure: number | null; latencyMs: number | null; status: string }[] {
