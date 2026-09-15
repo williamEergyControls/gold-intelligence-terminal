@@ -60,7 +60,7 @@ export default {
         case path === '/api/analytics':
         case path === '/api/why-gold': {
           const b = await cachedBoot(env, '15M');
-          return json(path === '/api/analytics' ? b.v.analytics : { ...b.v.why, movePct: b.v.gold.changePct }));
+          return json(path === '/api/analytics' ? b.v.analytics : { ...b.v.why, movePct: b.v.gold.changePct });
         }
         case path === '/api/ai/analyst': {
           // AI is ON-DEMAND only (user clicks RUN) — never per-visitor, never in cron.
