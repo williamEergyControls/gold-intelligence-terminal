@@ -2,7 +2,7 @@ import type { Env, Tf } from './types';
 import { AppCache } from './cache';
 import { buildBootstrap } from './bootstrap';
 import { aiAnalyst } from './ai/analyst';
-import { persistHealthRows, ensureSecrets } from './providers/provider';
+import { persistHealthRows, ensureSecrets, secret } from './providers/provider';
 import { trainAndStore, predictAndStore, gradeOutcomes } from './ml/pipeline';
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff' };
