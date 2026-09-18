@@ -1,12 +1,12 @@
 /* ================================================================
-   PIPELINE — runs ONLY in the cron, try/catch-wrapped so the site
-   can never crash from ML. Requests only read the KV snapshot.
+   PIPELINE — runs in the cron (and via /api/ml/train), always
+   try/catch-wrapped so the site can never crash from ML.
    ================================================================ */
 import type { Env } from '../types';
 import type { DailyInput } from './engine';
 import { featuresAt, labelAt, trainLogistic, predictLogistic, trainGBS, predictGBS, regimeHMM, volAnn, FEATURE_NAMES } from './engine';
 import { runAgents, consensus, bayesianRounds, evidenceLRs, finalScore } from './agents';
-import { fetchJson } from '../providers/provider';
+import { fetchJson, secret } from '../providers/provider';
 
 const HORIZON = 5;
 
@@ -21,8 +21,9 @@ async function yahooCloses(sym: string): Promise<{ t: number[]; c: number[] }> {
   return { t, c };
 }
 async function fredTail(env: Env, id: string, n = 300): Promise<{ t: number; v: number }[]> {
-  if (!env.FRED_API_KEY) throw new Error('FRED_API_KEY not set');
-  const j = await fetchJson(`https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${env.FRED_API_KEY}&file_type=json&sort_order=desc&limit=${n}`);
+  const key = secret(env, 'FRED_API_KEY');
+  if (!key) throw new Error('FRED_API_KEY not set');
+  const j = await fetchJson(`https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${key}&file_type=json&sort_order=desc&limit=${n}`);
   return (j?.observations ?? []).filter((o: any) => o.value !== '.').map((o: any) => ({ t: Date.parse(o.date + 'T12:00:00Z'), v: parseFloat(o.value) })).reverse();
 }
 
@@ -61,7 +62,6 @@ export async function trainAndStore(env: Env): Promise<{ ok: boolean; metrics?: 
     }
     const wfN = X.length - cut;
     const metrics = { samples: X.length, walkForwardN: wfN, lrAcc: +(c1 / wfN).toFixed(3), gbsAcc: +(c2 / wfN).toFixed(3), trainedAt: Date.now(), features: FEATURE_NAMES };
-    // full-train final models + evidence LRs for live use
     const lrFull = trainLogistic(X, y);
     const gbFull = trainGBS(X, y);
     const lrs = evidenceLRs(X, y);
@@ -78,7 +78,6 @@ export async function predictAndStore(env: Env): Promise<void> {
     const i = d.gold.length - 1;
     const f = featuresAt(d, d.t, i); if (!f) return;
     const fmap: Record<string, number> = {}; FEATURE_NAMES.forEach((n, k) => fmap[n] = f[k]);
-    // regime observations for HMM (last 60 days)
     const obs: number[][] = [];
     const volMean = volAnn(d.gold, 60);
     for (let k = Math.max(60, i - 59); k <= i; k++) {
@@ -95,7 +94,6 @@ export async function predictAndStore(env: Env): Promise<void> {
         mlP = 0.5 * predictLogistic(W.lrFull, f) + 0.5 * predictGBS(W.gbFull, f);
       } catch { mlP = null; }
     }
-    // news sentiment from the cached news blob
     let nb = 3, ne = 3;
     try {
       const news = (await env.CACHE.get('news', 'json')) as any;
@@ -112,7 +110,6 @@ export async function predictAndStore(env: Env): Promise<void> {
         bayes = bayesianRounds(p0, lrs);
       } catch { /* consensus stands */ }
     }
-    // live accuracy from graded outcomes
     const acc = await env.DB.prepare('SELECT COUNT(*) n, SUM(correct) c FROM prediction_outcomes').first<{ n: number; c: number }>();
     const liveAcc = { rate: acc?.c && acc.n ? acc.c / acc.n : 0.5, n: acc?.n ?? 0 };
     const fs = finalScore(bayes.p, agents, liveAcc);
@@ -125,7 +122,7 @@ export async function predictAndStore(env: Env): Promise<void> {
     await env.DB.prepare('INSERT OR REPLACE INTO predictions(ts,horizon_days,p_up,direction,regime,agents) VALUES(?,?,?,?,?,?)')
       .bind(ts, HORIZON, snap.p, snap.direction, regime.state, JSON.stringify(agents.map(a => `${a.name}:${a.p.toFixed(2)}`))).run();
     await env.CACHE.put('ml:snap', JSON.stringify(snap), { expirationTtl: 86400 });
-  } catch { /* never break the cron */ }
+  } catch (e) { console.error('ML_PREDICT_FAIL', String((e as Error).message).slice(0, 300)); }
 }
 
 /** Grade predictions whose 5-day horizon has elapsed — real performance measurement. */
@@ -148,5 +145,5 @@ export async function gradeOutcomes(env: Env): Promise<void> {
       await env.DB.prepare('INSERT OR REPLACE INTO prediction_outcomes(ts,horizon_days,realized_ret,correct) VALUES(?,?,?,?)')
         .bind(r.ts, HORIZON, +ret5.toFixed(3), correct).run();
     }
-  } catch { /* never break the cron */ }
+  } catch (e) { console.error('ML_GRADE_FAIL', String((e as Error).message).slice(0, 300)); }
 }
