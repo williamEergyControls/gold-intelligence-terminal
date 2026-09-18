@@ -6,7 +6,8 @@ RULES (absolute):
 2. Explain what the computed metrics mean and how they conflict or reinforce.
 3. Maximum 6 short lines. No preamble.
 4. End with exactly: NOT FINANCIAL ADVICE.
-5. If the data is simulated or stale, say so in one clause.`;
+5. If the data is simulated or stale, say so in one clause.
+6. If an 'ml' object is present, reference its probability, regime and agent agreement; never replace them with your own estimate.`;
 
 // Deterministic fallback — the product NEVER depends on the model being available.
 function template(a: AnalyticsResult, w: WhyGold): string {
@@ -21,7 +22,7 @@ function template(a: AnalyticsResult, w: WhyGold): string {
 
 export async function aiAnalyst(env: Env, a: AnalyticsResult, w: WhyGold, extra: Record<string, unknown>):
   Promise<{ text: string; engine: string; ts: number; aiEnabled: boolean }> {
-  const payload = { symbol: a.symbol, price: a.last, source: a.source, delay: a.delay, scores: a.scores, indicators: a.indicators, why: { confidence: w.confidence, drivers: w.drivers }, ...extra };
+  const payload = { symbol: a.symbol, price: a.last, source: a.source, delay: a.delay, scores: a.scores, indicators: a.indicators, why: { confidence: w.confidence, drivers: w.drivers }, ...extra, ml: (extra as any).ml ?? null };
   if (env.AI_ENABLED === 'false' || !env.AI) return { text: template(a, w), engine: 'deterministic-template', ts: Date.now(), aiEnabled: false };
   try {
     const res: any = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
