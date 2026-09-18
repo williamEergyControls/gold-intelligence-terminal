@@ -1,6 +1,6 @@
 import type { AlertItem, Bootstrap, Candle, Env, MacroRow, Quote, Tf } from './types';
 import { AppCache } from './cache';
-import { firstOk, healthSnapshot } from './providers/provider';
+import { firstOk, healthSnapshot, secret } from './providers/provider';
 import * as metalsdev from './providers/metalsdev';
 import * as yahoo from './providers/yahoo';
 import * as stooq from './providers/stooq';
@@ -166,11 +166,11 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
   if (us10) tape.push({ symbol: 'US10Y', price: us10.value, prevClose: us10.prior, change: us10.value - us10.prior, changePct: us10.value - us10.prior, currency: '%', source: us10.source, delay: 'daily', ts: Date.parse(us10.asOf) });
 
   const health = healthSnapshot({
-    'metals.dev': env.METALS_API_KEY ? ('near-live' as const) : null,
+    'metals.dev': secret(env, 'METALS_API_KEY') ? ('near-live' as const) : null,
     'yahoo': 'near-live' as const,
     'stooq': 'eod' as const,
     'frankfurter': 'daily' as const,
-    'fred': env.FRED_API_KEY ? ('daily' as const) : null,
+    'fred': secret(env, 'FRED_API_KEY') ? ('daily' as const) : null,
     'gdelt': 'near-live' as const,
     'workers-ai': env.AI ? ('event-driven' as const) : null,
   });
