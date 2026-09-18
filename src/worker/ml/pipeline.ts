@@ -1,9 +1,10 @@
 /* ================================================================
    PIPELINE — runs ONLY in the cron, try/catch-wrapped so the site
-   can never crash from ML. Requests read the KV snapshot: cheap.
+   can never crash from ML. Requests only read the KV snapshot.
    ================================================================ */
 import type { Env } from '../types';
-import { featuresAt, labelAt, trainLogistic, predictLogistic, trainGBS, predictGBS, regimeHMM, volAnn, FEATURE_NAMES, DailyInput } from './engine';
+import type { DailyInput } from './engine';
+import { featuresAt, labelAt, trainLogistic, predictLogistic, trainGBS, predictGBS, regimeHMM, volAnn, FEATURE_NAMES } from './engine';
 import { runAgents, consensus, bayesianRounds, evidenceLRs, finalScore } from './agents';
 import { fetchJson } from '../providers/provider';
 
@@ -26,13 +27,14 @@ async function fredTail(env: Env, id: string, n = 300): Promise<{ t: number; v: 
 }
 
 async function loadInputs(env: Env): Promise<DailyInput & { t: number[] }> {
-  const [g, dx, vx, ol] = await Promise.all([
-    yahooCloses('GC=F'), yahooCloses('DX-Y.NYB'), yahooCloses('^VIX'), yahooCloses('CL=F'),
-  ]);
+  const g = await yahooCloses('GC=F');
+  const dx = await yahooCloses('DX-Y.NYB');
+  const vx = await yahooCloses('^VIX');
+  const ol = await yahooCloses('CL=F');
   let ry: { t: number; v: number }[] = [];
   try { ry = await fredTail(env, 'DFII10'); } catch { ry = []; }
   const t = g.t;
-  const vix = t.map((tt, i) => { void i; const j = vx.t.findIndex(x => x >= tt); return vx.c[j >= 0 ? j : vx.c.length - 1] ?? 20; });
+  const vix = t.map(tt => { const j = vx.t.findIndex(x => x >= tt); return vx.c[j >= 0 ? j : vx.c.length - 1] ?? 20; });
   const oil = t.map(tt => { const j = ol.t.findIndex(x => x >= tt); return ol.c[j >= 0 ? j : ol.c.length - 1] ?? ol.c[ol.c.length - 1]; });
   const dxy = t.map(tt => { const j = dx.t.findIndex(x => x >= tt); return dx.c[j >= 0 ? j : dx.c.length - 1] ?? dx.c[dx.c.length - 1]; });
   return { t, gold: g.c, dxy, vix, oil, ry };
@@ -41,13 +43,14 @@ async function loadInputs(env: Env): Promise<DailyInput & { t: number[] }> {
 export async function trainAndStore(env: Env): Promise<{ ok: boolean; metrics?: any; error?: string }> {
   try {
     const d = await loadInputs(env);
-    const X: number[][] = [], y: number[] = [];
-    for (let i = 60; i < d.gold.length;  i++) {
+    let X: number[][] = [], y: number[] = [];
+    for (let i = 60; i < d.gold.length; i++) {
       const f = featuresAt(d, d.t, i); const l = labelAt(d, i);
       if (f && l != null) { X.push(f); y.push(l); }
     }
+    if (X.length > 420) { X = X.slice(-420); y = y.slice(-420); }
     if (X.length < 150) throw new Error(`only ${X.length} samples`);
-    // chronological 70/30 walk-forward
+    // chronological 70/30 walk-forward validation
     const cut = Math.floor(X.length * 0.7);
     const lr70 = trainLogistic(X.slice(0, cut), y.slice(0, cut));
     const gb70 = trainGBS(X.slice(0, cut), y.slice(0, cut));
@@ -57,11 +60,7 @@ export async function trainAndStore(env: Env): Promise<{ ok: boolean; metrics?: 
       if ((predictGBS(gb70, X[i]) > 0.5 ? 1 : 0) === y[i]) c2++;
     }
     const wfN = X.length - cut;
-    const metrics = {
-      samples: X.length, walkForwardN: wfN,
-      lrAcc: +(c1 / wfN).toFixed(3), gbsAcc: +(c2 / wfN).toFixed(3),
-      trainedAt: Date.now(), features: FEATURE_NAMES,
-    };
+    const metrics = { samples: X.length, walkForwardN: wfN, lrAcc: +(c1 / wfN).toFixed(3), gbsAcc: +(c2 / wfN).toFixed(3), trainedAt: Date.now(), features: FEATURE_NAMES };
     // full-train final models + evidence LRs for live use
     const lrFull = trainLogistic(X, y);
     const gbFull = trainGBS(X, y);
@@ -138,9 +137,10 @@ export async function gradeOutcomes(env: Env): Promise<void> {
        WHERE o.ts IS NULL AND p.ts < ? LIMIT 20`).bind(Date.now() - (HORIZON + 2) * 864e5).all<{ ts: number }>();
     for (const r of old.results ?? []) {
       const idx = d.t.findIndex(t => t >= r.ts);
-      const base = d.gold[idx >= 0 ? idx : d.gold.length - 1];
-      const fut = d.gold[Math.min(d.gold.length - 1, (idx >= 0 ? idx : d.gold.length - 1) + HORIZON)];
-      if (idx < 0 || fut == null) continue;
+      if (idx < 0) continue;
+      const base = d.gold[idx];
+      const fut = d.gold[Math.min(d.gold.length - 1, idx + HORIZON)];
+      if (fut == null) continue;
       const ret5 = (fut / base - 1) * 100;
       const pred = await env.DB.prepare('SELECT p_up FROM predictions WHERE ts=? AND horizon_days=?').bind(r.ts, HORIZON).first<{ p_up: number }>();
       if (!pred) continue;
