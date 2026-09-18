@@ -331,7 +331,9 @@ function tw(parent, caret, txt, cps) {
     })();
   });
 }
-const whyOut = $('#whyOut'), whyCaret = $('#whyCaret');
+const whyOut = $('#whyOut');
+let whyCaret = $('#whyCaret');
+if (!whyCaret) { whyCaret = document.createElement('span'); whyCaret.className = 'caret'; }
 async function runInvestigation() {
   if (investigating || !B) return; investigating = true;
   const btn = $('#runWhy'); btn.disabled = true; btn.textContent = '▮ ANALYZING…';
