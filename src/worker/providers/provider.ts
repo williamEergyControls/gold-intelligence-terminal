@@ -22,7 +22,7 @@ export function healthSnapshot(configured: Record<string, Delay | null>): { name
     const configuredB = delay !== null;
     const status = !configuredB ? 'not-configured'
       : h?.lastSuccess ? (h.lastFailure && h.lastFailure > h.lastSuccess ? 'degraded' : 'online')
-      : h?.lastFailure ? 'offline' : 'not-configured';
+      : h?.lastFailure ? 'offline' : 'idle';
     return { name, configured: configuredB, delay, lastSuccess: h?.lastSuccess ?? null, lastFailure: h?.lastFailure ?? null, latencyMs: h?.latencyMs ?? null, status };
   });
 }
