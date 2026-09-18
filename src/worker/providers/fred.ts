@@ -1,5 +1,5 @@
 import type { Env, MacroRow } from '../types';
-import { fetchJson } from './provider';
+import { fetchJson, secret } from './provider';
 
 export const FRED_MAP: Record<string, { id: string; label: string; kind: 'yoy' | 'level' | 'bp'; freq: string }> = {
   CPI:     { id: 'CPIAUCSL',   label: 'Headline CPI', kind: 'yoy',   freq: 'Monthly' },
@@ -15,11 +15,12 @@ export const FRED_MAP: Record<string, { id: string; label: string; kind: 'yoy' |
 };
 
 export async function fredRows(env: Env): Promise<MacroRow[]> {
-  if (!env.FRED_API_KEY) throw new Error('FRED_API_KEY not configured');
+  const key = secret(env, 'FRED_API_KEY');
+  if (!key) throw new Error('FRED_API_KEY not configured');
   const out: MacroRow[] = [];
-  for (const [key, cfg] of Object.entries(FRED_MAP)) {
+  for (const [keyName, cfg] of Object.entries(FRED_MAP)) {
     const j = await fetchJson(
-      `https://api.stlouisfed.org/fred/series/observations?series_id=${cfg.id}&api_key=${env.FRED_API_KEY}&file_type=json&sort_order=desc&limit=26`
+      `https://api.stlouisfed.org/fred/series/observations?series_id=${cfg.id}&api_key=${key}&file_type=json&sort_order=desc&limit=26`
     );
     const obs: { date: string; value: string }[] = (j?.observations ?? []).filter((o: any) => o.value !== '.');
     if (obs.length < 2) continue;
@@ -34,14 +35,16 @@ export async function fredRows(env: Env): Promise<MacroRow[]> {
     } else {
       value = num(obs[0]); prior = num(obs[1]); unit = 'level';
     }
-    out.push({ key, label: cfg.label, value, prior, unit, freq: cfg.freq, source: 'FRED ' + cfg.id, delay: cfg.kind === 'yoy' ? 'monthly' : 'daily', asOf, spark });
+    out.push({ key: keyName, label: cfg.label, value, prior, unit, freq: cfg.freq, source: 'FRED ' + cfg.id, delay: cfg.kind === 'yoy' ? 'monthly' : 'daily', asOf, spark });
   }
   if (!out.length) throw new Error('fred: no rows');
   return out;
 }
-// Raw daily series (for the Gold-vs-real-yield panel + attribution):
+
+// Raw daily series (for the Gold-vs-real-yield panel, ML features + attribution):
 export async function fredSeriesTail(env: Env, id: string, n = 80): Promise<{ t: number; v: number }[]> {
-  if (!env.FRED_API_KEY) throw new Error('FRED_API_KEY not configured');
-  const j = await fetchJson(`https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${env.FRED_API_KEY}&file_type=json&sort_order=desc&limit=${n}`);
+  const key = secret(env, 'FRED_API_KEY');
+  if (!key) throw new Error('FRED_API_KEY not configured');
+  const j = await fetchJson(`https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${key}&file_type=json&sort_order=desc&limit=${n}`);
   return (j?.observations ?? []).filter((o: any) => o.value !== '.').map((o: any) => ({ t: Date.parse(o.date + 'T12:00:00Z'), v: parseFloat(o.value) })).reverse();
 }
