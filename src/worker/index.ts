@@ -46,6 +46,16 @@ export default {
           });
           return json({ tf, ...r.v, stale: r.stale, ageMs: r.ageMs });
         }
+        case path === '/api/env': {
+          return json({
+            METALS_API_KEY: env.METALS_API_KEY ? 'SET (' + env.METALS_API_KEY.length + ' chars)' : 'MISSING',
+            FRED_API_KEY: env.FRED_API_KEY ? 'SET (' + env.FRED_API_KEY.length + ' chars)' : 'MISSING',
+            BLS_API_KEY: env.BLS_API_KEY ? 'SET' : 'MISSING',
+            SEC_USER_AGENT: env.SEC_USER_AGENT ? 'SET' : 'MISSING',
+            aiEnabled: env.AI_ENABLED ?? 'MISSING',
+            checkedAt: new Date().toISOString()
+          });
+        }
         case path === '/api/ml': {
           const raw = await env.CACHE.get('ml:snap', 'json');
           if (raw) return json(raw);
