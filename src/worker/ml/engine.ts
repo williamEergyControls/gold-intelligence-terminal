@@ -1,16 +1,16 @@
 /* ================================================================
-   ML ENGINE — pure TypeScript, no libraries.
-   - Logistic Regression: your P(Y=1) = 1/(1+e^-z), gradient descent
+   ML ENGINE — pure TypeScript, no libraries, no external service.
+   - Logistic Regression: P(Y=1) = 1/(1+e^-z), batch gradient descent
    - GBS: gradient boosting on stumps (XGBoost's core math, depth-1)
-   - 3-state HMM: fixed transitions/emissions, forward-filtered
-   All trained on REAL Yahoo/FRED data. All sized for Worker CPU.
+   - 3-state HMM: fixed transitions/emissions, forward algorithm
+   Trained on REAL Yahoo/FRED data. Sized for Worker CPU limits.
    ================================================================ */
 
 export const sigmoid = (z: number) => 1 / (1 + Math.exp(-z));
 
 /* ---------- 1. LOGISTIC REGRESSION ---------- */
 export interface LogitModel { w: number[]; b: number; mean: number[]; std: number[] }
-export function trainLogistic(X: number[][], y: number[], epochs = 120, lr = 0.05, l2 = 0.01): LogitModel {
+export function trainLogistic(X: number[][], y: number[], epochs = 80, lr = 0.05, l2 = 0.01): LogitModel {
   const n = X.length, d = X[0].length;
   const mean = new Array(d).fill(0), std = new Array(d).fill(1);
   for (let j = 0; j < d; j++) {
@@ -39,17 +39,17 @@ export function predictLogistic(m: LogitModel, x: number[]): number {
 }
 
 /* ---------- 2. GRADIENT-BOOSTED STUMPS (XGBoost-lite) ----------
-   F_{k}(x) = F_{k-1}(x) + lr * f_k(x), f_k = depth-1 tree fitted to
-   the logloss gradient g_i = y_i - sigmoid(F(x_i)).                */
+   F_k(x) = F_{k-1}(x) + lr * f_k(x); f_k fits the logloss gradient
+   g_i = y_i - sigmoid(F(x_i)). Depth-1 trees keep CPU tiny.        */
 export interface GBSModel { base: number; lr: number; stumps: { j: number; thr: number; left: number; right: number }[] }
-export function trainGBS(X: number[][], y: number[], trees = 25, lr = 0.1): GBSModel {
+export function trainGBS(X: number[][], y: number[], trees = 16, lr = 0.1): GBSModel {
   const n = X.length, d = X[0].length;
   const pos = y.reduce((a, b) => a + b, 0);
-  const base = Math.log((pos + 0.5) / (n - pos + 0.5)); // init: log-odds of base rate
+  const base = Math.log((pos + 0.5) / (n - pos + 0.5));
   const F = new Array(n).fill(base);
   const stumps: GBSModel['stumps'] = [];
   for (let k = 0; k < trees; k++) {
-    const g = F.map((f, i) => y[i] - sigmoid(f)); // residuals = logloss gradient
+    const g = F.map((f, i) => y[i] - sigmoid(f));
     let best = { j: 0, thr: 0, left: 0, right: 0, gain: -Infinity };
     for (let j = 0; j < d; j++) {
       const vals = X.map(r => r[j]).sort((a, b) => a - b);
@@ -72,29 +72,25 @@ export function predictGBS(m: GBSModel, x: number[]): number {
   return sigmoid(f);
 }
 
-/* ---------- 3. 3-STATE HMM (fixed params, forward algorithm) ----------
-   States: BULL / NEUTRAL / RISKOFF. Observations: (r20, vol20 z, drawdown).
-   Fixed emission Gaussians + persistence-favoring transition matrix.
-   No Baum-Welch — parameters fixed by design, filtering is the real math. */
+/* ---------- 3. 3-STATE HMM (fixed params, forward filtering) ---------- */
 export interface RegimeResult { state: 'BULL' | 'NEUTRAL' | 'RISKOFF'; probs: [number, number, number] }
 const REG = {
   trans: [[0.90, 0.08, 0.02], [0.10, 0.80, 0.10], [0.05, 0.15, 0.80]],
-  // emissions (mu, sigma) per state over [r20%, volZ, dd%]
   emis: [
-    [[6, 6], [-0.3, 1.0], [-3, 4]],    // BULL: positive trend, normal vol, shallow dd
-    [[0, 4], [0, 1.0], [-8, 6]],       // NEUTRAL
-    [[-4, 5], [1.2, 1.0], [-16, 8]],   // RISKOFF: negative trend, high vol, deep dd
+    [[6, 6], [-0.3, 1.0], [-3, 4]],
+    [[0, 4], [0, 1.0], [-8, 6]],
+    [[-4, 5], [1.2, 1.0], [-16, 8]],
   ],
 };
 function emisLogLP(s: number, o: number[]): number {
   let lp = 0;
   for (let j = 0; j < 3; j++) {
-    const [mu, sd] = REG.emis[s][j];
+    const mu = REG.emis[s][j][0], sd = REG.emis[s][j][1];
     lp += -0.5 * Math.log(2 * Math.PI * sd * sd) - ((o[j] - mu) ** 2) / (2 * sd * sd);
   }
   return lp;
 }
-export function regimeHMM(obs: number[] /* last ~60 days of [r20, volZ, dd] */): RegimeResult {
+export function regimeHMM(obs: number[][]): RegimeResult {
   let a = [1 / 3, 1 / 3, 1 / 3];
   for (const o of obs) {
     const na = [0, 0, 0];
@@ -104,13 +100,13 @@ export function regimeHMM(obs: number[] /* last ~60 days of [r20, volZ, dd] */):
       na[s] = pre * Math.exp(emisLogLP(s, o));
     }
     const sum = na[0] + na[1] + na[2] || 1;
-    a = na.map(v => v / sum);
+    a = [na[0] / sum, na[1] / sum, na[2] / sum];
   }
-  const idx = a.indexOf(Math.max(...a)) as 0 | 1 | 2;
+  const idx = a.indexOf(Math.max(...a));
   return { state: (['BULL', 'NEUTRAL', 'RISKOFF'] as const)[idx], probs: [a[0], a[1], a[2]] };
 }
 
-/* ---------- 4. FEATURE ENGINE (all from REAL data) ---------- */
+/* ---------- 4. FEATURE ENGINE (all values from REAL data) ---------- */
 export const FEATURE_NAMES = ['r5', 'r20', 'r50', 'rsi14', 'macdN', 'vol20', 'distSMA50', 'dxyR20', 'ryLvl', 'ryChg5', 'vix', 'oilR20'];
 export interface DailyInput { gold: number[]; dxy: number[]; vix: number[]; oil: number[]; ry: { t: number; v: number }[] }
 
@@ -128,7 +124,7 @@ export function macdNorm(c: number[]): number {
   const e12 = emaF(c, 12), e26 = emaF(c, 26);
   const line = c.map((_, i) => e12[i] - e26[i]);
   const sig = emaF(line.slice(25), 9);
-  return (line[line.length - 1] - sig[sig.length - 1]) / (c[c.length - 1] || 1) * 100; // % of price
+  return (line[line.length - 1] - sig[sig.length - 1]) / (c[c.length - 1] || 1) * 100;
 }
 export function volAnn(c: number[], w = 20): number {
   const a = c.slice(-(w + 1)); if (a.length < 3) return 0;
@@ -144,12 +140,12 @@ const ff = (ry: { t: number; v: number }[], t: number) => {
   return v ?? (ry[0]?.v ?? 1.5);
 };
 
-/** Build feature row at index i (needs i >= 50 history). Timestamps = candle times. */
 export function featuresAt(d: DailyInput, ts: number[], i: number): number[] | null {
-  if (i < 55 || i + 5 >= d.gold.length) return null; // need history + future label
+  if (i < 55 || i + 5 >= d.gold.length) return null;
   const g = d.gold.slice(0, i + 1);
   const sma50 = g.slice(-50).reduce((a, b) => a + b, 0) / 50;
-  const dd = (() => { let peak = -Infinity, last = g[g.length - 1]; for (const v of g) peak = Math.max(peak, v); return (peak - last) / peak * 100; })();
+  let peak = -Infinity; for (const v of g) peak = Math.max(peak, v);
+  const dd = (peak - g[g.length - 1]) / peak * 100;
   const ryNow = ff(d.ry, ts[i]), ryPrev = ff(d.ry, ts[Math.max(0, i - 5)]);
   const f = [
     ret(g, 5), ret(g, 20), ret(g, 50),
