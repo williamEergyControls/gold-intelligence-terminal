@@ -14,4 +14,4 @@
   "triggers": { "crons": ["*/5 * * * *"] },
   "vars": { "AI_ENABLED": "true" },
   "observability": { "enabled": true }
-}
+} 
