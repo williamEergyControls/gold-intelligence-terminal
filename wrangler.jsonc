@@ -4,8 +4,12 @@
   "main": "src/worker/index.ts",
   "compatibility_date": "2025-01-15",
   "assets": { "directory": "./public" },
+  "secrets_store_secrets": [
+    { "binding": "METALS_API_KEY", "store_id": "b880f1ab4595433da0a4ce5f6a90d71f", "secret_name": "METALS_API_KEY" },
+    { "binding": "FRED_API_KEY", "store_id": "b880f1ab4595433da0a4ce5f6a90d71f", "secret_name": "FRED_API_KEY" }
+  ],
   "kv_namespaces": [{ "binding": "CACHE", "id": "34dc1c3546bb4093b1c1f2bf88b3a862" }],
-  "d1_databases": [{ "binding": "DB", "database_name": "gold-terminal", "database_id": "a456b81e-1825-4293-ab60-f703312688b4" }],
+  "d1_databases": [{ "binding": "DB", "database_name": "gold-terminal", "database_id": "KEEP-YOUR-EXISTING-ID-HERE" }],
   "ai": { "binding": "AI" },
   "triggers": { "crons": ["*/5 * * * *"] },
   "vars": { "AI_ENABLED": "true" },
