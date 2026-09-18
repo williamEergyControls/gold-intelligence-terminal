@@ -30,12 +30,8 @@ export default {
     try {
       switch (true) {
         case path === '/api/env': {
-          return json({
-            METALS_API_KEY: env.METALS_API_KEY ? 'SET (' + env.METALS_API_KEY.length + ' chars)' : 'MISSING',
-            FRED_API_KEY: env.FRED_API_KEY ? 'SET (' + env.FRED_API_KEY.length + ' chars)' : 'MISSING',
-            aiEnabled: env.AI_ENABLED ?? 'MISSING',
-            checkedAt: new Date().toISOString()
-          });
+          const mk = (n: string) => { const v = secret(env, n); return v ? `SET (${v.length} chars)` : 'MISSING'; };
+          return json({ METALS_API_KEY: mk('METALS_API_KEY'), FRED_API_KEY: mk('FRED_API_KEY'), BLS_API_KEY: mk('BLS_API_KEY'), SEC_USER_AGENT: mk('SEC_USER_AGENT'), aiEnabled: env.AI_ENABLED ?? 'MISSING', checkedAt: new Date().toISOString() });
         }
         case path === '/api/health': {
           const boot = await cachedBoot(env, '15M');
