@@ -1,4 +1,4 @@
-import type { AlertItem, Bootstrap, Env, MacroRow, Quote, Tf } from './types';
+import type { AlertItem, Bootstrap, Candle, Env, MacroRow, Quote, Tf } from './types';
 import { AppCache } from './cache';
 import { firstOk, healthSnapshot } from './providers/provider';
 import * as metalsdev from './providers/metalsdev';
@@ -10,8 +10,7 @@ import * as gdelt from './providers/gdelt';
 import * as sim from './providers/simulated';
 import { score, attribution, corr } from './analytics/engine';
 
-// ---------- REFERENCE DATA: curated, low-frequency, honestly labeled. ----------
-// Shipping/insurance have NO free live APIs (your Sections 13/14) → reference values + news indicators only.
+// ---------- REFERENCE DATA: curated, low-frequency, honestly labeled ----------
 const RE = {
   shipping: [
     { label: 'FBX · Container 40ft', value: '3,842', delta: '▲ +1.8% w/w', deltaDir: 1, typetag: 'INDEX · W', note: 'public index' },
@@ -46,34 +45,37 @@ const RE_PERIODS: Record<string, Record<string, number>> = {
   '6M': { CPI: 1.6, HOUSING: 2.2, FOOD: 1.4, AUTOINS: 6.4, ENERGY: -3.1, FREIGHT: 3.8, WAGES: 2.0 },
   '1Y': { CPI: 3.1, HOUSING: 4.2, FOOD: 2.7, AUTOINS: 11.8, ENERGY: -1.9, FREIGHT: 6.4, WAGES: 4.1 },
 };
+const idxA = (a: number[]) => a.map(v => (v / a[0]) * 100);
+const fmt1 = (n: number | undefined | null) => (n == null ? '—' : n.toFixed(2));
+const sgn = (n: number | undefined) => (n != null && n > 0 ? '+' : '');
+const nowHM = () => new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
-export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap> {
+export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml: any }> {
   const cache = new AppCache(env.CACHE);
 
-  // ---- gold: your mandated chain metals.dev → yahoo → stooq → simulated ----
-  const gold = await firstOk<Quote>([
+  // ---- gold: mandated chain metals.dev → yahoo → stooq → simulated ----
+  const gold = (await firstOk<Quote>([
     { name: 'metals.dev', fn: () => metalsdev.metalsdevQuote(env, 'XAU:USD') },
     { name: 'yahoo', fn: () => yahoo.yahooQuote(env, 'XAU:USD') },
     { name: 'stooq', fn: async () => (await stooq.stooqQuotes(env, ['XAU:USD']))[0] },
     { name: 'simulated', fn: () => Promise.resolve(sim.simQuote('XAU:USD')) },
-  ]).then(r => r.value);
-  // metals.dev has no prevClose → use our own stored previous-day close (written by cron)
+  ])).value;
   if (gold.prevClose == null) {
     const pc = await env.CACHE.get('prevclose:XAU:USD', 'json') as { c: number } | null;
     if (pc) { gold.prevClose = pc.c; gold.change = gold.price - pc.c; gold.changePct = (gold.price / pc.c - 1) * 100; }
   }
-  const silver = await firstOk<Quote>([
+  const silver = (await firstOk<Quote>([
     { name: 'metals.dev', fn: () => metalsdev.metalsdevQuote(env, 'XAG:USD') },
     { name: 'yahoo', fn: () => yahoo.yahooQuote(env, 'XAG:USD') },
     { name: 'simulated', fn: () => Promise.resolve(sim.simQuote('XAG:USD')) },
-  ]).then(r => r.value);
-  const dxy = await firstOk<Quote>([
+  ])).value;
+  const dxy = (await firstOk<Quote>([
     { name: 'yahoo', fn: () => yahoo.yahooQuote(env, 'DXY') },
     { name: 'stooq', fn: async () => (await stooq.stooqQuotes(env, ['DXY']))[0] },
     { name: 'simulated', fn: () => Promise.resolve(sim.simQuote('DXY')) },
-  ]).then(r => r.value);
+  ])).value;
 
-  // ---- candles (chart) — cached 120s, lazy per timeframe ----
+  // ---- candles for the current timeframe — cached 120s ----
   const candles = (await cache.wrap(`candles:XAU:${tf}`, 120, () =>
     firstOk([
       { name: 'yahoo', fn: () => yahoo.yahooCandles(env, 'XAU:USD', tf) },
@@ -83,29 +85,46 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap> {
 
   // ---- daily relationships: gold/dxy/real-yield indexed + correlations — cached 1h ----
   const daily = await cache.wrap('series:daily', 3600, async () => {
-    const g = await firstOk({ name: 'yahoo', fn: () => yahoo.yahooCandles(env, 'XAU:USD', '1D') }.name ? [{ name: 'yahoo', fn: () => yahoo.yahooCandles(env, 'XAU:USD', '1D') }, { name: 'simulated', fn: () => Promise.resolve(sim.simCandles('XAU:USD', '1D')) }] : []).then(r => r.value);
-    const d = await firstOk([{ name: 'yahoo', fn: () => yahoo.yahooCandles(env, 'DXY', '1D') }, { name: 'simulated', fn: () => Promise.resolve(sim.simCandles('DXY', '1D')) }]).then(r => r.value);
-    const s = await firstOk([{ name: 'yahoo', fn: () => yahoo.yahooCandles(env, 'XAG:USD', '1D') }, { name: 'simulated', fn: () => Promise.resolve(sim.simCandles('XAG:USD', '1D')) }]).then(r => r.value);
+    const g = (await firstOk([
+      { name: 'yahoo', fn: () => yahoo.yahooCandles(env, 'XAU:USD', '1D') },
+      { name: 'simulated', fn: () => Promise.resolve(sim.simCandles('XAU:USD', '1D')) },
+    ]).then(r => r.value)).map(c => c.c);
+    const d = (await firstOk([
+      { name: 'yahoo', fn: () => yahoo.yahooCandles(env, 'DXY', '1D') },
+      { name: 'simulated', fn: () => Promise.resolve(sim.simCandles('DXY', '1D')) },
+    ]).then(r => r.value)).map(c => c.c);
+    const s = (await firstOk([
+      { name: 'yahoo', fn: () => yahoo.yahooCandles(env, 'XAG:USD', '1D') },
+      { name: 'simulated', fn: () => Promise.resolve(sim.simCandles('XAG:USD', '1D')) },
+    ]).then(r => r.value)).map(c => c.c);
     let ry: number[] = [];
-    try { ry = (await fred.fredSeriesTail(env, 'DFII10', 80)).map(p => p.v); } catch { ry = Array.from({ length: 60 }, (_, i) => 1.7 - i * 0.004); } // sim proxy if FRED absent
-    const idx = (a: number[]) => a.length ? a.map(v => (v / a[0]) * 100) : [];
-    const gc = g.map(c => c.c).slice(-80), dc = d.map(c => c.c).slice(-80), sc = s.map(c => c.c).slice(-80);
-    const ratio = gc.length && sc.length ? gc.slice(-Math.min(gc.length, sc.length)).map((v, i) => v / sc.slice(-Math.min(gc.length, sc.length))[i]) : [];
-    return { goldIdx: idx(gc), dxyIdx: idx(dc), ryIdx: idx(ry.slice(-80)), ratio, corrDxy: corr(gc, dc), corrRy: corr(gc.slice(-ry.length), ry.slice(-gc.length).length ? ry.slice(-gc.length) : ry), goldDaily: gc, dxyDaily: dc, ryDaily: ry };
+    try { ry = (await fred.fredSeriesTail(env, 'DFII10', 80)).map(p => p.v); }
+    catch { ry = Array.from({ length: 60 }, (_, i) => 1.7 - i * 0.004); }
+    const n80 = Math.min(g.length, d.length, 80);
+    const m = Math.min(g.length, s.length, 80);
+    const ratio: number[] = [];
+    for (let i = 0; i < m; i++) ratio.push(g[g.length - m + i] / s[s.length - m + i]);
+    const rn = Math.min(g.length, ry.length, 80);
+    return {
+      goldIdx: idxA(g.slice(-n80)), dxyIdx: idxA(d.slice(-n80)), ryIdx: idxA(ry.slice(-rn)), ratio,
+      corrDxy: corr(g.slice(-n80), d.slice(-n80)), corrRy: corr(g.slice(-rn), ry.slice(-rn)),
+      goldDaily: g, dxyDaily: d, ryDaily: ry,
+    };
   });
-  const ryLast = daily.v.ryDaily.at(-1) ?? 1.51, ryPrev = daily.v.ryDaily.at(-2) ?? ryLast;
+  const ryLast = daily.v.ryDaily.length ? daily.v.ryDaily[daily.v.ryDaily.length - 1] : 1.51;
+  const ryPrev = daily.v.ryDaily.length > 1 ? daily.v.ryDaily[daily.v.ryDaily.length - 2] : ryLast;
 
-  // ---- miners heatmap: ONE stooq CSV call, EOD-labeled; missing tickers dropped honestly ----
-  const miners = await cache.wrap('miners', 3600, async () => {
+  // ---- miners heatmap: ONE stooq CSV call (EOD); missing tickers dropped honestly ----
+  const miners = (await cache.wrap('miners', 3600, async () => {
     try { const q = await stooq.stooqQuotes(env, stooq.MINERS); if (q.length >= 6) return q; throw new Error('thin'); }
     catch { return sim.simMiners(); }
-  }).then(r => r.v);
+  })).v;
 
   // ---- FX: frankfurter (one call, DAILY) → simulated ----
-  const fx = await cache.wrap('fx', 3600, () => frankfurter.frankfurterFx(env).catch(() => sim.simFx())).then(r => r.v);
+  const fx = (await cache.wrap('fx', 3600, () => frankfurter.frankfurterFx(env).catch(() => sim.simFx()))).v;
 
   // ---- macro: FRED (key) → simulated — cached 6h ----
-  const macro = await cache.wrap('macro', 21600, () => fred.fredRows(env).catch(() => sim.simMacro())).then(r => r.v);
+  const macro = (await cache.wrap('macro', 21600, () => fred.fredRows(env).catch(() => sim.simMacro()))).v;
   const row = (k: string) => macro.find((m: MacroRow) => m.key === k);
   const cpi = row('CPI'); const autoins = row('AUTOINS');
   const cpiBreakdown = [
@@ -118,14 +137,14 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap> {
   ];
 
   // ---- news: GDELT → simulated — cached 5min ----
-  const news = await cache.wrap('news', 300, () => gdelt.gdeltNews(env, ['gold', 'mining', 'macro']).catch(() => sim.simNews())).then(r => r.v);
+  const news = (await cache.wrap('news', 300, () => gdelt.gdeltNews(env, ['gold', 'mining', 'macro']).catch(() => sim.simNews()))).v;
 
   // ---- analytics over the DAILY gold series (proper lookback) ----
-  const dailyCandles: import('./types').Candle[] = (daily.v.goldDaily ?? []).map((c, i, arr) => ({ t: Date.now() - (arr.length - i) * 864e5, o: arr[Math.max(0, i - 1)], h: c, l: c, c, v: 0 }));
-  const analytics = score(dailyCandles.length > 60 ? dailyCandles : (candles as any), gold);
+  const dailyCandles: Candle[] = daily.v.goldDaily.map((c, i, arr) => ({ t: Date.now() - (arr.length - i) * 864e5, o: arr[Math.max(0, i - 1)], h: c, l: c, c, v: 0 }));
+  const analytics = score(dailyCandles.length > 60 ? dailyCandles : candles, gold);
 
   // ---- why-gold attribution ----
-  const gdx = miners.length ? miners.reduce((s, m) => s + (m.changePct ?? 0), 0) / miners.length : null;
+  const gdx = miners.length ? miners.reduce((s, mm) => s + (mm.changePct ?? 0), 0) / miners.length : null;
   const why = attribution({
     goldPct: gold.changePct ?? 0, dxyPct: dxy.changePct ?? 0,
     realYieldChgBp: (ryLast - ryPrev) * 100,
@@ -133,9 +152,9 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap> {
     newsCount: news.filter(n => n.topic === 'gold').length, newsAvg: 4,
   });
 
-  // ---- alerts: derived from ACTUAL moves (works identically on sim data, labeled SIM) ----
+  // ---- alerts: derived from ACTUAL moves ----
   const alerts: AlertItem[] = [];
-  const hm = Math.max(...candles.slice(-60).map(c => c.h));
+  let hm = 0; for (const c of candles.slice(-60)) hm = Math.max(hm, c.h);
   if (hm > 0 && gold.price >= hm * 0.998) alerts.push({ se: 'warn', t: nowHM(), txt: `GOLD ${fmt1(gold.price)} — within 0.2% of session high ${fmt1(hm)}`, cat: 'gold' });
   if (Math.abs(dxy.changePct ?? 0) > 0.5) alerts.push({ se: 'warn', t: nowHM(), txt: `DXY ${sgn(dxy.changePct)}${fmt1(dxy.changePct)}% — dollar move in force`, cat: 'fx' });
   if (Math.abs((ryLast - ryPrev) * 100) > 3) alerts.push({ se: 'info', t: nowHM(), txt: `10Y real yield ${sgn((ryLast - ryPrev) * 100)}${fmt1((ryLast - ryPrev) * 100)}bp on the day`, cat: 'fx' });
@@ -143,7 +162,8 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap> {
   alerts.push({ se: 'info', t: nowHM(), txt: 'FOMC minutes tomorrow 14:00 ET — rate channel in focus', cat: 'macro' });
 
   const tape: Quote[] = [gold, silver, dxy, ...fx.slice(0, 2)];
-  const us10 = row('US10Y'); if (us10) tape.push({ symbol: 'US10Y', price: us10.value, prevClose: us10.prior, change: us10.value - us10.prior, changePct: us10.value - us10.prior, currency: '%', source: us10.source, delay: 'daily', ts: Date.parse(us10.asOf) });
+  const us10 = row('US10Y');
+  if (us10) tape.push({ symbol: 'US10Y', price: us10.value, prevClose: us10.prior, change: us10.value - us10.prior, changePct: us10.value - us10.prior, currency: '%', source: us10.source, delay: 'daily', ts: Date.parse(us10.asOf) });
 
   const health = healthSnapshot({
     'metals.dev': env.METALS_API_KEY ? ('near-live' as const) : null,
@@ -160,7 +180,7 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap> {
     builtAt: Date.now(), tf,
     gold, silver, dxy, ratio: gold.price && silver.price ? gold.price / silver.price : null, tape,
     candles, miners, fx,
-    series: { goldIdx: daily.v.goldIdx, dxyIdx: daily.v.dxyIdx, ryIdx: daily.v.ryIdx, ratio: daily.v.ratio },
+    series: { goldIdx: daily.v.goldIdx, dxyIdx: daily.v.dxyIdx, ryIdx: daily.v.ryIdx, ratio: daily.v.ratio, dailyCloses: daily.v.goldDaily },
     corr: { dxy: daily.v.corrDxy, ry: daily.v.corrRy },
     macro: { rows: macro, cpiBreakdown, components: { cpi: cpi?.value ?? 3.1, housing: 4.2, food: 2.7, autoins: autoins?.value ?? 11.8, energy: -1.9 } },
     realeconomy: { periods: RE_PERIODS },
@@ -171,8 +191,6 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap> {
     },
     reference: RE,
     analytics, why, health,
+    ml: ((await env.CACHE.get('ml:snap', 'json')) as any) ?? null,
   };
 }
-const fmt1 = (n: number | undefined | null) => (n == null ? '—' : n.toFixed(2));
-const sgn = (n: number | undefined) => (n != null && n > 0 ? '+' : '');
-const nowHM = () => new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
