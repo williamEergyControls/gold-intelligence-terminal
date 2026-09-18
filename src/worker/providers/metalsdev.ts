@@ -1,7 +1,7 @@
 import type { Env, Quote } from '../types';
 import { fetchJson } from './provider';
 
-export const UA = 'GoldIntelligenceTerminal/1.0 (personal research terminal; contact: you@example.com)';
+export const UA = 'GoldIntelligenceTerminal/1.0 (personal research terminal; contact: eaxmple@gmail.com)';
 // For SEC calls use env.SEC_USER_AGENT instead — SEC asks for a real identity.
 
 export async function fetchJson(url: string, headers: Record<string, string> = {}, timeoutMs = 8000): Promise<any> {
