@@ -51,3 +51,22 @@ export async function firstOk<T>(
   }
   throw new Error(`ALL_SOURCES_FAILED | ${errors.join(' | ')}`);
 }
+// Secrets Store insurance: bindings normally arrive as plain strings on env.
+// If they arrive as { get(): Promise<string> } instead, resolve + memoize once.
+const secretMemo = new Map<string, string>();
+export function secret(env: unknown, name: string): string | undefined {
+  const v = (env as Record<string, unknown>)[name];
+  if (typeof v === 'string') return v || undefined;
+  return secretMemo.get(name);
+}
+export async function ensureSecrets(env: unknown): Promise<void> {
+  for (const n of ['METALS_API_KEY', 'FRED_API_KEY', 'BLS_API_KEY', 'SEC_USER_AGENT']) {
+    if (secretMemo.has(n)) continue;
+    const v = (env as Record<string, unknown>)[n];
+    if (typeof v === 'string') { if (v) secretMemo.set(n, v); }
+    else if (v && typeof (v as { get?: unknown }).get === 'function') {
+      try { const s = await (v as { get(): Promise<string> }).get(); if (s) secretMemo.set(n, s); } catch { /* unresolved */ }
+    }
+  }
+}
+
