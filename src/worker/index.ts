@@ -2,7 +2,7 @@ import type { Env, Tf } from './types';
 import { AppCache } from './cache';
 import { buildBootstrap } from './bootstrap';
 import { aiAnalyst } from './ai/analyst';
-import { persistHealthRows } from './providers/provider';
+import { persistHealthRows, ensureSecrets } from './providers/provider';
 import { trainAndStore, predictAndStore, gradeOutcomes } from './ml/pipeline';
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff' };
@@ -25,9 +25,18 @@ export default {
     if (!path.startsWith('/api/')) return new Response('Not found', { status: 404 });
     const ip = req.headers.get('CF-Connecting-IP') ?? 'local';
     if (!allow(ip)) return json({ error: 'RATE_LIMITED' }, 429);
+    await ensureSecrets(env); // resolve Secrets Store bindings once per isolate
 
     try {
       switch (true) {
+        case path === '/api/env': {
+          return json({
+            METALS_API_KEY: env.METALS_API_KEY ? 'SET (' + env.METALS_API_KEY.length + ' chars)' : 'MISSING',
+            FRED_API_KEY: env.FRED_API_KEY ? 'SET (' + env.FRED_API_KEY.length + ' chars)' : 'MISSING',
+            aiEnabled: env.AI_ENABLED ?? 'MISSING',
+            checkedAt: new Date().toISOString()
+          });
+        }
         case path === '/api/health': {
           const boot = await cachedBoot(env, '15M');
           return json({ mode: boot.v.mode, builtAt: boot.v.builtAt, stale: boot.stale, providers: boot.v.health });
@@ -46,15 +55,12 @@ export default {
           });
           return json({ tf, ...r.v, stale: r.stale, ageMs: r.ageMs });
         }
-        case path === '/api/env': {
-          return json({
-            METALS_API_KEY: env.METALS_API_KEY ? 'SET (' + env.METALS_API_KEY.length + ' chars)' : 'MISSING',
-            FRED_API_KEY: env.FRED_API_KEY ? 'SET (' + env.FRED_API_KEY.length + ' chars)' : 'MISSING',
-            BLS_API_KEY: env.BLS_API_KEY ? 'SET' : 'MISSING',
-            SEC_USER_AGENT: env.SEC_USER_AGENT ? 'SET' : 'MISSING',
-            aiEnabled: env.AI_ENABLED ?? 'MISSING',
-            checkedAt: new Date().toISOString()
-          });
+        case path === '/api/ml/train': {
+          // Manual trigger: trains on real Yahoo+FRED data, then predicts.
+          // Response shows ok:true + metrics, or ok:false + the exact error.
+          const tr = await trainAndStore(env);
+          await predictAndStore(env);
+          return json(tr);
         }
         case path === '/api/ml': {
           const raw = await env.CACHE.get('ml:snap', 'json');
@@ -90,7 +96,7 @@ export default {
           });
           return json(out);
         }
-        default: return json({ error: 'UNKNOWN_ENDPOINT', endpoints: ['/api/health', '/api/bootstrap', '/api/candles', '/api/ml', '/api/macro', '/api/news', '/api/analytics', '/api/why-gold', '/api/ai/analyst'] }, 404);
+        default: return json({ error: 'UNKNOWN_ENDPOINT', endpoints: ['/api/env', '/api/health', '/api/bootstrap', '/api/candles', '/api/ml', '/api/ml/train', '/api/macro', '/api/news', '/api/analytics', '/api/why-gold', '/api/ai/analyst'] }, 404);
       }
     } catch (e) {
       return json({ error: 'UPSTREAM_FAILURE', detail: String((e as Error).message).slice(0, 300) }, 502);
@@ -99,6 +105,8 @@ export default {
 
   // ---- CRON: the ONLY steady-state upstream caller. Warms KV + persists history. ----
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    await ensureSecrets(env);
+
     // (1) warm site cache + write history — the site itself
     ctx.waitUntil((async () => {
       try {
@@ -114,20 +122,24 @@ export default {
         const cur = await env.CACHE.get('prevday:XAU:USD', 'json') as { d: string; c: number } | null;
         if (cur && cur.d !== day) await env.CACHE.put('prevclose:XAU:USD', JSON.stringify({ c: cur.c }), { expirationTtl: 259200 });
         await env.CACHE.put('prevday:XAU:USD', JSON.stringify({ d: day, c: boot.gold.price }), { expirationTtl: 259200 });
-      } catch { /* cron failures are non-fatal; users still read last warm KV */ }
+      } catch (e) { console.error('CRON_SITE_FAIL', String((e as Error).message).slice(0, 300)); }
     })());
 
-    // (2) ML: retrain weekly, predict+grade at most every 6h — never every 5 min
+    // (2) ML: retrain weekly, predict+grade at most every 6h — flag stamps only on SUCCESS
     ctx.waitUntil((async () => {
       try {
         const lastMl = await env.CACHE.get('ml:last', 'json') as { t: number } | null;
         if (lastMl && Date.now() - lastMl.t < 6 * 36e5) return;
-        await env.CACHE.put('ml:last', JSON.stringify({ t: Date.now() }), { expirationTtl: 86400 });
+        let mlOk = true;
         const last = await env.DB.prepare('SELECT MAX(trained_at) t FROM ml_models WHERE active=1').first<{ t: number | null }>();
-        if (!last?.t || Date.now() - last.t > 7 * 864e5) await trainAndStore(env);
+        if (!last?.t || Date.now() - last.t > 7 * 864e5) {
+          const tr = await trainAndStore(env);
+          if (!tr.ok) { mlOk = false; console.error('ML_TRAIN_FAIL', tr.error); }
+        }
         await predictAndStore(env);
         await gradeOutcomes(env);
-      } catch { /* ML never breaks the site */ }
+        if (mlOk) await env.CACHE.put('ml:last', JSON.stringify({ t: Date.now() }), { expirationTtl: 86400 });
+      } catch (e) { console.error('ML_CRON_FAIL', String((e as Error).message).slice(0, 300)); }
     })());
   },
 };
