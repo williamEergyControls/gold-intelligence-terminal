@@ -1,16 +1,14 @@
-import type { Bootstrap, Env, Tf } from './types';
+import type { Env, Tf } from './types';
 import { AppCache } from './cache';
 import { buildBootstrap } from './bootstrap';
 import { aiAnalyst } from './ai/analyst';
 import { persistHealthRows } from './providers/provider';
 import { trainAndStore, predictAndStore, gradeOutcomes } from './ml/pipeline';
 
-
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff' };
 const TFS: Tf[] = ['5M', '15M', '1H', '1D', '1W'];
 
-// ---- per-isolate rate limiter: protects against runaway frontend loops.
-// Real abuse protection = a WAF rate rule in the Cloudflare dash (see MANUAL_SETUP §C7). ----
+// per-isolate rate limiter (real abuse protection = WAF rule in the dash)
 const hits = new Map<string, { n: number; w: number }>();
 function allow(ip: string, max = 240, windowMs = 60_000): boolean {
   const now = Date.now();
@@ -24,15 +22,14 @@ export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(req.url);
     const path = url.pathname;
-    if (!path.startsWith('/api/')) return new Response('Not found', { status: 404 }); // assets handled by CF
+    if (!path.startsWith('/api/')) return new Response('Not found', { status: 404 });
     const ip = req.headers.get('CF-Connecting-IP') ?? 'local';
     if (!allow(ip)) return json({ error: 'RATE_LIMITED' }, 429);
 
     try {
       switch (true) {
         case path === '/api/health': {
-          const tf: Tf = '15M';
-          const boot = await cachedBoot(env, tf);
+          const boot = await cachedBoot(env, '15M');
           return json({ mode: boot.v.mode, builtAt: boot.v.builtAt, stale: boot.stale, providers: boot.v.health });
         }
         case path === '/api/bootstrap': {
@@ -48,6 +45,11 @@ export default {
             return { candles: b.candles, source: b.gold.source, delay: b.gold.delay, ts: b.builtAt };
           });
           return json({ tf, ...r.v, stale: r.stale, ageMs: r.ageMs });
+        }
+        case path === '/api/ml': {
+          const raw = await env.CACHE.get('ml:snap', 'json');
+          if (raw) return json(raw);
+          return json({ status: 'WARMING', note: 'first predictions appear within ~5 minutes of cron' });
         }
         case path === '/api/macro': {
           const cache = new AppCache(env.CACHE);
@@ -68,14 +70,17 @@ export default {
           // AI is ON-DEMAND only (user clicks RUN) — never per-visitor, never in cron.
           const b = await cachedBoot(env, parseTf(url.searchParams.get('tf')));
           const out = await aiAnalyst(env, b.v.analytics, b.v.why, {
-            dxy: b.v.dxy.changePct, realYield: b.v.why.drivers[0]?.delta, newsSentiment: {
+            ml: (b.v as any).ml ?? null,
+            dxy: b.v.dxy.changePct,
+            realYield: b.v.why.drivers[0]?.delta,
+            newsSentiment: {
               bull: b.v.news.gold.filter(n => n.sentiment === 'bull').length,
               bear: b.v.news.gold.filter(n => n.sentiment === 'bear').length,
             },
           });
           return json(out);
         }
-        default: return json({ error: 'UNKNOWN_ENDPOINT', endpoints: ['/api/health', '/api/bootstrap', '/api/candles', '/api/macro', '/api/news', '/api/analytics', '/api/why-gold', '/api/ai/analyst'] }, 404);
+        default: return json({ error: 'UNKNOWN_ENDPOINT', endpoints: ['/api/health', '/api/bootstrap', '/api/candles', '/api/ml', '/api/macro', '/api/news', '/api/analytics', '/api/why-gold', '/api/ai/analyst'] }, 404);
       }
     } catch (e) {
       return json({ error: 'UPSTREAM_FAILURE', detail: String((e as Error).message).slice(0, 300) }, 502);
@@ -84,7 +89,7 @@ export default {
 
   // ---- CRON: the ONLY steady-state upstream caller. Warms KV + persists history. ----
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
-    // (1) warm site cache + write history — unchanged
+    // (1) warm site cache + write history — the site itself
     ctx.waitUntil((async () => {
       try {
         const boot = await buildBootstrap(env, '15M');
@@ -106,7 +111,7 @@ export default {
     ctx.waitUntil((async () => {
       try {
         const lastMl = await env.CACHE.get('ml:last', 'json') as { t: number } | null;
-        if (lastMl && Date.now() - lastMl.t < 6 * 36e5) return;   // not due yet
+        if (lastMl && Date.now() - lastMl.t < 6 * 36e5) return;
         await env.CACHE.put('ml:last', JSON.stringify({ t: Date.now() }), { expirationTtl: 86400 });
         const last = await env.DB.prepare('SELECT MAX(trained_at) t FROM ml_models WHERE active=1').first<{ t: number | null }>();
         if (!last?.t || Date.now() - last.t > 7 * 864e5) await trainAndStore(env);
@@ -115,6 +120,7 @@ export default {
       } catch { /* ML never breaks the site */ }
     })());
   },
+};
 
 async function cachedBoot(env: Env, tf: Tf) {
   return new AppCache(env.CACHE).wrap(`boot:${tf}`, 30, () => buildBootstrap(env, tf));
