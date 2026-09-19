@@ -319,36 +319,31 @@ function renderWhy() {
   if (B.ml && B.ml.final) { const m = B.ml;
     $('.sub').textContent = 'ML ' + m.direction + ' P=' + (m.p * 100).toFixed(0) + '% · REGIME ' + m.regime.state + ' · AGREE ' + m.final.agreeing + '/10 · ACC ' + m.final.accStatus; }
 }
-function tw(parent, caret, txt, cps) {
-  return new Promise(res => { let i = 0, cur = null;
+/* ---- WHY console (crash-proof: appendChild only, no caret element needed) ---- */
+const whyOut = $('#whyOut');
+function line(txt) { const d = document.createElement('div'); d.className = 'ln'; d.textContent = txt || ''; whyOut.appendChild(d); whyOut.scrollTop = 1e9; return d; }
+function typeInto(el, txt, cps) {
+  return new Promise(res => { let i = 0;
     (function step() {
       if (i >= txt.length) return res();
-      if (txt[i] === '\n') { parent.insertBefore(document.createElement('br'), caret); i++; return step(); }
-      if (!cur) { cur = document.createElement('span'); parent.insertBefore(cur, caret); }
-      cur.textContent += txt[i++];
-      const sc = $('#whyOut'); if (sc) sc.scrollTop = 1e9;
+      el.textContent += txt[i++]; whyOut.scrollTop = 1e9;
       setTimeout(step, Math.round(1000 / (cps || 70)));
     })();
   });
 }
-const whyOut = $('#whyOut');
-let whyCaret = $('#whyCaret');
-if (!whyCaret) { whyCaret = document.createElement('span'); whyCaret.className = 'caret'; }
 async function runInvestigation() {
   if (investigating || !B) return; investigating = true;
   const btn = $('#runWhy'); btn.disabled = true; btn.textContent = '▮ ANALYZING…';
-  whyOut.innerHTML = ''; whyOut.appendChild(whyCaret);
+  whyOut.innerHTML = '';
   confSet(52);
   try {
     const ai = await getJSON('/api/ai/analyst');
-    const h = document.createElement('div'); h.className = 'ln'; whyOut.insertBefore(h, whyCaret);
-    const head = `> ENGINE: ${ai.engine}\n> DATA: ${B.gold.source} · ${(CHIP[B.gold.delay] || ['?'])[0]} · ${new Date(ai.ts).toISOString().replace('T', ' ').slice(0, 16)} UTC\n\n`;
-    await tw(h, whyCaret, head, 150);
-    const bodyEl = document.createElement('div'); bodyEl.className = 'ln'; whyOut.insertBefore(bodyEl, whyCaret);
-    await tw(bodyEl, whyCaret, ai.text, 60);
+    await typeInto(line(''), '> ENGINE: ' + ai.engine + '\n> DATA: ' + B.gold.source + ' · ' + (CHIP[B.gold.delay] || ['?'])[0] + ' · ' + new Date(ai.ts).toISOString().replace('T', ' ').slice(0, 16) + ' UTC', 150);
+    await typeInto(line(''), '\n' + ai.text, 60);
+    if (ai.aiErrors && ai.aiErrors.length) line('> AI TRIED: ' + ai.aiErrors.join(' | '));
     confSet(B.why.confidence);
   } catch (e) {
-    const d = document.createElement('div'); d.className = 'ln'; d.textContent = '> ANALYST UNAVAILABLE — ' + String(e && e.message || e); whyOut.insertBefore(d, whyCaret);
+    line('> ANALYST UNAVAILABLE — ' + String(e && e.message || e));
   }
   btn.disabled = false; btn.textContent = '▶ RUN INVESTIGATION';
   investigating = false;
