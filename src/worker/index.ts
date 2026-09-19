@@ -1,14 +1,15 @@
 import type { Env, Tf } from './types';
 import { AppCache } from './cache';
 import { buildBootstrap } from './bootstrap';
-import { aiAnalyst } from './ai/analyst';
-import { persistHealthRows, ensureSecrets, secret } from './providers/provider';
+import { aiAnalyst, newsSentimentHourly } from './ai/analyst';
+import { firstOk, persistHealthRows, ensureSecrets, secret } from './providers/provider';
 import { trainAndStore, predictAndStore, gradeOutcomes } from './ml/pipeline';
+import * as yahoo from './providers/yahoo';
+import * as sim from './providers/simulated';
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff' };
 const TFS: Tf[] = ['5M', '15M', '1H', '1D', '1W'];
 
-// per-isolate rate limiter (real abuse protection = WAF rule in the dash)
 const hits = new Map<string, { n: number; w: number }>();
 function allow(ip: string, max = 240, windowMs = 60_000): boolean {
   const now = Date.now();
@@ -25,13 +26,13 @@ export default {
     if (!path.startsWith('/api/')) return new Response('Not found', { status: 404 });
     const ip = req.headers.get('CF-Connecting-IP') ?? 'local';
     if (!allow(ip)) return json({ error: 'RATE_LIMITED' }, 429);
-    await ensureSecrets(env); // resolve Secrets Store bindings once per isolate
+    await ensureSecrets(env);
 
     try {
       switch (true) {
         case path === '/api/env': {
           const mk = (n: string) => { const v = secret(env, n); return v ? `SET (${v.length} chars)` : 'MISSING'; };
-          return json({ METALS_API_KEY: mk('METALS_API_KEY'), FRED_API_KEY: mk('FRED_API_KEY'), BLS_API_KEY: mk('BLS_API_KEY'), SEC_USER_AGENT: mk('SEC_USER_AGENT'), aiEnabled: env.AI_ENABLED ?? 'MISSING', checkedAt: new Date().toISOString() });
+          return json({ METALS_API_KEY: mk('METALS_API_KEY'), FRED_API_KEY: mk('FRED_API_KEY'), aiEnabled: env.AI_ENABLED ?? 'MISSING', checkedAt: new Date().toISOString() });
         }
         case path === '/api/health': {
           const boot = await cachedBoot(env, '15M');
@@ -43,17 +44,18 @@ export default {
           return json(boot.v);
         }
         case path === '/api/candles': {
+          // LIGHT endpoint: fetches ONLY candles — no full bootstrap. Fixes hero stats + speed.
           const tf = parseTf(url.searchParams.get('tf'));
           const cache = new AppCache(env.CACHE);
-          const r = await cache.wrap(`candles:XAU:${tf}`, 120, async () => {
-            const b = await buildBootstrap(env, tf);
-            return { candles: b.candles, source: b.gold.source, delay: b.gold.delay, ts: b.builtAt };
-          });
+          const r = await cache.wrap(`candles:XAU:${tf}`, tf === '1D' ? 3600 : 120, () =>
+            firstOk([
+              { name: 'yahoo', fn: () => yahoo.yahooCandles(env, 'XAU:USD', tf) },
+              { name: 'simulated', fn: () => Promise.resolve(sim.simCandles('XAU:USD', tf)) },
+            ]).then(rr => ({ candles: rr.value, source: rr.provider === 'yahoo' ? 'yahoo(unofficial)' : 'simulated', delay: rr.provider === 'yahoo' ? 'near-live' : 'simulated', ts: Date.now() }))
+          );
           return json({ tf, ...r.v, stale: r.stale, ageMs: r.ageMs });
         }
         case path === '/api/ml/train': {
-          // Manual trigger: trains on real Yahoo+FRED data, then predicts.
-          // Response shows ok:true + metrics, or ok:false + the exact error.
           const tr = await trainAndStore(env);
           await predictAndStore(env);
           return json(tr);
@@ -70,7 +72,7 @@ export default {
         }
         case path === '/api/news': {
           const cache = new AppCache(env.CACHE);
-          const r = await cache.wrap('news', 300, async () => (await buildBootstrap(env, '15M')).news);
+          const r = await cache.wrap('news', 3600, async () => (await buildBootstrap(env, '15M')).news);
           return json(r.v);
         }
         case path === '/api/analytics':
@@ -79,7 +81,6 @@ export default {
           return json(path === '/api/analytics' ? b.v.analytics : { ...b.v.why, movePct: b.v.gold.changePct });
         }
         case path === '/api/ai/analyst': {
-          // AI is ON-DEMAND only (user clicks RUN) — never per-visitor, never in cron.
           const b = await cachedBoot(env, parseTf(url.searchParams.get('tf')));
           const out = await aiAnalyst(env, b.v.analytics, b.v.why, {
             ml: (b.v as any).ml ?? null,
@@ -99,11 +100,10 @@ export default {
     }
   },
 
-  // ---- CRON: the ONLY steady-state upstream caller. Warms KV + persists history. ----
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
     await ensureSecrets(env);
 
-    // (1) warm site cache + write history — the site itself
+    // (1) warm site cache + write history
     ctx.waitUntil((async () => {
       try {
         const boot = await buildBootstrap(env, '15M');
@@ -121,7 +121,7 @@ export default {
       } catch (e) { console.error('CRON_SITE_FAIL', String((e as Error).message).slice(0, 300)); }
     })());
 
-    // (2) ML: retrain weekly, predict+grade at most every 6h — flag stamps only on SUCCESS
+    // (2) ML: retrain weekly, predict+grade at most every 6h
     ctx.waitUntil((async () => {
       try {
         const lastMl = await env.CACHE.get('ml:last', 'json') as { t: number } | null;
@@ -136,6 +136,16 @@ export default {
         await gradeOutcomes(env);
         if (mlOk) await env.CACHE.put('ml:last', JSON.stringify({ t: Date.now() }), { expirationTtl: 86400 });
       } catch (e) { console.error('ML_CRON_FAIL', String((e as Error).message).slice(0, 300)); }
+    })());
+
+    // (3) HOURLY Llama news sentiment — ~1 AI call/hour, free quota
+    ctx.waitUntil((async () => {
+      try {
+        const lastNse = await env.CACHE.get('nse:last', 'json') as { t: number } | null;
+        if (lastNse && Date.now() - lastNse.t < 36e5) return;
+        await newsSentimentHourly(env);
+        await env.CACHE.put('nse:last', JSON.stringify({ t: Date.now() }), { expirationTtl: 86400 });
+      } catch { /* never breaks the site */ }
     })());
   },
 };
