@@ -59,3 +59,25 @@ export async function yahooQuote(_env: Env, sym: string): Promise<Quote> {
   if (prev != null) { q.change = price - prev; q.changePct = (price / prev - 1) * 100; }
   return q;
 }
+
+/* ---- batch quotes for the miners heatmap (cron-warmed, cached 1h) ---- */
+export async function yahooBatchQuotes(symbols: string[]): Promise<Quote[]> {
+  const settled = await Promise.allSettled(symbols.map(s => chart(s, '5M').then(r => ({ s, m: r.meta, cs: r.candles }))));
+  const out: Quote[] = [];
+  for (const r of settled) {
+    if (r.status !== 'fulfilled' || !r.value || !r.value.cs || !r.value.cs.length) continue;
+    const { s, m, cs } = r.value;
+    const price = typeof m.regularMarketPrice === 'number' ? m.regularMarketPrice : cs[cs.length - 1].c;
+    const prev = typeof m.chartPreviousClose === 'number' ? m.chartPreviousClose : cs[0].o;
+    const q: Quote = {
+      symbol: s, price, prevClose: prev,
+      open: typeof m.regularMarketOpen === 'number' ? m.regularMarketOpen : cs[0].o,
+      high: m.regularMarketDayHigh, low: m.regularMarketDayLow, volume: m.regularMarketVolume,
+      currency: 'USD', source: 'yahoo(unofficial)', delay: 'near-live', ts: Date.now(),
+    };
+    if (prev != null) { q.change = price - prev; q.changePct = (price / prev - 1) * 100; }
+    out.push(q);
+  }
+  if (out.length < 3) throw new Error('yahoo batch: thin (' + out.length + ')');
+  return out;
+}
