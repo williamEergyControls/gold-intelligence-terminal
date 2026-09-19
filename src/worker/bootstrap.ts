@@ -114,10 +114,23 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
   const ryLast = daily.v.ryDaily.length ? daily.v.ryDaily[daily.v.ryDaily.length - 1] : 1.51;
   const ryPrev = daily.v.ryDaily.length > 1 ? daily.v.ryDaily[daily.v.ryDaily.length - 2] : ryLast;
 
-  // ---- miners heatmap: ONE stooq CSV call (EOD); missing tickers dropped honestly ----
+// ---- miners heatmap: stooq CSV → yahoo batch → simulated (errors logged, never silent) ----
   const miners = (await cache.wrap('miners', 3600, async () => {
-    try { const q = await stooq.stooqQuotes(env, stooq.MINERS); if (q.length >= 6) return q; throw new Error('thin'); }
-    catch { return sim.simMiners(); }
+    try {
+      const q = await stooq.stooqQuotes(env, stooq.MINERS);
+      if (q.length >= 6) return q;
+      throw new Error('stooq thin: ' + q.length);
+    } catch (e) {
+      console.error('MINERS_STOOQ_FAIL', String((e as Error).message).slice(0, 120));
+      try {
+        const q2 = await yahoo.yahooBatchQuotes(stooq.MINERS);
+        if (q2.length >= 6) return q2;
+        throw new Error('yahoo thin: ' + q2.length);
+      } catch (e2) {
+        console.error('MINERS_YAHOO_FAIL', String((e2 as Error).message).slice(0, 120));
+        return sim.simMiners();
+      }
+    }
   })).v;
 
   // ---- FX: frankfurter (one call, DAILY) → simulated ----
