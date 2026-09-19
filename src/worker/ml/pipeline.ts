@@ -97,7 +97,7 @@ export async function predictAndStore(env: Env): Promise<void> {
     let nb = 3, ne = 3;
     try {
       const news = (await env.CACHE.get('news', 'json')) as any;
-      const gold = (news?.gold ?? []) as { sentiment: string }[];
+      const gold = (Array.isArray(news) ? news : []).filter((n: any) => n?.topic === 'gold') as { sentiment: string }[];
       nb = gold.filter(n => n.sentiment === 'bull').length || 1;
       ne = gold.filter(n => n.sentiment === 'bear').length || 1;
     } catch { /* keep neutral */ }
