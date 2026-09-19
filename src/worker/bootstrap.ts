@@ -113,6 +113,12 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
   });
   const ryLast = daily.v.ryDaily.length ? daily.v.ryDaily[daily.v.ryDaily.length - 1] : 1.51;
   const ryPrev = daily.v.ryDaily.length > 1 ? daily.v.ryDaily[daily.v.ryDaily.length - 2] : ryLast;
+  // metals.dev gives no prevClose — use the REAL previous daily close from the series
+  if (gold.prevClose == null && daily.v.goldDaily.length >= 2) {
+    gold.prevClose = daily.v.goldDaily[daily.v.goldDaily.length - 2];
+    gold.change = gold.price - gold.prevClose;
+    gold.changePct = (gold.price / gold.prevClose - 1) * 100;
+  }
 
 // ---- miners heatmap: stooq CSV → yahoo batch → simulated (errors logged, never silent) ----
   const miners = (await cache.wrap('miners', 3600, async () => {
@@ -149,9 +155,20 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
     { label: 'MEDICAL', yoy: 3.1, source: 'reference' },
   ];
 
-  // ---- news: GDELT → simulated — cached 5min ----
-  const news = (await cache.wrap('news', 300, () => gdelt.gdeltNews(env, ['gold', 'mining', 'macro']).catch(() => sim.simNews()))).v;
-
+  // ---- news: GDELT → simulated — cached 1 HOUR ----
+  const news = (await cache.wrap('news', 3600, () => gdelt.gdeltNews(env, ['gold', 'mining', 'macro']).catch(() => sim.simNews()))).v;
+  // hourly Llama sentiment (if fresh) overrides the keyword heuristic — labeled LLAMA HOURLY
+  try {
+    const nse = (await env.CACHE.get('news:sentiment', 'json')) as { ts: number; items: { id: string; s: string }[] } | null;
+    if (nse && Array.isArray(nse.items) && Date.now() - nse.ts < 26 * 36e5) {
+      const smap = new Map(nse.items.map(x => [x.id, x.s]));
+      for (const n of news) {
+        const s = smap.get(n.id);
+        if (s === 'bull' || s === 'bear' || s === 'neutral') { n.sentiment = s; n.sentimentNote = 'LLAMA HOURLY'; }
+      }
+    }
+  } catch { /* heuristic stands */ }
+  
   // ---- analytics over the DAILY gold series (proper lookback) ----
   const dailyCandles: Candle[] = daily.v.goldDaily.map((c, i, arr) => ({ t: Date.now() - (arr.length - i) * 864e5, o: arr[Math.max(0, i - 1)], h: c, l: c, c, v: 0 }));
   const analytics = score(dailyCandles.length > 60 ? dailyCandles : candles, gold);
