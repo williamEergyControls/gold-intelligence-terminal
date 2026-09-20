@@ -4,18 +4,20 @@ import { fetchText } from './provider';
 const S: Record<string, string> = {
   'XAU:USD': 'xauusd', 'XAG:USD': 'xagusd', 'DXY': 'dx.f', 'GDX': 'gdx.us',
   'WTI': 'cl.f', 'SPX': '^spx',
+  'GOLD': 'b.us',   // Barrick trades as B on NYSE since May 2025 (GOLD was the old ticker)
+  'AGI': 'agi.us',  // Alamos Gold (AUQ was a dead AuRico ticker)
 };
 const NAMES: Record<string, string> = {
   NEM: 'Newmont', GOLD: 'Barrick', AEM: 'Agnico Eagle', WPM: 'Wheaton PM', RGLD: 'Royal Gold',
   KGC: 'Kinross', GFI: 'Gold Fields', AU: 'AngloGold', PAAS: 'Pan American', CDE: 'Coeur',
   HL: 'Hecla', IAG: 'IAMGOLD', BVN: 'Buenaventura', DRD: 'DRDGOLD', HMY: 'Harmony',
-  NGD: 'New Gold', AUQ: 'Alamos', SBSW: 'Sibanye',
+  NGD: 'New Gold', AGI: 'Alamos Gold', SBSW: 'Sibanye',
 };
 export const minerNames = NAMES;
 export const MINERS = Object.keys(NAMES);
 
 export async function stooqQuotes(_env: Env, syms: string[]): Promise<Quote[]> {
-  const ours = new Map<string, string>(); // stooq sym -> our symbol
+  const ours = new Map<string, string>();
   const list = syms.map(s => {
     const mapped = S[s] ?? (s.includes(':') ? s.replace(':', '').toLowerCase() : s.toLowerCase() + '.us');
     ours.set(mapped, s);
@@ -33,8 +35,7 @@ export async function stooqQuotes(_env: Env, syms: string[]): Promise<Quote[]> {
     const close = parseFloat(f[ix('close')]);
     if (!sym || !isFinite(close)) continue; // unknown ticker → dropped honestly, not fabricated
     const open = parseFloat(f[ix('open')]);
-    // Stooq daily CSV has no prevClose; session change O→C only, and the delay label says EOD.
-    const chg = isFinite(open) && open > 0 ? (close / open - 1) * 100 : undefined;
+    const chg = (isFinite(open) && open > 0) ? (close / open - 1) * 100 : undefined;
     const d = f[ix('date')] ?? '';
     const t = f[ix('time')] ?? '';
     const ts = /^\d{4}-\d{2}-\d{2}$/.test(d) ? Date.parse(`${d}T${/^\d{2}:\d{2}/.test(t) ? t.slice(0, 8) : '00:00:00'}Z`) : Date.now();
