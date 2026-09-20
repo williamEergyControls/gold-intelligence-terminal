@@ -4,8 +4,11 @@ import { buildBootstrap } from './bootstrap';
 import { aiAnalyst, newsSentimentHourly } from './ai/analyst';
 import { firstOk, persistHealthRows, ensureSecrets, secret } from './providers/provider';
 import { trainAndStore, predictAndStore, gradeOutcomes } from './ml/pipeline';
+import { buildEnergyPage, buildAgriPage } from './pages';
 import * as yahoo from './providers/yahoo';
 import * as metalsdev from './providers/metalsdev';
+import * as goldapicom from './providers/goldapicom';
+import * as goldapiio from './providers/goldapiio';
 import * as sim from './providers/simulated';
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff' };
@@ -17,11 +20,10 @@ function allow(ip: string, max = 240, windowMs = 60_000): boolean {
   const h = hits.get(ip);
   if (!h || now - h.w > windowMs) { hits.set(ip, { n: 1, w: now }); return true; }
   h.n++;
-  if (hits.size > 5000) hits.clear(); // prune so the map never grows forever
+  if (hits.size > 5000) hits.clear();
   return h.n <= max;
 }
 
-/* per-isolate memo for the light quote poll — NO KV writes, so polling is free */
 const qMemo = new Map<string, { v: any; ts: number }>();
 function memo<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
   const m = qMemo.get(key);
@@ -29,7 +31,6 @@ function memo<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
   return fn().then(v => { qMemo.set(key, { v, ts: Date.now() }); return v; });
 }
 
-/* admin gate: sensitive endpoints stay LOCKED until an ADMIN_TOKEN secret exists */
 function adminOk(req: Request, env: Env, url: URL): boolean {
   const t = secret(env, 'ADMIN_TOKEN');
   if (!t) return false;
@@ -50,7 +51,7 @@ export default {
         case path === '/api/env': {
           if (!adminOk(req, env, url)) return json({ error: 'ADMIN_LOCKED', hint: 'set ADMIN_TOKEN secret, then pass ?key=TOKEN' }, 403);
           const mk = (n: string) => { const v = secret(env, n); return v ? `SET (${v.length} chars)` : 'MISSING'; };
-          return json({ METALS_API_KEY: mk('METALS_API_KEY'), FRED_API_KEY: mk('FRED_API_KEY'), ADMIN_TOKEN: mk('ADMIN_TOKEN'), aiEnabled: env.AI_ENABLED ?? 'MISSING', checkedAt: new Date().toISOString() });
+          return json({ METALS_API_KEY: mk('METALS_API_KEY'), FRED_API_KEY: mk('FRED_API_KEY'), GOLDAPI_KEY: mk('GOLDAPI_KEY'), EIA_API_KEY: mk('EIA_API_KEY'), ADMIN_TOKEN: mk('ADMIN_TOKEN'), aiEnabled: env.AI_ENABLED ?? 'MISSING', checkedAt: new Date().toISOString() });
         }
         case path === '/api/health': {
           const boot = await cachedBoot(env, '15M');
@@ -61,31 +62,50 @@ export default {
           const boot = await cachedBoot(env, tf);
           return json(boot.v);
         }
-        /* LIGHT quote poll: tiny payload, zero KV writes, feeds the 20s frontend tick */
+        /* LIGHT quote poll — gold-api.com primary (free, no key, no limit) */
         case path === '/api/quote': {
           const out: any = { ts: Date.now() };
           try {
-            const g = await memo('q:gold', 60e3, () => yahoo.yahooQuote(env, 'XAU:USD'));
-            const s = await memo('q:silver', 60e3, () => yahoo.yahooQuote(env, 'XAG:USD'));
-            out.gold = g.price; out.silver = s.price; out.source = 'yahoo(unofficial)';
+            const g = await goldapicom.goldapiComQuote('XAU:USD');
+            const s = await goldapicom.goldapiComQuote('XAG:USD');
+            out.gold = g.price; out.silver = s.price; out.source = 'gold-api.com';
           } catch {
-            const l = await metalsdev.metalsdevLatest(env); // quota-protected fallback
-            out.gold = l.gold; out.silver = l.silver; out.source = 'metals.dev';
+            try {
+              const g = await memo('q:gold', 60e3, () => yahoo.yahooQuote(env, 'XAU:USD'));
+              const s = await memo('q:silver', 60e3, () => yahoo.yahooQuote(env, 'XAG:USD'));
+              out.gold = g.price; out.silver = s.price; out.source = 'yahoo(unofficial)';
+            } catch {
+              const l = await metalsdev.metalsdevLatest(env); // quota-protected last resort
+              out.gold = l.gold; out.silver = l.silver; out.source = 'metals.dev';
+            }
           }
           const d = await memo('q:dxy', 60e3, () => yahoo.yahooQuote(env, 'DXY'));
           out.dxy = d.price; out.dxyPct = d.changePct ?? null;
           return json(out);
         }
+        /* candles now accepts ?sym= (defaults XAU:USD — home page unchanged) */
         case path === '/api/candles': {
           const tf = parseTf(url.searchParams.get('tf'));
+          const sym = url.searchParams.get('sym') ?? 'XAU:USD';
           const cache = new AppCache(env.CACHE);
-          const r = await cache.wrap(`candles:XAU:${tf}`, tf === '1D' ? 3600 : 300, () =>
+          const r = await cache.wrap(`candles:${sym}:${tf}`, tf === '1D' ? 3600 : 300, () =>
             firstOk([
-              { name: 'yahoo', fn: () => yahoo.yahooCandles(env, 'XAU:USD', tf) },
-              { name: 'simulated', fn: () => Promise.resolve(sim.simCandles('XAU:USD', tf)) },
+              { name: 'yahoo', fn: () => yahoo.yahooCandles(env, sym, tf) },
+              { name: 'simulated', fn: () => Promise.resolve(sim.simCandles(sym, tf)) },
             ]).then(rr => ({ candles: rr.value, source: rr.provider === 'yahoo' ? 'yahoo(unofficial)' : 'simulated', delay: rr.provider === 'yahoo' ? 'near-live' : 'simulated', ts: Date.now() }))
           );
-          return json({ tf, ...r.v, stale: r.stale, ageMs: r.ageMs });
+          return json({ tf, sym, ...r.v, stale: r.stale, ageMs: r.ageMs });
+        }
+        /* ===== EXPANSION PAGES ===== */
+        case path === '/api/page/energy': {
+          const cache = new AppCache(env.CACHE);
+          const r = await cache.wrap('page:energy', 300, () => buildEnergyPage(env));
+          return json(r.v);
+        }
+        case path === '/api/page/agri': {
+          const cache = new AppCache(env.CACHE);
+          const r = await cache.wrap('page:agri', 300, () => buildAgriPage(env));
+          return json(r.v);
         }
         case path === '/api/ml/train': {
           if (!adminOk(req, env, url)) return json({ error: 'ADMIN_LOCKED', hint: 'set ADMIN_TOKEN secret, then pass ?key=TOKEN' }, 403);
@@ -98,8 +118,6 @@ export default {
           if (raw) return json(raw);
           return json({ status: 'WARMING', note: 'first predictions appear within ~5 minutes of cron' });
         }
-        /* collision fix: SLICE the boot payload instead of re-wrapping the same
-           KV keys bootstrap writes — no more object-vs-array 502 loops */
         case path === '/api/macro': {
           const b = await cachedBoot(env, '15M');
           return json(b.v.macro);
@@ -115,7 +133,7 @@ export default {
         }
         case path === '/api/ai/analyst': {
           const cachedAi = (await env.CACHE.get('ai:cache', 'json')) as any;
-          if (cachedAi && Date.now() - cachedAi.ts < 600e3) return json(cachedAi); // 10-min quota shield
+          if (cachedAi && Date.now() - cachedAi.ts < 600e3) return json(cachedAi);
           const b = await cachedBoot(env, parseTf(url.searchParams.get('tf')));
           const out = await aiAnalyst(env, b.v.analytics, b.v.why, {
             ml: (b.v as any).ml ?? null,
@@ -129,7 +147,7 @@ export default {
           await env.CACHE.put('ai:cache', JSON.stringify(out), { expirationTtl: 1200 });
           return json(out);
         }
-        default: return json({ error: 'UNKNOWN_ENDPOINT', endpoints: ['/api/health', '/api/bootstrap', '/api/quote', '/api/candles', '/api/ml', '/api/macro', '/api/news', '/api/analytics', '/api/why-gold', '/api/ai/analyst'] }, 404);
+        default: return json({ error: 'UNKNOWN_ENDPOINT', endpoints: ['/api/health', '/api/bootstrap', '/api/quote', '/api/candles?sym=', '/api/page/energy', '/api/page/agri', '/api/ml', '/api/macro', '/api/news', '/api/analytics', '/api/why-gold', '/api/ai/analyst'] }, 404);
       }
     } catch (e) {
       return json({ error: 'UPSTREAM_FAILURE', detail: String((e as Error).message).slice(0, 300) }, 502);
@@ -138,11 +156,9 @@ export default {
 
   async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
     await ensureSecrets(env);
-    // cron split: */5 = site only; the hourly trigger also runs ML + sentiment.
-    // Keeps each invocation far under the 50-subrequest free limit.
     const hourly = event.cron === '0 * * * *';
 
-    // (1) warm site cache + write history — every run
+    // (1) warm site cache + history — every run
     ctx.waitUntil((async () => {
       try {
         const boot = await buildBootstrap(env, '15M');
@@ -162,7 +178,18 @@ export default {
 
     if (!hourly) return;
 
-    // (2) ML: retrain weekly, predict+grade (6h throttle stays)
+    // (1b) GoldAPI.io DAILY SEED — 2 calls/day, gated 20h (quota: ~100/mo)
+    ctx.waitUntil((async () => {
+      try {
+        const last = await env.CACHE.get('goldio:last', 'json') as { t: number } | null;
+        if (last && Date.now() - last.t < 20 * 36e5) return;
+        const seed = await goldapiio.goldapiIoSeed(env);
+        await env.CACHE.put('goldio:daily', JSON.stringify(seed), { expirationTtl: 172800 });
+        await env.CACHE.put('goldio:last', JSON.stringify({ t: Date.now() }), { expirationTtl: 172800 });
+      } catch (e) { console.error('GOLDIO_SEED_FAIL', String((e as Error).message).slice(0, 200)); }
+    })());
+
+    // (2) ML: retrain weekly, predict+grade (6h throttle)
     ctx.waitUntil((async () => {
       try {
         const lastMl = await env.CACHE.get('ml:last', 'json') as { t: number } | null;
@@ -179,7 +206,7 @@ export default {
       } catch (e) { console.error('ML_CRON_FAIL', String((e as Error).message).slice(0, 300)); }
     })());
 
-    // (3) hourly Llama news sentiment — ~1 AI call/hour, free quota
+    // (3) hourly Llama news sentiment
     ctx.waitUntil((async () => {
       try {
         const lastNse = await env.CACHE.get('nse:last', 'json') as { t: number } | null;
