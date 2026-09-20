@@ -13,11 +13,11 @@ import { score, attribution, corr } from './analytics/engine';
 // ---------- REFERENCE DATA: curated, low-frequency, honestly labeled ----------
 const RE = {
   shipping: [
-    { label: 'FBX · Container 40ft', value: '3,842', delta: '▲ +1.8% w/w', deltaDir: 1, typetag: 'INDEX · W', note: 'public index' },
-    { label: 'BDI · Dry Bulk', value: '1,984', delta: '▼ −2.3% d', deltaDir: -1, typetag: 'INDEX · D', note: 'public index' },
-    { label: 'Bunker VLSFO (SGP)', value: '612 $/t', delta: '▲ +1.1% w/w', deltaDir: 1, typetag: 'INDEX · W', note: 'public index' },
-    { label: 'Suez transits', value: '−18% m/m', delta: '▼', deltaDir: -1, typetag: 'NEWS-IND', note: 'GDELT-derived' },
-    { label: 'Red Sea war-risk', value: 'FIRM', delta: '▲', deltaDir: 1, typetag: 'MKT-IND', note: 'news indicator — no live quote claimed' },
+    { label: 'FBX · Container 40ft', value: '3,842', delta: '▲ +1.8% w/w', deltaDir: 1 as const, typetag: 'INDEX · W', note: 'public index' },
+    { label: 'BDI · Dry Bulk', value: '1,984', delta: '▼ −2.3% d', deltaDir: -1 as const, typetag: 'INDEX · D', note: 'public index' },
+    { label: 'Bunker VLSFO (SGP)', value: '612 $/t', delta: '▲ +1.1% w/w', deltaDir: 1 as const, typetag: 'INDEX · W', note: 'public index' },
+    { label: 'Suez transits', value: '−18% m/m', delta: '▼', deltaDir: -1 as const, typetag: 'NEWS-IND', note: 'GDELT-derived' },
+    { label: 'Red Sea war-risk', value: 'FIRM', delta: '▲', deltaDir: 1 as const, typetag: 'MKT-IND', note: 'news indicator — no live quote claimed' },
   ],
   insurance: [
     { line: 'Auto Insurance CPI', yoy: 11.8, pressure: 3, tag: 'OFFICIAL CPI IDX' },
@@ -31,12 +31,14 @@ const RE = {
     { bank: 'BOJ', rate: '0.75%', next: 'OCT 31', stance: 'HAWKISH', gold: '—' },
     { bank: 'PBOC', rate: '3.10% LPR', next: '—', stance: 'EASING', gold: '+9.0t ▲BUYING (7M)' },
   ],
+  // HONEST CALENDAR: fixed real dates so the countdown actually arrives.
+  // Times are ET (UTC-4/5). Update this list as dates pass.
   calendar: [
-    { when: 'TOM 14:00', event: 'FOMC Minutes (Sep)', cons: '—', prior: '—', imp: 3, ts: Date.now() + 18 * 36e5 },
-    { when: 'OCT 10 · 08:30', event: 'CPI (Sep)', cons: '2.9%', prior: '3.1%', imp: 3, ts: Date.now() + 26 * 864e5 },
-    { when: 'OCT 29 · 14:00', event: 'FOMC Rate', cons: '−25bp', prior: '3.75%', imp: 3, ts: Date.now() + 45 * 864e5 },
-    { when: 'OCT 31 · 08:30', event: 'Core PCE (Sep)', cons: '2.8%', prior: '2.8%', imp: 2, ts: Date.now() + 47 * 864e5 },
-    { when: 'NOV 01 · 08:30', event: 'Nonfarm Payrolls', cons: '145K', prior: '112K', imp: 3, ts: Date.now() + 48 * 864e5 },
+    { when: 'OCT 08 · 13:00', event: 'FOMC Minutes (Sep)', cons: '—', prior: '—', imp: 3, ts: Date.parse('2026-10-08T17:00:00Z') },
+    { when: 'OCT 15 · 07:30', event: 'CPI YoY (Sep)', cons: '2.9%', prior: '2.9%', imp: 3, ts: Date.parse('2026-10-15T11:30:00Z') },
+    { when: 'OCT 29 · 13:00', event: 'FOMC Rate', cons: '—', prior: '3.75–4.00', imp: 3, ts: Date.parse('2026-10-29T17:00:00Z') },
+    { when: 'OCT 31 · 07:30', event: 'Core PCE (Sep)', cons: '2.9%', prior: '2.9%', imp: 2, ts: Date.parse('2026-10-31T11:30:00Z') },
+    { when: 'NOV 06 · 07:30', event: 'Nonfarm Payrolls (Oct)', cons: '—', prior: '—', imp: 3, ts: Date.parse('2026-11-06T12:30:00Z') },
   ],
 };
 const RE_PERIODS: Record<string, Record<string, number>> = {
@@ -60,10 +62,6 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
     { name: 'stooq', fn: async () => (await stooq.stooqQuotes(env, ['XAU:USD']))[0] },
     { name: 'simulated', fn: () => Promise.resolve(sim.simQuote('XAU:USD')) },
   ])).value;
-  if (gold.prevClose == null) {
-    const pc = await env.CACHE.get('prevclose:XAU:USD', 'json') as { c: number } | null;
-    if (pc) { gold.prevClose = pc.c; gold.change = gold.price - pc.c; gold.changePct = (gold.price / pc.c - 1) * 100; }
-  }
   const silver = (await firstOk<Quote>([
     { name: 'metals.dev', fn: () => metalsdev.metalsdevQuote(env, 'XAG:USD') },
     { name: 'yahoo', fn: () => yahoo.yahooQuote(env, 'XAG:USD') },
@@ -75,8 +73,8 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
     { name: 'simulated', fn: () => Promise.resolve(sim.simQuote('DXY')) },
   ])).value;
 
-  // ---- candles for the current timeframe — cached 120s ----
-  const candles = (await cache.wrap(`candles:XAU:${tf}`, 120, () =>
+  // ---- candles for the current timeframe — cached 300s (1D: via endpoint TTL) ----
+  const candles = (await cache.wrap(`candles:XAU:${tf}`, 300, () =>
     firstOk([
       { name: 'yahoo', fn: () => yahoo.yahooCandles(env, 'XAU:USD', tf) },
       { name: 'simulated', fn: () => Promise.resolve(sim.simCandles('XAU:USD', tf)) },
@@ -113,14 +111,18 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
   });
   const ryLast = daily.v.ryDaily.length ? daily.v.ryDaily[daily.v.ryDaily.length - 1] : 1.51;
   const ryPrev = daily.v.ryDaily.length > 1 ? daily.v.ryDaily[daily.v.ryDaily.length - 2] : ryLast;
-  // metals.dev gives no prevClose — use the REAL previous daily close from the series
-  if (gold.prevClose == null && daily.v.goldDaily.length >= 2) {
-    gold.prevClose = daily.v.goldDaily[daily.v.goldDaily.length - 2];
-    gold.change = gold.price - gold.prevClose;
-    gold.changePct = (gold.price / gold.prevClose - 1) * 100;
+  // prevClose fill: stored day-close first, else REAL previous daily close
+  if (gold.prevClose == null) {
+    const pc = await env.CACHE.get('prevclose:XAU:USD', 'json') as { c: number } | null;
+    if (pc) gold.prevClose = pc.c;
+    else if (daily.v.goldDaily.length >= 2) gold.prevClose = daily.v.goldDaily[daily.v.goldDaily.length - 2];
+    if (gold.prevClose != null) {
+      gold.change = gold.price - gold.prevClose;
+      gold.changePct = (gold.price / gold.prevClose - 1) * 100;
+    }
   }
 
-// ---- miners heatmap: stooq CSV → yahoo batch → simulated (errors logged, never silent) ----
+  // ---- miners heatmap: stooq CSV → yahoo batch → simulated (errors logged, never silent) ----
   const miners = (await cache.wrap('miners', 3600, async () => {
     try {
       const q = await stooq.stooqQuotes(env, stooq.MINERS);
@@ -168,7 +170,7 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
       }
     }
   } catch { /* heuristic stands */ }
-  
+
   // ---- analytics over the DAILY gold series (proper lookback) ----
   const dailyCandles: Candle[] = daily.v.goldDaily.map((c, i, arr) => ({ t: Date.now() - (arr.length - i) * 864e5, o: arr[Math.max(0, i - 1)], h: c, l: c, c, v: 0 }));
   const analytics = score(dailyCandles.length > 60 ? dailyCandles : candles, gold);
@@ -182,14 +184,17 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
     newsCount: news.filter(n => n.topic === 'gold').length, newsAvg: 4,
   });
 
-  // ---- alerts: derived from ACTUAL moves ----
+  // ---- alerts: derived from ACTUAL moves + date-gated calendar alert ----
   const alerts: AlertItem[] = [];
   let hm = 0; for (const c of candles.slice(-60)) hm = Math.max(hm, c.h);
   if (hm > 0 && gold.price >= hm * 0.998) alerts.push({ se: 'warn', t: nowHM(), txt: `GOLD ${fmt1(gold.price)} — within 0.2% of session high ${fmt1(hm)}`, cat: 'gold' });
   if (Math.abs(dxy.changePct ?? 0) > 0.5) alerts.push({ se: 'warn', t: nowHM(), txt: `DXY ${sgn(dxy.changePct)}${fmt1(dxy.changePct)}% — dollar move in force`, cat: 'fx' });
   if (Math.abs((ryLast - ryPrev) * 100) > 3) alerts.push({ se: 'info', t: nowHM(), txt: `10Y real yield ${sgn((ryLast - ryPrev) * 100)}${fmt1((ryLast - ryPrev) * 100)}bp on the day`, cat: 'fx' });
   if (gdx != null && Math.abs(gdx) > 2) alerts.push({ se: 'info', t: nowHM(), txt: `Miners avg ${sgn(gdx)}${fmt1(gdx)}% vs XAU ${sgn(gold.changePct)}${fmt1(gold.changePct)}% — beta check`, cat: 'gold' });
-  alerts.push({ se: 'info', t: nowHM(), txt: 'FOMC minutes tomorrow 14:00 ET — rate channel in focus', cat: 'macro' });
+  const nextEv = RE.calendar.find(c => c.ts > Date.now());
+  if (nextEv && nextEv.ts - Date.now() < 72 * 36e5) {
+    alerts.push({ se: 'info', t: nowHM(), txt: `${nextEv.event} in ${Math.round((nextEv.ts - Date.now()) / 36e5)}h — rate channel in focus`, cat: 'macro' });
+  }
 
   const tape: Quote[] = [gold, silver, dxy, ...fx.slice(0, 2)];
   const us10 = row('US10Y');
