@@ -2,9 +2,10 @@ import type { Env, Quote } from '../types';
 import { fetchJson, secret } from './provider';
 
 // ONE /latest call returns ALL metals. Cached per-isolate so gold+silver cost a
-// single upstream request per TTL window. METALS_TTL (vars, seconds) throttles
-// quota burn: 300s = ≤288 calls/day worst case. Check your plan's limit in the
-// metals.dev dashboard; if it's monthly, set METALS_TTL=900 in wrangler vars.
+// single upstream request per TTL window. METALS_TTL (wrangler vars, seconds)
+// throttles quota burn: 300s = max ~288 calls/day (was ~5,760 with two uncached
+// calls per 30s build). If your metals.dev plan is monthly-limited, set
+// METALS_TTL to 900 in wrangler.jsonc.
 interface MetalsLatest { gold: number; silver: number; ts: number }
 const microMd = new Map<string, MetalsLatest>();
 
@@ -22,8 +23,9 @@ export async function metalsdevLatest(env: Env): Promise<MetalsLatest> {
   return out;
 }
 
+// Free plan, key required, provider states <=60s delay. Labeled NEAR-LIVE, never LIVE.
 export async function metalsdevQuote(env: Env, symbol: 'XAU:USD' | 'XAG:USD'): Promise<Quote> {
   const l = await metalsdevLatest(env);
-  // /latest carries no prevClose — bootstrap fills it from stored day-close / daily series.
-  return { symbol, price: symbol === 'XAU:USD' ? l.gold : l silver, currency: 'USD', unit: 'troy oz', source: 'metals.dev', delay: 'near-live', ts: l.ts };
+  // /latest carries no prevClose — bootstrap fills it from the daily series.
+  return { symbol, price: symbol === 'XAU:USD' ? l.gold : l.silver, currency: 'USD', unit: 'troy oz', source: 'metals.dev', delay: 'near-live', ts: l.ts };
 }
