@@ -63,8 +63,8 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
     { name: 'simulated', fn: () => Promise.resolve(sim.simQuote('XAU:USD')) },
   ])).value;
   const silver = (await firstOk<Quote>([
-    { name: 'metals.dev', fn: () => metalsdev.metalsdevQuote(env, 'XAG:USD') },
     { name: 'yahoo', fn: () => yahoo.yahooQuote(env, 'XAG:USD') },
+    { name: 'metals.dev', fn: () => metalsdev.metalsdevQuote(env, 'XAG:USD') },
     { name: 'simulated', fn: () => Promise.resolve(sim.simQuote('XAG:USD')) },
   ])).value;
   const dxy = (await firstOk<Quote>([
