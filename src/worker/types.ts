@@ -7,6 +7,7 @@ export interface Quote {
   symbol: string; name?: string;
   price: number; prevClose?: number; change?: number; changePct?: number;
   open?: number; high?: number; low?: number; volume?: number;
+  bid?: number; ask?: number;
   currency: string; unit?: string;
   source: string; delay: Delay; ts: number;
   wkHigh?: number; wkLow?: number;
@@ -20,7 +21,7 @@ export interface MacroRow {
 }
 export interface NewsItem {
   id: string; title: string; source: string; url: string; publishedTs: number;
-  topic: 'gold' | 'mining' | 'macro';
+  topic: 'gold' | 'mining' | 'macro' | 'energy' | 'agri';
   sentiment: 'bull' | 'bear' | 'neutral'; sentimentNote: string;
 }
 export interface Driver { name: string; delta: string; dir: -1 | 0 | 1; magnitude: number }
@@ -77,6 +78,22 @@ export interface Bootstrap {
   health: ProviderStatus[];
 }
 
+/* ===== EXPANSION: page payloads (ENERGY / AGRI) ===== */
+export interface SpotCard { symbol: string; name: string; price: number; changePct: number; note: string }
+export interface PagePayload {
+  mode: 'live' | 'simulated'; builtAt: number;
+  hero: Quote; tape: Quote[]; monitor: (Quote & { unit: string })[];
+  spotlights: SpotCard[];
+  ratios: { label: string; value: number; unit: string }[];
+  spreads: { label: string; value: string; change: string | null }[];
+  eia?: { label: string; value: number; unit: string; asOf: string; change: number | null }[];
+  water?: { nqH2o: { value: number; prior: number; asOf: string } | null; levels: { site: string; name: string; gageFt: number; ts: number }[] };
+  weather?: { tempC: number; windKph: number; code: number; daily: { date: string; tmax: number; tmin: number; precip: number }[] };
+  news: NewsItem[];
+  calendar: { when: string; event: string; note: string }[];
+  health: ProviderStatus[];
+}
+
 export interface Env {
   CACHE: KVNamespace;
   DB: D1Database;
@@ -86,6 +103,7 @@ export interface Env {
   BLS_API_KEY?: string;
   SEC_USER_AGENT?: string;
   EIA_API_KEY?: string;
+  GOLDAPI_KEY?: string;
   AI_ENABLED?: string;
   METALS_TTL?: string;
   ADMIN_TOKEN?: string;
