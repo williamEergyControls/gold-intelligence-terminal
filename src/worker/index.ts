@@ -65,12 +65,12 @@ export default {
         case path === '/api/quote': {
           const out: any = { ts: Date.now() };
           try {
-            const l = await metalsdev.metalsdevLatest(env);
-            out.gold = l.gold; out.silver = l.silver; out.source = 'metals.dev';
-          } catch {
             const g = await memo('q:gold', 60e3, () => yahoo.yahooQuote(env, 'XAU:USD'));
             const s = await memo('q:silver', 60e3, () => yahoo.yahooQuote(env, 'XAG:USD'));
             out.gold = g.price; out.silver = s.price; out.source = 'yahoo(unofficial)';
+          } catch {
+            const l = await metalsdev.metalsdevLatest(env); // quota-protected fallback
+            out.gold = l.gold; out.silver = l.silver; out.source = 'metals.dev';
           }
           const d = await memo('q:dxy', 60e3, () => yahoo.yahooQuote(env, 'DXY'));
           out.dxy = d.price; out.dxyPct = d.changePct ?? null;
