@@ -5,9 +5,11 @@ const QUERIES: Record<string, string> = {
   gold: 'gold price OR "gold market" sourcelang:english',
   mining: '"gold mining" OR newmont OR barrick OR agnico sourcelang:english',
   macro: 'inflation OR "federal reserve" OR CPI OR "central bank" sourcelang:english',
+  energy: 'crude oil OR "natural gas" OR gasoline OR OPEC sourcelang:english',
+  agri: 'corn OR soybean OR wheat OR cattle OR USDA OR drought sourcelang:english',
 };
-const POS = ['rally', 'surge', 'record', 'gain', 'rise', 'jumps', 'boost', 'strong', 'buying'];
-const NEG = ['plunge', 'slump', 'fall', 'drops', 'crisis', 'war', 'fear', 'weak', 'selling', 'default'];
+const POS = ['rally', 'surge', 'record', 'gain', 'rise', 'jumps', 'boost', 'strong', 'buying', 'climbs', 'firms', 'higher'];
+const NEG = ['plunge', 'slump', 'fall', 'drops', 'crisis', 'war', 'fear', 'weak', 'selling', 'default', 'tumbles', 'lower'];
 
 export async function gdeltNews(_env: Env, topics: string[]): Promise<NewsItem[]> {
   const all: NewsItem[] = [];
@@ -22,14 +24,14 @@ export async function gdeltNews(_env: Env, topics: string[]): Promise<NewsItem[]
       const ts = m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) : Date.now();
       const low = title.toLowerCase();
       const p = POS.filter(w => low.includes(w)).length, n = NEG.filter(w => low.includes(w)).length;
-      const sentiment = p > n ? 'bull' : n > p ? 'bear' : 'neutral';
       all.push({
         id: String(a.url), title, source: `GDELT · ${a.domain ?? 'web'}`, url: String(a.url),
         publishedTs: ts, topic: topic as NewsItem['topic'],
-        sentiment, sentimentNote: 'KEYWORD HEURISTIC (not a model)',
+        sentiment: p > n ? 'bull' : n > p ? 'bear' : 'neutral',
+        sentimentNote: 'KEYWORD HEURISTIC (not a model)',
       });
     }
   }
   if (!all.length) throw new Error('gdelt: no articles');
-  return all.sort((a, b) => b.publishedTs - a.publishedTs).slice(0, 24);
+  return all.sort((a, b) => b.publishedTs - a.publishedTs).slice(0, 30);
 }
