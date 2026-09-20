@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GIT/4 · AGRI TERMINAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/terminal.css">
+<style>
+/* page-local layout + the .bi grid (terminal.css scopes .bi under .brk) */
+body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
+.pgrid{display:grid;grid-template-columns:repeat(12,1fr);gap:7px;max-width:1920px;margin:0 auto;padding:8px 10px}
+#p-hero{grid-column:1/4}
+#p-chart{grid-column:4/13;min-height:430px}
+#p-mon{grid-column:1/7}
+#p-spot{grid-column:7/10}
+#p-extra{grid-column:10/13}
+#p-news{grid-column:1/8}
+#p-cal{grid-column:8/13}
+.hrow{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.hrow label{font-size:8px;letter-spacing:.14em}
+.hero .bigpx{font:600 42px/1 var(--mono);color:#f2e9d4}
+.hero .bigchg{font:600 13px var(--mono);margin-top:6px}
+.spots,.ratios{display:grid;grid-template-columns:1fr;gap:4px}
+.ratios{margin-top:8px}
+.bi{display:grid;grid-template-columns:96px 70px 1fr;align-items:center;gap:8px;padding:3px 0;font:10.5px var(--mono)}
+.bi .n{color:var(--mut)}
+.bi:last-child{margin-bottom:4px}
+@media(max-width:1400px){body{overflow-x:auto}.pgrid{min-width:1380px}}
+</style>
+</head>
+<body>
+
+<header id="top">
+  <div class="logo"><span class="lx"></span><span class="lt">GOLD INTELLIGENCE TERMINAL</span><span class="lv">GIT/4.2.26 · AGRI</span></div>
+  <nav class="gochips">
+    <a class="gchip" href="/" style="text-decoration:none">HOME</a>
+    <a class="gchip" href="/" style="text-decoration:none">GOLD<em>&lt;GO&gt;</em></a>
+    <a class="gchip" href="/energy.html" style="text-decoration:none">ENERGY<em>&lt;GO&gt;</em></a>
+    <a class="gchip" href="/agri.html" style="text-decoration:none">AGRI<em>&lt;GO&gt;</em></a>
+  </nav>
+  <div class="tsright">
+    <span class="livedot"><i></i>FEED</span>
+    <span id="clock">--:--:--</span>
+  </div>
+</header>
+
+<div id="tape"><div class="tape-in"><span id="tapeA"></span><span id="tapeB"></span></div></div>
+
+<main class="pgrid">
+
+  <section id="p-hero" class="panel sig">
+    <div class="p-hd"><span class="sq"></span><span class="ttl" id="meta">CORN FRONT</span>
+      <span class="chip near" id="chip">—</span><span class="src" id="prov">AWAITING FEED…</span></div>
+    <div class="p-bd hero">
+      <div class="bigpx" id="px">—</div>
+      <div class="bigchg" id="pxc">—</div>
+      <div class="hrow"><div><label class="dim">OPEN</label><br><b id="oo">—</b></div><div><label class="dim">HIGH</label><br><b id="oh">—</b></div></div>
+      <div class="hrow"><div><label class="dim">LOW</label><br><b id="ol">—</b></div><div><label class="dim">PREV CLOSE</label><br><b id="op">—</b></div></div>
+      <div class="hrow"><div><label class="dim">BID</label><br><b id="obid">—</b></div><div><label class="dim">ASK</label><br><b id="oask">—</b></div></div>
+      <div class="rng"><span>L</span><div class="rtrack"><i id="rmark" style="left:50%"></i></div><span>H</span></div>
+    </div>
+  </section>
+
+  <section id="p-chart" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">C1 · CORN (ZC=F)</span>
+      <span class="src">YAHOO (UNOFFICIAL) · NEAR LIVE</span></div>
+    <div class="ch-tools">
+      <div class="tgrp"><button data-tf="5M">5M</button><button data-tf="15M">15M</button><button data-tf="1H">1H</button><button data-tf="1D" class="on">1D</button><button data-tf="1W">1W</button></div>
+    </div>
+    <div class="ch-wrap"><canvas id="chCv"></canvas></div>
+    <div class="ch-read" id="chRead">HOVER CHART FOR READOUT</div>
+  </section>
+
+  <section id="p-mon" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Ag Monitor</span>
+      <span class="chip near">NEAR LIVE</span><span class="src">YAHOO FUTURES</span></div>
+    <div class="p-bd">
+      <table class="tb"><thead><tr><th>SYM</th><th>DESCRIPTION</th><th class="r">LAST</th><th class="r">%CHG</th><th class="r">UNIT</th><th class="r">SRC</th></tr></thead>
+      <tbody id="monTb"></tbody></table>
+    </div>
+  </section>
+
+  <section id="p-spot" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Movers · Ratios</span></div>
+    <div class="p-bd">
+      <div class="spots" id="spots"></div>
+      <div class="ratios" id="ratios"></div>
+      <div id="spreads"></div>
+    </div>
+  </section>
+
+  <section id="p-extra" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Water &amp; Weather</span>
+      <span class="chip evt">REF / LIVE</span><span class="src">FRED · USGS · OPEN-METEO</span></div>
+    <div class="p-bd" id="extraBody"></div>
+  </section>
+
+  <section id="p-news" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Ag News</span>
+      <span class="chip near">GDELT</span></div>
+    <div class="p-bd"><ul class="nwl" id="nwList"></ul></div>
+  </section>
+
+  <section id="p-cal" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Ag Calendar</span>
+      <span class="chip evt">USDA REFERENCE</span></div>
+    <div class="p-bd">
+      <table class="tb"><thead><tr><th>WHEN</th><th>EVENT</th><th class="r">NOTE</th></tr></thead>
+      <tbody id="calTb"></tbody></table>
+    </div>
+  </section>
+
+</main>
+
+<footer id="status">
+  <span>GIT-4.2.26 · AGRI DESK</span>
+  <span class="mid">ANALYSIS, NOT FINANCIAL ADVICE · EVERY VALUE SHOWS ITS SOURCE</span>
+</footer>
+
+<script>window.PAGE_CONFIG = { type: 'agri', api: '/api/page/agri', sym: 'C1', heroUnit: '$/BU' };</script>
+<script src="/js/pages.js"></script>
+</body>
+</html>
