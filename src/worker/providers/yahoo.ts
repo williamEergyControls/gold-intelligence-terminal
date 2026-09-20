@@ -8,6 +8,11 @@ const Y: Record<string, string> = {
   'GDX': 'GDX', 'SPX': '^GSPC', 'WTI': 'CL=F',
   'GOLD': 'B',    // Barrick = B on NYSE since May 2025
   'AGI': 'AGI',   // Alamos Gold
+  // ENERGY
+  'CL1': 'CL=F', 'CO1': 'BZ=F', 'NG1': 'NG=F', 'HO1': 'HO=F', 'XB1': 'RB=F',
+  // AGRI
+  'C1': 'ZC=F', 'S1': 'ZS=F', 'W1': 'ZW=F', 'CT1': 'CT=F', 'SB1': 'SB=F',
+  'LC1': 'LE=F', 'FC1': 'GF=F',
 };
 export const toYahoo = (s: string) => Y[s] ?? s;
 
