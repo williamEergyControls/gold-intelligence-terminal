@@ -10,7 +10,7 @@ RULES (absolute):
 6. If an 'ml' object is present, reference its probability, regime and agent agreement; never replace them with your own estimate.`;
 
 // Model fallback chain — Cloudflare rotates/retires model IDs over time.
-// We try each in order; if all fail, the errors are RETURNED so you can see why.
+// If all fail, the errors are RETURNED in aiErrors so the reason is visible.
 const MODELS = [
   '@cf/meta/llama-3.1-8b-instruct',
   '@cf/meta/llama-3-8b-instruct',
@@ -49,14 +49,13 @@ export async function aiAnalyst(env: Env, a: AnalyticsResult, w: WhyGold, extra:
   return { text: template(a, w), engine: 'deterministic-template (AI unavailable)', ts: Date.now(), aiEnabled: false, aiErrors: errors };
 }
 
-/* ---- HOURLY LLAMA NEWS SENTIMENT (cron-only, ~1 AI call/hour, free quota) ----
-   Reads cached GDELT headlines, asks the model to classify bull/bear/neutral,
-   stores in KV 'news:sentiment'. Bootstrap overlays it on the keyword heuristic. */
+/* ---- HOURLY LLAMA NEWS SENTIMENT (cron-only, ~1 AI call/hour, free quota) ---- */
 export async function newsSentimentHourly(env: Env): Promise<void> {
   try {
     if (!env.AI) return;
-    const news = (await env.CACHE.get('news', 'json')) as any;
-    const items = (Array.isArray(news) ? news : []).filter((n: any) => n?.topic === 'gold').slice(0, 10) as { id: string; title: string }[];
+    const cached = (await env.CACHE.get('news', 'json')) as any;
+    const all = Array.isArray(cached) ? cached : (cached?.v ?? cached?.news ?? []); // unwrap AppCache envelope
+    const items = (Array.isArray(all) ? all : []).filter((n: any) => n?.topic === 'gold').slice(0, 10) as { id: string; title: string }[];
     if (!items.length) return;
     const prompt = 'Classify each headline by its implication for GOLD prices. Reply with ONLY a JSON array, one object per headline in the same order, format: {"i":<index>,"s":"bull"|"bear"|"neutral"}. No other text.\n' + items.map((it, i) => `${i}. ${it.title}`).join('\n');
     let out: { i: number; s: string }[] | null = null;
