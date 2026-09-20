@@ -46,7 +46,8 @@ export interface AnalyticsResult {
 export interface ProviderStatus {
   name: string; configured: boolean; delay: Delay | null;
   lastSuccess: number | null; lastFailure: number | null;
-  latencyMs: number | null; status: 'online' | 'degraded' | 'offline' | 'not-configured';
+  latencyMs: number | null;
+  status: 'online' | 'degraded' | 'offline' | 'idle' | 'not-configured';
 }
 export interface AlertItem { se: 'crit' | 'warn' | 'info'; t: string; txt: string; cat: string }
 export interface Bootstrap {
@@ -55,7 +56,7 @@ export interface Bootstrap {
   candles: Candle[];
   miners: Quote[];
   fx: Quote[];
-  series: { goldIdx: number[]; dxyIdx: number[]; ryIdx: number[]; ratio: number[] };
+  series: { goldIdx: number[]; dxyIdx: number[]; ryIdx: number[]; ratio: number[]; dailyCloses: number[] };
   corr: { dxy: number | null; ry: number | null };
   macro: {
     rows: MacroRow[];
@@ -84,5 +85,8 @@ export interface Env {
   FRED_API_KEY?: string;
   BLS_API_KEY?: string;
   SEC_USER_AGENT?: string;
+  EIA_API_KEY?: string;
   AI_ENABLED?: string;
+  METALS_TTL?: string;
+  ADMIN_TOKEN?: string;
 }
