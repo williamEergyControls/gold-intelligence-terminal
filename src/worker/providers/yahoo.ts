@@ -6,6 +6,8 @@ const Y: Record<string, string> = {
   'XAG:USD': 'SI=F',
   'DXY': 'DX-Y.NYB',
   'GDX': 'GDX', 'SPX': '^GSPC', 'WTI': 'CL=F',
+  'GOLD': 'B',    // Barrick = B on NYSE since May 2025
+  'AGI': 'AGI',   // Alamos Gold
 };
 export const toYahoo = (s: string) => Y[s] ?? s;
 
