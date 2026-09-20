@@ -5,6 +5,7 @@ import { aiAnalyst, newsSentimentHourly } from './ai/analyst';
 import { firstOk, persistHealthRows, ensureSecrets, secret } from './providers/provider';
 import { trainAndStore, predictAndStore, gradeOutcomes } from './ml/pipeline';
 import * as yahoo from './providers/yahoo';
+import * as metalsdev from './providers/metalsdev';
 import * as sim from './providers/simulated';
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff' };
@@ -16,7 +17,23 @@ function allow(ip: string, max = 240, windowMs = 60_000): boolean {
   const h = hits.get(ip);
   if (!h || now - h.w > windowMs) { hits.set(ip, { n: 1, w: now }); return true; }
   h.n++;
+  if (hits.size > 5000) hits.clear(); // prune so the map never grows forever
   return h.n <= max;
+}
+
+/* per-isolate memo for the light quote poll — NO KV writes, so polling is free */
+const qMemo = new Map<string, { v: any; ts: number }>();
+function memo<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
+  const m = qMemo.get(key);
+  if (m && Date.now() - m.ts < ttlMs) return Promise.resolve(m.v as T);
+  return fn().then(v => { qMemo.set(key, { v, ts: Date.now() }); return v; });
+}
+
+/* admin gate: sensitive endpoints stay LOCKED until an ADMIN_TOKEN secret exists */
+function adminOk(req: Request, env: Env, url: URL): boolean {
+  const t = secret(env, 'ADMIN_TOKEN');
+  if (!t) return false;
+  return req.headers.get('x-admin') === t || url.searchParams.get('key') === t;
 }
 
 export default {
@@ -31,8 +48,9 @@ export default {
     try {
       switch (true) {
         case path === '/api/env': {
+          if (!adminOk(req, env, url)) return json({ error: 'ADMIN_LOCKED', hint: 'set ADMIN_TOKEN secret, then pass ?key=TOKEN' }, 403);
           const mk = (n: string) => { const v = secret(env, n); return v ? `SET (${v.length} chars)` : 'MISSING'; };
-          return json({ METALS_API_KEY: mk('METALS_API_KEY'), FRED_API_KEY: mk('FRED_API_KEY'), aiEnabled: env.AI_ENABLED ?? 'MISSING', checkedAt: new Date().toISOString() });
+          return json({ METALS_API_KEY: mk('METALS_API_KEY'), FRED_API_KEY: mk('FRED_API_KEY'), ADMIN_TOKEN: mk('ADMIN_TOKEN'), aiEnabled: env.AI_ENABLED ?? 'MISSING', checkedAt: new Date().toISOString() });
         }
         case path === '/api/health': {
           const boot = await cachedBoot(env, '15M');
@@ -43,11 +61,25 @@ export default {
           const boot = await cachedBoot(env, tf);
           return json(boot.v);
         }
+        /* LIGHT quote poll: tiny payload, zero KV writes, feeds the 20s frontend tick */
+        case path === '/api/quote': {
+          const out: any = { ts: Date.now() };
+          try {
+            const l = await metalsdev.metalsdevLatest(env);
+            out.gold = l.gold; out.silver = l.silver; out.source = 'metals.dev';
+          } catch {
+            const g = await memo('q:gold', 60e3, () => yahoo.yahooQuote(env, 'XAU:USD'));
+            const s = await memo('q:silver', 60e3, () => yahoo.yahooQuote(env, 'XAG:USD'));
+            out.gold = g.price; out.silver = s.price; out.source = 'yahoo(unofficial)';
+          }
+          const d = await memo('q:dxy', 60e3, () => yahoo.yahooQuote(env, 'DXY'));
+          out.dxy = d.price; out.dxyPct = d.changePct ?? null;
+          return json(out);
+        }
         case path === '/api/candles': {
-          // LIGHT endpoint: fetches ONLY candles — no full bootstrap. Fixes hero stats + speed.
           const tf = parseTf(url.searchParams.get('tf'));
           const cache = new AppCache(env.CACHE);
-          const r = await cache.wrap(`candles:XAU:${tf}`, tf === '1D' ? 3600 : 120, () =>
+          const r = await cache.wrap(`candles:XAU:${tf}`, tf === '1D' ? 3600 : 300, () =>
             firstOk([
               { name: 'yahoo', fn: () => yahoo.yahooCandles(env, 'XAU:USD', tf) },
               { name: 'simulated', fn: () => Promise.resolve(sim.simCandles('XAU:USD', tf)) },
@@ -56,6 +88,7 @@ export default {
           return json({ tf, ...r.v, stale: r.stale, ageMs: r.ageMs });
         }
         case path === '/api/ml/train': {
+          if (!adminOk(req, env, url)) return json({ error: 'ADMIN_LOCKED', hint: 'set ADMIN_TOKEN secret, then pass ?key=TOKEN' }, 403);
           const tr = await trainAndStore(env);
           await predictAndStore(env);
           return json(tr);
@@ -65,15 +98,15 @@ export default {
           if (raw) return json(raw);
           return json({ status: 'WARMING', note: 'first predictions appear within ~5 minutes of cron' });
         }
+        /* collision fix: SLICE the boot payload instead of re-wrapping the same
+           KV keys bootstrap writes — no more object-vs-array 502 loops */
         case path === '/api/macro': {
-          const cache = new AppCache(env.CACHE);
-          const r = await cache.wrap('macro', 21600, async () => (await buildBootstrap(env, '15M')).macro);
-          return json(r.v);
+          const b = await cachedBoot(env, '15M');
+          return json(b.v.macro);
         }
         case path === '/api/news': {
-          const cache = new AppCache(env.CACHE);
-          const r = await cache.wrap('news', 3600, async () => (await buildBootstrap(env, '15M')).news);
-          return json(r.v);
+          const b = await cachedBoot(env, '15M');
+          return json(b.v.news);
         }
         case path === '/api/analytics':
         case path === '/api/why-gold': {
@@ -81,6 +114,8 @@ export default {
           return json(path === '/api/analytics' ? b.v.analytics : { ...b.v.why, movePct: b.v.gold.changePct });
         }
         case path === '/api/ai/analyst': {
+          const cachedAi = (await env.CACHE.get('ai:cache', 'json')) as any;
+          if (cachedAi && Date.now() - cachedAi.ts < 600e3) return json(cachedAi); // 10-min quota shield
           const b = await cachedBoot(env, parseTf(url.searchParams.get('tf')));
           const out = await aiAnalyst(env, b.v.analytics, b.v.why, {
             ml: (b.v as any).ml ?? null,
@@ -91,23 +126,27 @@ export default {
               bear: b.v.news.gold.filter(n => n.sentiment === 'bear').length,
             },
           });
+          await env.CACHE.put('ai:cache', JSON.stringify(out), { expirationTtl: 1200 });
           return json(out);
         }
-        default: return json({ error: 'UNKNOWN_ENDPOINT', endpoints: ['/api/env', '/api/health', '/api/bootstrap', '/api/candles', '/api/ml', '/api/ml/train', '/api/macro', '/api/news', '/api/analytics', '/api/why-gold', '/api/ai/analyst'] }, 404);
+        default: return json({ error: 'UNKNOWN_ENDPOINT', endpoints: ['/api/health', '/api/bootstrap', '/api/quote', '/api/candles', '/api/ml', '/api/macro', '/api/news', '/api/analytics', '/api/why-gold', '/api/ai/analyst'] }, 404);
       }
     } catch (e) {
       return json({ error: 'UPSTREAM_FAILURE', detail: String((e as Error).message).slice(0, 300) }, 502);
     }
   },
 
-  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+  async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
     await ensureSecrets(env);
+    // cron split: */5 = site only; the hourly trigger also runs ML + sentiment.
+    // Keeps each invocation far under the 50-subrequest free limit.
+    const hourly = event.cron === '0 * * * *';
 
-    // (1) warm site cache + write history
+    // (1) warm site cache + write history — every run
     ctx.waitUntil((async () => {
       try {
         const boot = await buildBootstrap(env, '15M');
-        await new AppCache(env.CACHE).write('boot:15M', boot, 30);
+        await new AppCache(env.CACHE).write('boot:15M', boot, 300);
         await env.DB.prepare('INSERT OR REPLACE INTO price_snapshots(ts,symbol,price,source) VALUES(?,?,?,?)')
           .bind(Date.now(), 'XAU:USD', boot.gold.price, boot.gold.source).run();
         for (const h of persistHealthRows()) {
@@ -121,7 +160,9 @@ export default {
       } catch (e) { console.error('CRON_SITE_FAIL', String((e as Error).message).slice(0, 300)); }
     })());
 
-    // (2) ML: retrain weekly, predict+grade at most every 6h
+    if (!hourly) return;
+
+    // (2) ML: retrain weekly, predict+grade (6h throttle stays)
     ctx.waitUntil((async () => {
       try {
         const lastMl = await env.CACHE.get('ml:last', 'json') as { t: number } | null;
@@ -138,7 +179,7 @@ export default {
       } catch (e) { console.error('ML_CRON_FAIL', String((e as Error).message).slice(0, 300)); }
     })());
 
-    // (3) HOURLY Llama news sentiment — ~1 AI call/hour, free quota
+    // (3) hourly Llama news sentiment — ~1 AI call/hour, free quota
     ctx.waitUntil((async () => {
       try {
         const lastNse = await env.CACHE.get('nse:last', 'json') as { t: number } | null;
@@ -151,7 +192,7 @@ export default {
 };
 
 async function cachedBoot(env: Env, tf: Tf) {
-  return new AppCache(env.CACHE).wrap(`boot:${tf}`, 30, () => buildBootstrap(env, tf));
+  return new AppCache(env.CACHE).wrap(`boot:${tf}`, 300, () => buildBootstrap(env, tf));
 }
 function parseTf(s: string | null): Tf { return TFS.includes(s as Tf) ? (s as Tf) : '15M'; }
 function json(v: unknown, status = 200): Response { return new Response(JSON.stringify(v), { status, headers: JSON_HEADERS }); }
