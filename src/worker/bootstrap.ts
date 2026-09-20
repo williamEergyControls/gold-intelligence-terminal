@@ -9,6 +9,7 @@ import * as fred from './providers/fred';
 import * as gdelt from './providers/gdelt';
 import * as sim from './providers/simulated';
 import { score, attribution, corr } from './analytics/engine';
+import * as goldapicom from './providers/goldapicom';
 
 // ---------- REFERENCE DATA: curated, low-frequency, honestly labeled ----------
 const RE = {
@@ -55,18 +56,42 @@ const nowHM = () => new Date().toLocaleTimeString('en-GB', { hour: '2-digit', mi
 export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml: any }> {
   const cache = new AppCache(env.CACHE);
 
-  // ---- gold: mandated chain metals.dev → yahoo → stooq → simulated ----
+    // ---- gold: gold-api.com (free, no key) → yahoo → metals.dev (quota backup) → sim ----
   const gold = (await firstOk<Quote>([
+    { name: 'gold-api.com', fn: () => goldapicom.goldapiComQuote('XAU:USD') },
     { name: 'yahoo', fn: () => yahoo.yahooQuote(env, 'XAU:USD') },
     { name: 'metals.dev', fn: () => metalsdev.metalsdevQuote(env, 'XAU:USD') },
     { name: 'stooq', fn: async () => (await stooq.stooqQuotes(env, ['XAU:USD']))[0] },
     { name: 'simulated', fn: () => Promise.resolve(sim.simQuote('XAU:USD')) },
   ])).value;
+  if (gold.prevClose == null) {
+    const pc = await env.CACHE.get('prevclose:XAU:USD', 'json') as { c: number } | null;
+    if (pc) { gold.prevClose = pc.c; gold.change = gold.price - pc.c; gold.changePct = (gold.price / pc.c - 1) * 100; }
+  }
   const silver = (await firstOk<Quote>([
+    { name: 'gold-api.com', fn: () => goldapicom.goldapiComQuote('XAG:USD') },
     { name: 'yahoo', fn: () => yahoo.yahooQuote(env, 'XAG:USD') },
     { name: 'metals.dev', fn: () => metalsdev.metalsdevQuote(env, 'XAG:USD') },
     { name: 'simulated', fn: () => Promise.resolve(sim.simQuote('XAG:USD')) },
   ])).value;
+  // GoldAPI.io DAILY SEED (cron writes KV 'goldio:daily' once/day — ~60 calls/month):
+  // fills real prevClose / OHLC / bid / ask without touching the request chain.
+  try {
+    const seed = (await env.CACHE.get('goldio:daily', 'json')) as any;
+    if (seed && Date.now() - seed.ts < 26 * 36e5) {
+      for (const [q, s] of [[gold, seed.gold], [silver, seed.silver]] as [Quote, any][]) {
+        if (q.prevClose == null && isFinite(Number(s?.prevClose))) {
+          q.prevClose = Number(s.prevClose);
+          q.change = q.price - q.prevClose; q.changePct = (q.price / q.prevClose - 1) * 100;
+        }
+        if (isFinite(Number(s?.open))) q.open ??= Number(s.open);
+        if (isFinite(Number(s?.high))) q.high ??= Number(s.high);
+        if (isFinite(Number(s?.low))) q.low ??= Number(s.low);
+        if (isFinite(Number(s?.bid))) q.bid = Number(s.bid);
+        if (isFinite(Number(s?.ask))) q.ask = Number(s.ask);
+      }
+    }
+  } catch { /* seed optional */ }
   const dxy = (await firstOk<Quote>([
     { name: 'yahoo', fn: () => yahoo.yahooQuote(env, 'DXY') },
     { name: 'stooq', fn: async () => (await stooq.stooqQuotes(env, ['DXY']))[0] },
