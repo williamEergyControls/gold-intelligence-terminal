@@ -57,8 +57,8 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
 
   // ---- gold: mandated chain metals.dev → yahoo → stooq → simulated ----
   const gold = (await firstOk<Quote>([
-    { name: 'metals.dev', fn: () => metalsdev.metalsdevQuote(env, 'XAU:USD') },
     { name: 'yahoo', fn: () => yahoo.yahooQuote(env, 'XAU:USD') },
+    { name: 'metals.dev', fn: () => metalsdev.metalsdevQuote(env, 'XAU:USD') },
     { name: 'stooq', fn: async () => (await stooq.stooqQuotes(env, ['XAU:USD']))[0] },
     { name: 'simulated', fn: () => Promise.resolve(sim.simQuote('XAU:USD')) },
   ])).value;
