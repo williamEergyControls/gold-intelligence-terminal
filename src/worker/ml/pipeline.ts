@@ -1,6 +1,6 @@
 /* ================================================================
-   PIPELINE — runs in the cron (and via /api/ml/train), always
-   try/catch-wrapped so the site can never crash from ML.
+   PIPELINE — runs in the hourly cron (and via /api/ml/train?key=),
+   always try/catch-wrapped so the site can never crash from ML.
    ================================================================ */
 import type { Env } from '../types';
 import type { DailyInput } from './engine';
@@ -51,10 +51,12 @@ export async function trainAndStore(env: Env): Promise<{ ok: boolean; metrics?: 
     }
     if (X.length > 420) { X = X.slice(-420); y = y.slice(-420); }
     if (X.length < 150) throw new Error(`only ${X.length} samples`);
-    // chronological 70/30 walk-forward validation
+    // 70/30 walk-forward with a 5-bar EMBARGO: labels look 5 days ahead, so the
+    // last 5 train rows would otherwise leak into the test window
     const cut = Math.floor(X.length * 0.7);
-    const lr70 = trainLogistic(X.slice(0, cut), y.slice(0, cut));
-    const gb70 = trainGBS(X.slice(0, cut), y.slice(0, cut));
+    const trainEnd = Math.max(0, cut - HORIZON);
+    const lr70 = trainLogistic(X.slice(0, trainEnd), y.slice(0, trainEnd));
+    const gb70 = trainGBS(X.slice(0, trainEnd), y.slice(0, trainEnd));
     let c1 = 0, c2 = 0;
     for (let i = cut; i < X.length; i++) {
       if ((predictLogistic(lr70, X[i]) > 0.5 ? 1 : 0) === y[i]) c1++;
@@ -65,6 +67,7 @@ export async function trainAndStore(env: Env): Promise<{ ok: boolean; metrics?: 
     const lrFull = trainLogistic(X, y);
     const gbFull = trainGBS(X, y);
     const lrs = evidenceLRs(X, y);
+    await env.DB.prepare('UPDATE ml_models SET active=0 WHERE active=1').run(); // keep only the newest active
     await env.DB.prepare('INSERT INTO ml_models(name,trained_at,weights,metrics,active) VALUES(?,?,?,?,1)')
       .bind('v1', Date.now(), JSON.stringify({ lrFull, gbFull, lrs }), JSON.stringify(metrics)).run();
     return { ok: true, metrics };
@@ -96,12 +99,16 @@ export async function predictAndStore(env: Env): Promise<void> {
     }
     let nb = 3, ne = 3;
     try {
-      const news = (await env.CACHE.get('news', 'json')) as any;
-      const gold = (Array.isArray(news) ? news : []).filter((n: any) => n?.topic === 'gold') as { sentiment: string }[];
+      const cachedN = (await env.CACHE.get('news', 'json')) as any;
+      const allN = Array.isArray(cachedN) ? cachedN : (cachedN?.v ?? []); // unwrap envelope
+      const gold = (Array.isArray(allN) ? allN : []).filter((n: any) => n?.topic === 'gold') as { sentiment: string }[];
       nb = gold.filter(n => n.sentiment === 'bull').length || 1;
       ne = gold.filter(n => n.sentiment === 'bear').length || 1;
     } catch { /* keep neutral */ }
-    const agents = runAgents({ ...fmap, dd: (fmap.distSMA50 < 0 ? -fmap.distSMA50 * 2 : 0) }, nb, ne, regime, mlP);
+    // REAL 60-day drawdown for the BEAR/TECHNICAL agents (not a distSMA50 proxy)
+    let dd60 = 0;
+    { let peak = -Infinity; for (let q = Math.max(0, i - 60); q <= i; q++) peak = Math.max(peak, d.gold[q]); dd60 = peak > 0 ? (peak - d.gold[i]) / peak * 100 : 0; }
+    const agents = runAgents({ ...fmap, dd: dd60 }, nb, ne, regime, mlP);
     const p0 = consensus(agents);
     let bayes = { p: p0, rounds: [] as any[] };
     if (row) {
@@ -122,6 +129,7 @@ export async function predictAndStore(env: Env): Promise<void> {
     await env.DB.prepare('INSERT OR REPLACE INTO predictions(ts,horizon_days,p_up,direction,regime,agents) VALUES(?,?,?,?,?,?)')
       .bind(ts, HORIZON, snap.p, snap.direction, regime.state, JSON.stringify(agents.map(a => `${a.name}:${a.p.toFixed(2)}`))).run();
     await env.CACHE.put('ml:snap', JSON.stringify(snap), { expirationTtl: 86400 });
+    await persistDailyBars(env, d);
   } catch (e) { console.error('ML_PREDICT_FAIL', String((e as Error).message).slice(0, 300)); }
 }
 
@@ -146,4 +154,23 @@ export async function gradeOutcomes(env: Env): Promise<void> {
         .bind(r.ts, HORIZON, +ret5.toFixed(3), correct).run();
     }
   } catch (e) { console.error('ML_GRADE_FAIL', String((e as Error).message).slice(0, 300)); }
+}
+
+/** One close/day per symbol into D1 — training-history insurance (idempotent upserts). */
+export async function persistDailyBars(env: Env, d: { t: number[]; gold: number[]; dxy: number[]; vix: number[]; oil: number[]; ry: { t: number; v: number }[] }): Promise<void> {
+  try {
+    if (!d.t.length) return;
+    const day = new Date(d.t[d.t.length - 1]).toISOString().slice(0, 10);
+    const rows: [string, string, number][] = [
+      ['XAU:USD', day, d.gold[d.gold.length - 1]],
+      ['DXY', day, d.dxy[d.dxy.length - 1]],
+      ['VIX', day, d.vix[d.vix.length - 1]],
+      ['CL1', day, d.oil[d.oil.length - 1]],
+    ];
+    if (d.ry.length) rows.push(['REAL10Y', day, d.ry[d.ry.length - 1].v]);
+    for (const [symbol, date, close] of rows) {
+      if (!isFinite(close)) continue;
+      await env.DB.prepare('INSERT OR REPLACE INTO daily_bars(symbol,date,close) VALUES(?,?,?)').bind(symbol, date, close).run();
+    }
+  } catch { /* never breaks the cron */ }
 }
