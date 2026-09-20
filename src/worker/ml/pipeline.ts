@@ -174,3 +174,20 @@ export async function persistDailyBars(env: Env, d: { t: number[]; gold: number[
     }
   } catch { /* never breaks the cron */ }
 }
+
+
+/** EXPANDED daily_bars: persists ANY list of quotes once per 12h (KV-gated).
+    Covers gold, energy, agri, water — ~20 rows/day. Your multi-asset
+    training warehouse. Same table, no migration needed. */
+export async function persistQuotesAsBars(env: Env, quotes: { symbol: string; price: number }[]): Promise<void> {
+  try {
+    const last = await env.CACHE.get('bars:last', 'json') as { t: number } | null;
+    if (last && Date.now() - last.t < 12 * 36e5) return; // once per 12h is plenty for DAILY bars
+    const day = new Date().toISOString().slice(0, 10);
+    for (const q of quotes) {
+      if (!isFinite(q.price)) continue;
+      await env.DB.prepare('INSERT OR REPLACE INTO daily_bars(symbol,date,close) VALUES(?,?,?)').bind(q.symbol, day, q.price).run();
+    }
+    await env.CACHE.put('bars:last', JSON.stringify({ t: Date.now() }), { expirationTtl: 172800 });
+  } catch { /* never breaks anything */ }
+}
