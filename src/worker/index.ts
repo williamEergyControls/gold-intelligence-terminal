@@ -176,6 +176,17 @@ export default {
       } catch (e) { console.error('CRON_SITE_FAIL', String((e as Error).message).slice(0, 300)); }
     })());
 
+      // (1a) WARM THE PAGES every 15 min — energy/agri data ready on load
+    if (new Date(event.scheduledTime).getUTCMinutes() % 15 === 0) {
+      ctx.waitUntil((async () => {
+        try {
+          const cache = new AppCache(env.CACHE);
+          await cache.write('page:energy', await buildEnergyPage(env), 900);
+          await cache.write('page:agri', await buildAgriPage(env), 900);
+        } catch (e) { console.error('PAGE_WARM_FAIL', String((e as Error).message).slice(0, 200)); }
+      })());
+    }
+
     if (!hourly) return;
 
     // (1b) GoldAPI.io DAILY SEED — 2 calls/day, gated 20h (quota: ~100/mo)
