@@ -132,11 +132,15 @@ export default {
           return json(path === '/api/analytics' ? b.v.analytics : { ...b.v.why, movePct: b.v.gold.changePct });
         }
         case path === '/api/ai/analyst': {
-          const cachedAi = (await env.CACHE.get('ai:cache', 'json')) as any;
+          // optional POST body { profile } — HOME page sends the operator's custom basket
+          let profile: any = null;
+          try { if (req.method === 'POST') profile = (await req.json())?.profile ?? null; } catch { }
+          const cachedAi = profile ? null : (await env.CACHE.get('ai:cache', 'json')) as any;
           if (cachedAi && Date.now() - cachedAi.ts < 600e3) return json(cachedAi);
           const b = await cachedBoot(env, parseTf(url.searchParams.get('tf')));
           const out = await aiAnalyst(env, b.v.analytics, b.v.why, {
             ml: (b.v as any).ml ?? null,
+            profile,
             dxy: b.v.dxy.changePct,
             realYield: b.v.why.drivers[0]?.delta,
             newsSentiment: {
@@ -144,7 +148,7 @@ export default {
               bear: b.v.news.gold.filter(n => n.sentiment === 'bear').length,
             },
           });
-          await env.CACHE.put('ai:cache', JSON.stringify(out), { expirationTtl: 1200 });
+          if (!profile) await env.CACHE.put('ai:cache', JSON.stringify(out), { expirationTtl: 1200 });
           return json(out);
         }
         default: return json({ error: 'UNKNOWN_ENDPOINT', endpoints: ['/api/health', '/api/bootstrap', '/api/quote', '/api/candles?sym=', '/api/page/energy', '/api/page/agri', '/api/ml', '/api/macro', '/api/news', '/api/analytics', '/api/why-gold', '/api/ai/analyst'] }, 404);
