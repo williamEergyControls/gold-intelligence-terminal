@@ -99,7 +99,7 @@ export default {
         /* ===== EXPANSION PAGES ===== */
         case path === '/api/page/energy': {
           const cache = new AppCache(env.CACHE);
-          const r = await cache.wrap('page:energy', 300, () => buildEnergyPage(env));
+          const r = await cache.wrap('page:agri', 300, () => buildAgriPage(env));
           return json(r.v);
         }
         case path === '/api/page/agri': {
