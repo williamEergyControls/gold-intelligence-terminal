@@ -8,9 +8,11 @@ export const FRED_MAP: Record<string, { id: string; label: string; kind: 'yoy' |
   COREPCE: { id: 'PCEPILFE',   label: 'Core PCE',     kind: 'yoy',   freq: 'Monthly' },
   PPI:     { id: 'PPIACO',     label: 'PPI Final',    kind: 'yoy',   freq: 'Monthly' },
   UNRATE:  { id: 'UNRATE',     label: 'Unemployment', kind: 'level', freq: 'Monthly' },
-  US10Y:   { id: 'DGS10',      label: '10Y Nominal',  kind: 'bp',    freq: 'Daily' },
+  US10Y:   { id: 'DGS10',      label: '10Y Treasury',    kind: 'bp', freq: 'Daily' },
   REAL10Y: { id: 'DFII10',     label: '10Y Real (TIPS)', kind: 'bp', freq: 'Daily' },
-  BREAKEV: { id: 'T10YIE',     label: '10Y Breakeven',  kind: 'bp',  freq: 'Daily' },
+  BREAKEV: { id: 'T10YIE',     label: '10Y Breakeven',   kind: 'bp', freq: 'Daily' },
+  SOFR:    { id: 'SOFR',       label: 'SOFR · Repo',     kind: 'bp', freq: 'Daily' },
+  EFFR:    { id: 'EFFR',       label: 'Fed Funds (EFFR)', kind: 'bp', freq: 'Daily' },
   AUTOINS: { id: 'CUSR0000SETB', label: 'Auto Insurance CPI', kind: 'yoy', freq: 'Monthly' },
 };
 
@@ -41,7 +43,6 @@ export async function fredRows(env: Env): Promise<MacroRow[]> {
   return out;
 }
 
-// Raw daily series (for the Gold-vs-real-yield panel, ML features + attribution):
 export async function fredSeriesTail(env: Env, id: string, n = 80): Promise<{ t: number; v: number }[]> {
   const key = secret(env, 'FRED_API_KEY');
   if (!key) throw new Error('FRED_API_KEY not configured');
