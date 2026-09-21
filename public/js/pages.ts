@@ -146,4 +146,19 @@ async function loadAll() {
 loadAll();
 setInterval(() => { if (!document.hidden) loadAll(); }, 60000);
 let rzT; window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(drawChart, 150); });
+
+/* ===== theme toggle (shared with home) ===== */
+(function () {
+  let mode = localStorage.getItem('git-theme') || 'auto';
+  const isDay = () => mode === 'day' || (mode === 'auto' && matchMedia('(prefers-color-scheme: light)').matches);
+  const apply = () => {
+    document.body.classList.toggle('day', isDay());
+    const b = document.getElementById('themeBtn');
+    if (b) b.textContent = '◐ ' + (mode === 'auto' ? 'AUTO' : mode.toUpperCase());
+    try { drawChart(); } catch (e) { }
+  };
+  const b = document.getElementById('themeBtn');
+  if (b) b.addEventListener('click', () => { mode = mode === 'auto' ? 'day' : (mode === 'day' ? 'night' : 'auto'); localStorage.setItem('git-theme', mode); apply(); });
+  try { matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (mode === 'auto') apply(); }); } catch (e) { }
+  apply();
 })();
