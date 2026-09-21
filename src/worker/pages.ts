@@ -80,7 +80,7 @@ export async function buildEnergyPage(env: Env): Promise<PagePayload> {
   }
   if (cl && xb && ho) {
     // 3-2-1 crack: 3 bbl crude -> 2 bbl gasoline + 1 bbl distillate. RB/HO are ¢/gal; 1 bbl = 42 gal.
-    const prod = ((2 * xb.price + 1 * ho.price) * 42 / 100) / 3; // $/bbl product value
+    const prod = ((2 * xb.price + 1 * ho.price) * 42) / 3; // 2 gal-gasoline + 1 gal-distillate per 3 bbl; inputs already $/gal
     spreads.push({ label: '3-2-1 Crack Spread', value: (prod - cl.price).toFixed(2) + ' $/bbl [CALC]', change: null });
   }
   const ratios = xau && cl ? [{ label: 'GOLD / OIL', value: +(xau.price / cl.price).toFixed(1), unit: 'barrels per ounce' }] : [];
