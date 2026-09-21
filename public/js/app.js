@@ -546,9 +546,13 @@ function wireUI() {
   function apply() {
     document.body.classList.toggle('day', isDay());
     if (badge) { badge.textContent = 'GIT/4.2.26 · ' + (mode === 'auto' ? 'AUTO' : mode.toUpperCase()); badge.style.cursor = 'pointer'; badge.title = 'THEME: CLICK TO CYCLE AUTO / DAY / NIGHT'; }
-    if (B) { try { renderAll(); } catch (e) { } }
+    const tb2 = document.getElementById('themeBtn'); if (tb2) tb2.textContent = '◐ ' + (mode === 'auto' ? 'AUTO' : mode.toUpperCase());
+     if (B) { try { renderAll(); } catch (e) { } }
   }
-  if (badge) badge.addEventListener('click', () => { mode = mode === 'auto' ? 'day' : (mode === 'day' ? 'night' : 'auto'); localStorage.setItem('git-theme', mode); apply(); });
+   const cycle = () => { mode = mode === 'auto' ? 'day' : (mode === 'day' ? 'night' : 'auto'); localStorage.setItem('git-theme', mode); apply(); };
+  if (badge) badge.addEventListener('click', cycle);
+  const tbtn = document.getElementById('themeBtn');
+  if (tbtn) tbtn.addEventListener('click', cycle);
   try { matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (mode === 'auto') apply(); }); } catch (e) { }
   apply();
 })();
