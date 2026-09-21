@@ -39,7 +39,7 @@ const AGRI_CAL = [
 
 async function quotesFor(env: Env, syms: { sym: string; name: string; unit: string }[], cacheKey: string): Promise<(Quote & { unit: string })[]> {
   const cache = new AppCache(env.CACHE);
-  const out = (await cache.wrap(cacheKey, 300, async () => {
+  const out = (await cache.wrap(cacheKey, 900, async () => {
     try {
       const q = await yahoo.yahooBatchQuotes(syms.map(s => s.sym).concat(['XAU:USD', 'DXY']));
       if (q.length >= 3) return q;
