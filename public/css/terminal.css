@@ -396,3 +396,14 @@ body.day ::-webkit-scrollbar-thumb{background:#c3cad1}
   #crt,.livedot i,.cur,.stdot.on{animation:none!important}
   .tape-in{animation-duration:240s!important}
 }
+
+
+/* ============ AUTO-SIZE: stack on tablet/phone ============ */
+@media(max-width:1100px){
+  body{overflow-x:hidden}
+  main{grid-template-columns:1fr;grid-template-rows:none;min-width:0;max-width:100%}
+  main>section{grid-column:auto!important;grid-row:auto!important;min-height:300px}
+  #p-chart{min-height:360px}
+  #top{flex-wrap:wrap;height:auto;padding:6px 10px;gap:8px}
+  .cmdbar,#tape{display:none}
+}
