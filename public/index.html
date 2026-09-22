@@ -3,55 +3,55 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GIT/4 · HOME — GOLD INTELLIGENCE TERMINAL</title>
+<title>GIT/4 - HOME - GOLD INTELLIGENCE TERMINAL</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/terminal.css">
 <style>
-/* ===== HOME PORTAL LAYOUT — responsive ===== */
-.hgrid{display:grid;grid-template-columns:repeat(12,1fr);gap:7px;width:100%;max-width:2560px;margin:0 auto;padding:8px clamp(8px,0.6vw,14px)}
-#h-profile{grid-column:1/5;grid-row:1/3}
-#h-gold{grid-column:5/10;grid-row:1}
-#h-rates{grid-column:10/13;grid-row:1/3}
-#h-desks{grid-column:5/13;grid-row:2}
-#h-news{grid-column:1/9;grid-row:3}
-#h-health{grid-column:9/13;grid-row:3}
-.bigpx{font:600 44px/1 var(--mono);color:#f4ecd8}
+/* HOME - fits one screen at 100% zoom, fluid on all sizes */
+html,body{overflow-x:hidden}
+.hgrid{display:grid;grid-template-columns:repeat(12,1fr);
+  gap:clamp(5px,.45vw,8px);width:100%;max-width:2560px;margin:0 auto;
+  padding:8px clamp(8px,.6vw,14px);
+  height:calc(100dvh - 86px);
+  grid-template-rows:minmax(0,1.35fr) minmax(0,1fr) minmax(0,.9fr)}
+#h-profile{grid-column:1/5;grid-row:1/3;min-height:0}
+#h-gold{grid-column:5/10;grid-row:1;min-height:0}
+#h-rates{grid-column:10/13;grid-row:1/3;min-height:0}
+#h-desks{grid-column:5/13;grid-row:2;min-height:0;display:flex}
+#h-news{grid-column:1/9;grid-row:3;min-height:0}
+#h-health{grid-column:9/13;grid-row:3;min-height:0}
+.bigpx{font:600 clamp(34px,2.6vw,52px)/1 var(--mono);color:#f4ecd8}
 .bigchg{font:600 13px var(--mono);margin-top:5px}
-.deskcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:7px}
-a.deskcard{border:1px solid var(--line);background:var(--panel);padding:11px;text-decoration:none;display:block;min-width:0}
+.deskcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:7px;flex:1;min-height:0}
+a.deskcard{border:1px solid var(--line);background:var(--panel);padding:clamp(8px,.8vw,14px);text-decoration:none;display:block;min-width:0;overflow:hidden}
 a.deskcard:hover{border-color:var(--gold)}
-.deskcard .dt{font:700 12px var(--disp);letter-spacing:.18em;color:var(--gold)}
+.deskcard .dt{font:700 clamp(11px,.9vw,14px) var(--disp);letter-spacing:.18em;color:var(--gold)}
 .deskcard .dd{font:9.5px var(--mono);color:var(--mut);margin-top:5px;line-height:1.5}
 .ri{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:baseline;padding:3px 0;font:10.5px var(--mono)}
 .ri .n{color:var(--mut)}
-.wrow{display:grid;grid-template-columns:100px 1fr 36px 30px;align-items:center;gap:8px;font:9.5px var(--mono);color:var(--mut);padding:2px 0}
+.wrow{display:grid;grid-template-columns:clamp(80px,7vw,110px) 1fr 36px 30px;align-items:center;gap:8px;font:9.5px var(--mono);color:var(--mut);padding:2px 0}
 input[type=range]{-webkit-appearance:none;appearance:none;height:3px;background:#2a333c;outline:none;width:100%}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;background:var(--gold);cursor:ew-resize}
 input[type=range]::-moz-range-thumb{width:10px;height:10px;background:var(--gold);border:none;border-radius:0;cursor:ew-resize}
 #opname{background:var(--panel3);border:1px solid var(--line);color:var(--txt);font:11px var(--mono);padding:5px 8px;width:100%}
 .callout{border:1px solid var(--goldDk);background:#141007;padding:9px 11px;margin-top:9px}
-.callout .cv{font:700 30px var(--mono);color:var(--gold)}
+.callout .cv{font:700 clamp(22px,1.8vw,30px) var(--mono);color:var(--gold)}
 .mlline{font:10px var(--mono);color:var(--mut);border-top:1px dashed var(--line2);padding-top:7px;margin-top:7px;line-height:1.6}
-.console{margin-top:8px;min-height:130px;background:var(--panel3);border:1px solid var(--line2);padding:7px 9px;font:10px/1.65 var(--mono);color:#b6c1c9;overflow:auto}
+.console{margin-top:8px;flex:1;min-height:80px;background:var(--panel3);border:1px solid var(--line2);padding:7px 9px;font:10px/1.65 var(--mono);color:#b6c1c9;overflow:auto}
 .console .ln{white-space:pre-wrap}
-/* Zone L ≤1300px: two-column home */
-@media (max-width:1300px){
-  body{overflow-x:hidden}
-  .hgrid{grid-template-columns:1fr 1fr;min-width:0}
-  .hgrid>*{grid-column:auto!important;grid-row:auto!important;min-height:260px}
+#h-gold .p-bd{display:flex;flex-direction:column}
+@media (max-width:1100px){
+  .hgrid{height:auto;grid-template-columns:1fr 1fr;grid-template-rows:none}
+  .hgrid>*{grid-column:auto!important;grid-row:auto!important;min-height:240px}
   #h-profile,#h-gold,#h-desks{grid-column:1/-1!important}
-  .bigpx{font:600 38px/1 var(--mono)}
-  #top{flex-wrap:wrap;height:auto;padding:6px 10px;gap:8px}
   #tape{display:none}
+  .hgrid{height:calc(100dvh - 56px)}
 }
-/* Zone S ≤700px: single column */
 @media (max-width:700px){
-  .hgrid{grid-template-columns:1fr}
-  .hgrid>*{grid-column:auto!important}
-  .bigpx{font:600 32px/1 var(--mono)}
-  .callout .cv{font-size:24px}
+  .hgrid{grid-template-columns:1fr;height:auto}
+  .bigpx{font-size:32px}
 }
 </style>
 </head>
@@ -61,7 +61,7 @@ input[type=range]::-moz-range-thumb{width:10px;height:10px;background:var(--gold
 <div id="boot"><div id="bootLines"></div><div class="bootft">CLICK ANYWHERE TO SKIP</div></div>
 
 <header id="top">
-  <div class="logo"><span class="lx"></span><span class="lt">GOLD INTELLIGENCE TERMINAL</span><span class="lv">GIT/4.2.26 · HOME</span></div>
+  <div class="logo"><span class="lx"></span><span class="lt">GOLD INTELLIGENCE TERMINAL</span><span class="lv">GIT/4.2.26 - HOME</span></div>
   <nav class="gochips">
     <span class="gchip" style="color:var(--gold)">HOME</span>
     <a class="gchip" href="/gold.html" style="text-decoration:none">GOLD<em>&lt;GO&gt;</em></a>
@@ -69,8 +69,8 @@ input[type=range]::-moz-range-thumb{width:10px;height:10px;background:var(--gold
     <a class="gchip" href="/agri.html" style="text-decoration:none">AGRI<em>&lt;GO&gt;</em></a>
   </nav>
   <div class="tsright">
-    <button id="themeBtn" title="CYCLE AUTO / DAY / NIGHT" style="font:600 9px var(--mono);letter-spacing:.12em;color:var(--mut);border:1px solid var(--line);padding:3px 8px;background:none;cursor:pointer">◐ AUTO</button>
-    <span class="livedot" id="feedDot"><i></i><span id="feedTxt">FEED —</span></span>
+    <button id="themeBtn" title="CYCLE AUTO / DAY / NIGHT" style="font:600 9px var(--mono);letter-spacing:.12em;color:var(--mut);border:1px solid var(--line);padding:3px 8px;background:none;cursor:pointer">AUTO/SYS</button>
+    <span class="livedot" id="feedDot"><i></i><span id="feedTxt">FEED --</span></span>
     <span id="clock">--:--:--</span>
   </div>
 </header>
@@ -80,12 +80,12 @@ input[type=range]::-moz-range-thumb{width:10px;height:10px;background:var(--gold
 <main class="hgrid">
 
   <section id="h-profile" class="panel sig">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Operator Profile · Real Inflation</span>
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Operator Profile - Real Inflation</span>
       <span class="chip ai">USER-CONFIGURED</span></div>
     <div class="p-bd">
       <div class="secH">OPERATOR</div>
       <input id="opname" placeholder="YOUR NAME / DESK" maxlength="24">
-      <div class="secH" style="margin-top:10px">YOUR COST BASKET · WEIGHTS %</div>
+      <div class="secH" style="margin-top:10px">YOUR COST BASKET - WEIGHTS %</div>
       <div class="wrow"><span>FOOD</span><input type="range" min="0" max="50" id="wf"><b>15%</b></div>
       <div class="wrow"><span>ENERGY / OIL</span><input type="range" min="0" max="50" id="we"><b>10%</b></div>
       <div class="wrow"><span>INSURANCE</span><input type="range" min="0" max="50" id="wi"><b>10%</b></div>
@@ -93,23 +93,23 @@ input[type=range]::-moz-range-thumb{width:10px;height:10px;background:var(--gold
       <div class="wrow"><span>GOLD</span><input type="range" min="0" max="50" id="wg"><b>10%</b></div>
       <div class="callout">
         <div class="secH">YOUR REAL INFLATION</div>
-        <div class="cv" id="riVal">—</div>
-        <div id="riFed" class="mut" style="font:10px var(--mono);margin-top:4px">FED VIEW (CPI): —</div>
-        <div id="riGap" style="font:600 11px var(--mono);margin-top:2px">GAP —</div>
-        <div class="dim" style="font:8px var(--mono);letter-spacing:.08em;margin-top:5px">USER-CONFIGURED ANALYTICAL INDEX — NOT OFFICIAL CPI · <span id="riRest">REST —</span> @ CPI WEIGHT · FOOD/ENERGY/INSURANCE/HOUSING = FRED · GOLD = LIVE ~1Y</div>
+        <div class="cv" id="riVal">--</div>
+        <div id="riFed" class="mut" style="font:10px var(--mono);margin-top:4px">FED VIEW (CPI): --</div>
+        <div id="riGap" style="font:600 11px var(--mono);margin-top:2px">GAP --</div>
+        <div class="dim" style="font:8px var(--mono);letter-spacing:.08em;margin-top:5px">USER-CONFIGURED ANALYTICAL INDEX - NOT OFFICIAL CPI - <span id="riRest">REST --</span> @ CPI WEIGHT - FOOD/ENERGY/INSURANCE/HOUSING = FRED - GOLD = LIVE ~1Y</div>
       </div>
     </div>
   </section>
 
   <section id="h-gold" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Gold · AI Signal</span>
-      <span class="chip near" id="gchip">—</span><span class="src" id="gsrc">AWAITING FEED…</span></div>
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Gold - AI Signal</span>
+      <span class="chip near" id="gchip">--</span><span class="src" id="gsrc">AWAITING FEED...</span></div>
     <div class="p-bd">
-      <div class="bigpx" id="px">—</div>
-      <div class="bigchg" id="pxc">—</div>
-      <div class="mlline" id="mlLine">ML WARMING — first prediction within the hour</div>
-      <button class="runbtn" id="runA">▶ RUN ANALYST — WITH YOUR PROFILE</button>
-      <div class="console" id="aOut"><span class="hint">// OUTPUT — AWAITING OPERATOR COMMAND</span></div>
+      <div class="bigpx" id="px">--</div>
+      <div class="bigchg" id="pxc">--</div>
+      <div class="mlline" id="mlLine">ML WARMING - first prediction within the hour</div>
+      <button class="runbtn" id="runA">RUN ANALYST - WITH YOUR PROFILE</button>
+      <div class="console" id="aOut"><span class="hint">// OUTPUT - AWAITING OPERATOR COMMAND</span></div>
     </div>
   </section>
 
@@ -121,9 +121,9 @@ input[type=range]::-moz-range-thumb{width:10px;height:10px;background:var(--gold
 
   <div id="h-desks">
     <div class="deskcards">
-      <a class="deskcard" href="/gold.html"><div class="dt">◆ GOLD TERMINAL</div><div class="dd">Live gold, candles, miners heatmap, WHY engine, ML agents, inflation &amp; real economy — the full desk.</div></a>
-      <a class="deskcard" href="/energy.html"><div class="dt">◆ ENERGY DESK</div><div class="dd">WTI · Brent · NatGas · Heating · RBOB. Spreads, crack, EIA stocks, gold/oil ratio, energy news.</div></a>
-      <a class="deskcard" href="/agri.html"><div class="dt">◆ AGRI DESK</div><div class="dd">Corn · Soy · Wheat · Cattle. Water index &amp; USGS rivers, Plains weather, gold/corn ratio, USDA calendar.</div></a>
+      <a class="deskcard" href="/gold.html"><div class="dt">GOLD TERMINAL</div><div class="dd">Live gold, candles, miners heatmap, WHY engine, ML agents, inflation and real economy - the full desk.</div></a>
+      <a class="deskcard" href="/energy.html"><div class="dt">ENERGY DESK</div><div class="dd">WTI - Brent - NatGas - Heating - RBOB. Spreads, crack, EIA stocks, gold/oil ratio, energy news.</div></a>
+      <a class="deskcard" href="/agri.html"><div class="dt">AGRI DESK</div><div class="dd">Corn - Soy - Wheat - Cattle. Water index and USGS rivers, Plains weather, gold/corn ratio, USDA calendar.</div></a>
     </div>
   </div>
 
@@ -135,15 +135,15 @@ input[type=range]::-moz-range-thumb{width:10px;height:10px;background:var(--gold
 
   <section id="h-health" class="panel">
     <div class="p-hd"><span class="sq"></span><span class="ttl">Data Health</span>
-      <span class="chip live" id="hChip">—</span></div>
+      <span class="chip live" id="hChip">--</span></div>
     <div class="p-bd" id="hBody" style="font:10px var(--mono);color:var(--mut);line-height:1.8"></div>
   </section>
 
 </main>
 
 <footer id="status">
-  <span>GIT-4.2.26 · HOME</span>
-  <span class="mid">ANALYSIS, NOT FINANCIAL ADVICE · EVERY VALUE SHOWS ITS SOURCE</span>
+  <span>GIT-4.2.26 - HOME</span>
+  <span class="mid">ANALYSIS, NOT FINANCIAL ADVICE - EVERY VALUE SHOWS ITS SOURCE</span>
 </footer>
 
 <script src="/js/home.js"></script>
