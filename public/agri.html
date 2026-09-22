@@ -12,7 +12,7 @@
 body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
 .pgrid{display:grid;grid-template-columns:repeat(12,1fr);gap:7px;max-width:1920px;margin:0 auto;padding:8px 10px}
 #p-hero{grid-column:1/4}
-#p-chart{grid-column:4/13;min-height:430px}
+#p-chart{grid-column:4/13;min-height:clamp(320px,26vw,520px)}
 #p-mon{grid-column:1/7}
 #p-spot{grid-column:7/10}
 #p-extra{grid-column:10/13}
