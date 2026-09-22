@@ -10,7 +10,7 @@
 <style>
 /* page-local layout + the .bi grid (terminal.css scopes .bi under .brk) */
 body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
-.pgrid{display:grid;grid-template-columns:repeat(12,1fr);gap:7px;max-width:1920px;margin:0 auto;padding:8px 10px}
+.pgrid{display:grid;grid-template-columns:repeat(12,1fr);gap:7px;width:100%;max-width:2560px;margin:0 auto;padding:8px clamp(8px,0.6vw,14px)}
 #p-hero{grid-column:1/4}
 #p-chart{grid-column:4/13;min-height:430px}
 #p-mon{grid-column:1/7}
