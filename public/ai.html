@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GIT/4 - SHIPPING TERMINAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/terminal.css">
+<style>
+html,body{overflow-x:hidden}
+.shgrid{display:grid;grid-template-columns:repeat(12,1fr);gap:clamp(5px,.45vw,8px);width:100%;max-width:2560px;margin:0 auto;padding:8px clamp(8px,.6vw,14px)}
+#sh-indices{grid-column:1/7;grid-row:1;min-height:260px}
+#sh-futures{grid-column:7/13;grid-row:1;min-height:260px}
+#sh-ports{grid-column:1/5;grid-row:2;min-height:240px}
+#sh-sea{grid-column:5/8;grid-row:2;min-height:240px}
+#sh-sparks{grid-column:8/13;grid-row:2;min-height:240px}
+#sh-news{grid-column:1/13;grid-row:3;min-height:240px}
+.irow{display:grid;grid-template-columns:160px 80px 80px 1fr;gap:8px;align-items:center;padding:5px 0;border-top:1px dashed var(--line2);font:11px var(--mono)}
+.irow:first-child{border-top:none}
+.irow .name{color:var(--mut)}
+.irow .val{font-weight:700;color:var(--txt)}
+.portcard{border:1px solid var(--line);padding:10px;background:var(--panel)}
+.portcard .pt{font:700 11px var(--mono);color:var(--gold)}
+.portcard .pv{font:600 16px var(--mono);color:var(--txt);margin-top:4px}
+.portcard .ps{font:8px var(--mono);color:var(--dim);margin-top:3px;letter-spacing:.08em}
+@media (max-width:1100px){
+  .shgrid{grid-template-columns:1fr 1fr}
+  .shgrid>*{grid-column:auto!important;grid-row:auto!important;min-height:220px}
+  #sh-indices,#sh-futures,#sh-news{grid-column:1/-1!important}
+  #tape{display:none}
+}
+@media (max-width:700px){.shgrid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<script>try{var m=localStorage.getItem('git-theme')||'auto';if(m==='day'||(m==='auto'&&matchMedia('(prefers-color-scheme: light)').matches))document.body.classList.add('day')}catch(e){}</script>
+<div id="crt"></div>
+<header id="top">
+  <div class="logo"><span class="lx"></span><span class="lt">GOLD INTELLIGENCE TERMINAL</span><span class="lv">GIT/4.2.26 - SHIPPING</span></div>
+  <nav class="gochips">
+    <a class="gchip" href="/" style="text-decoration:none">HOME</a>
+    <a class="gchip" href="/gold.html" style="text-decoration:none">GOLD</a>
+    <a class="gchip" href="/energy.html" style="text-decoration:none">ENERGY</a>
+    <a class="gchip" href="/agri.html" style="text-decoration:none">AGRI</a>
+    <a class="gchip" href="/fx.html" style="text-decoration:none">FX</a>
+    <a class="gchip" href="/water.html" style="text-decoration:none">WATER</a>
+    <a class="gchip" href="/land.html" style="text-decoration:none">LAND</a>
+    <a class="gchip" href="/stable.html" style="text-decoration:none">STABLE</a>
+    <a class="gchip" href="/shipping.html" style="text-decoration:none">SHIPPING</a>
+    <a class="gchip" href="/ai.html" style="text-decoration:none">AI</a>
+  </nav>
+  <div class="tsright">
+    <button id="themeBtn" style="font:600 9px var(--mono);color:var(--mut);border:1px solid var(--line);padding:3px 8px;background:none;cursor:pointer">AUTO</button>
+    <span id="clock">--:--:--</span>
+  </div>
+</header>
+<div id="tape"><div class="tape-in"><span id="tapeA"></span><span id="tapeB"></span></div></div>
+<main class="shgrid">
+  <section id="sh-indices" class="panel sig">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Freight Indices</span>
+      <span class="chip month">PUBLIC INDEX</span><span class="src">MULTI-SOURCE</span></div>
+    <div class="p-bd" id="indexList"></div>
+  </section>
+  <section id="sh-futures" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Shipping-Linked Futures</span>
+      <span class="chip near">NEAR LIVE</span><span class="src">YAHOO</span></div>
+    <div class="p-bd" id="futuresList"></div>
+  </section>
+  <section id="sh-ports" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Port & Route Monitor</span>
+      <span class="chip evt">INDICATORS</span></div>
+    <div class="p-bd" id="portList"></div>
+  </section>
+  <section id="sh-sea" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Sea Conditions</span>
+      <span class="chip live">LIVE</span><span class="src">OPEN-METEO MARINE</span></div>
+    <div class="p-bd" id="seaBody"></div>
+  </section>
+  <section id="sh-sparks" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Gold / Freight Ratios</span>
+      <span class="chip evt">CALC</span></div>
+    <div class="p-bd" id="ratioBody"></div>
+  </section>
+  <section id="sh-news" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Shipping & Trade News</span>
+      <span class="chip near">GDELT FILTERED</span></div>
+    <div class="p-bd"><ul class="nwl" id="nwList"></ul></div>
+  </section>
+</main>
+<footer id="status"><span>GIT-4.2.26 - SHIPPING DESK</span><span class="mid">NOT FINANCIAL ADVICE - EVERY VALUE SHOWS ITS SOURCE</span></footer>
+<script>
+(function(){var _f=window.fetch;window.fetch=function(u,o){o=o||{};o.headers=o.headers||{};var t=localStorage.getItem('git-token');if(t){o.headers['x-session']=t}return _f(u,o)};if(!localStorage.getItem('git-token')){location.replace('/login.html')}})();
+</script>
+<script>
+(function(){
+'use strict';
+var $=function(s){return document.querySelector(s)};
+var fmt=function(n,d){if(n==null||isNaN(n))return'--';d=d==null?1:d;return Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d})};
+var sgn=function(n){return n>0?'+':''};
+var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+setInterval(function(){$('#clock').textContent=new Date().toLocaleTimeString('en-GB')},1000);
+ $('#clock').textContent=new Date().toLocaleTimeString('en-GB');
+
+var D=null;
+fetch('/api/page/shipping').then(function(r){return r.json()}).then(function(d){D=d;render()}).catch(function(e){console.error(e)});
+
+function render(){
+  if(!D)return;
+  var ih='';
+  (D.indices||[]).forEach(function(idx){
+    ih+='<div class="irow"><span class="name">'+esc(idx.label)+'</span><span class="val">'+fmt(idx.value,0)+'</span><span class="'+(idx.change>=0?'up':'dn')+'" style="text-align:right">'+sgn(idx.change)+fmt(idx.change,1)+'%</span><span class="dim" style="font-size:8px">'+esc(idx.source)+' - '+esc(idx.asOf)+'</span></div>';
+  });
+  ih+='<div class="footnote">PUBLIC FREIGHT INDICES - NOT LIVE SPOT RATES<br>SOURCES: BALTIC EXCHANGE / DREWRY / PUBLIC DATA<br>UPDATE FREQUENCY: DAILY TO WEEKLY DEPENDING ON INDEX</div>';
+  $('#indexList').innerHTML=ih;
+
+  var fh='';
+  (D.futures||[]).forEach(function(f){
+    fh+='<div class="irow"><span class="name">'+esc(f.name)+'</span><span class="val">'+fmt(f.price)+'</span><span class="'+(f.changePct>=0?'up':'dn')+'" style="text-align:right">'+sgn(f.changePct)+fmt(f.changePct,2)+'%</span><span class="dim" style="font-size:8px">'+esc(f.unit)+'</span></div>';
+  });
+  fh+='<div class="footnote">FUTURES PRICES VIA YAHOO - SHIPPING-RELEVANT COMMODITIES<br>THESE DRIVE SHIPPING DEMAND (GRAIN, OIL, METALS = CARGO)</div>';
+  $('#futuresList').innerHTML=fh;
+
+  var ph='<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">';
+  (D.ports||[]).forEach(function(p){
+    ph+='<div class="portcard"><div class="pt">'+esc(p.label)+'</div><div class="pv">'+esc(p.value)+'</div><div class="ps">'+esc(p.source)+'</div></div>';
+  });
+  ph+='</div><div class="footnote">ROUTE CONDITIONS - INDICATORS NOT LIVE DATA<br>DERIVED FROM NEWS FLOW AND PUBLIC REPORTS</div>';
+  $('#portList').innerHTML=ph;
+
+  if(D.sea){
+    $('#seaBody').innerHTML='<div class="bi"><span class="n">'+esc(D.sea.label)+'</span><span class="cyan">'+esc(D.sea.value)+'</span></div><div class="footnote">'+esc(D.sea.note)+'</div>';
+  } else {
+    $('#seaBody').innerHTML='<div class="footnote">SEA CONDITIONS PENDING<br>OPEN-METEO MARINE API - FREE - NO KEY<br>RETRY ON NEXT CRON CYCLE</div>';
+  }
+
+  fetch('/api/bootstrap?tf=1D').then(function(r){return r.json()}).then(function(b){
+    if(b.gold&&D.futures&&D.futures.length>0){
+      var oil=D.futures.find(function(f){return f.name.includes('Crude')});
+      if(oil){
+        var ratio=b.gold.price/oil.price;
+        $('#ratioBody').innerHTML='<div class="bi"><span class="n">GOLD PRICE</span><span class="gold">$'+fmt(b.gold.price,0)+'</span><span class="dim">/OZ</span></div>'+
+          '<div class="bi"><span class="n">WTI CRUDE</span><span class="mut">$'+fmt(oil.price)+'</span><span class="dim">/BBL</span></div>'+
+          '<div class="bi"><span class="n">GOLD / OIL</span><span class="gold">'+fmt(ratio,1)+'</span><span class="dim">BBL PER OZ</span></div>'+
+          '<div class="footnote">GOLD TO OIL RATIO - HISTORICAL RANGE 10-30<br>HIGH RATIO = GOLD EXPENSIVE VS OIL<br>SHIPPING COSTS LINK OIL TO FREIGHT RATES</div>';
+      }
+    }
+  }).catch(function(e){});
+
+  var nh='';
+  (D.news||[]).forEach(function(n){
+    var sc=n.sentiment==='bull'?'b':(n.sentiment==='bear'?'s':'n');
+    nh+='<li><time>'+new Date(n.publishedTs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</time><span class="tag">'+esc(n.source)+'</span><p>'+esc(n.title)+'</p><span class="sent '+sc+'">'+(n.sentiment==='bull'?'BULL':n.sentiment==='bear'?'BEAR':'NEUT')+'</span></li>';
+  });
+  $('#nwList').innerHTML=nh||'<li><span class="dim">NO SHIPPING NEWS TODAY</span></li>';
+}
+
+setInterval(function(){if(!document.hidden){fetch('/api/page/shipping').then(function(r){return r.json()}).then(function(d){D=d;render()}).catch(function(){})}},120000);
+
+(function(){
+  var mode=localStorage.getItem('git-theme')||'auto';
+  var isDay=function(){return mode==='day'||(mode==='auto'&&matchMedia('(prefers-color-scheme: light)').matches)};
+  var apply=function(){document.body.classList.toggle('day',isDay());var b=document.getElementById('themeBtn');if(b)b.textContent=mode==='auto'?'AUTO':mode.toUpperCase()};
+  var b=document.getElementById('themeBtn');
+  if(b)b.addEventListener('click',function(){mode=mode==='auto'?'day':(mode==='day'?'night':'auto');localStorage.setItem('git-theme',mode);apply()});
+  apply();
+})();
+})();
+</script>
+</body>
+</html>
