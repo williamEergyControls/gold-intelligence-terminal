@@ -64,7 +64,7 @@ input[type=range]::-moz-range-thumb{width:10px;height:10px;background:var(--gold
 </head>
 <body>
 <script>try{var s=JSON.parse(localStorage.getItem('git-session')||'null');if(!s||Date.now()-s.ts>30*864e5){location.replace('/login.html')}}catch(e){location.replace('/login.html')}</script>
-<script>try{var m=localStorage.getItem('git-theme')||'auto';if(m==='day'||(m==='auto'&&matchMedia('(prefers-color-scheme: light)').matches))document.body.classList.add('day')}catch(e){}</script>
+<script>if(!localStorage.getItem('git-token'))location.replace('/login.html')</script>
 <div id="crt"></div>
 
 <header id="top">
