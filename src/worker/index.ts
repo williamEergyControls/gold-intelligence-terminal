@@ -13,6 +13,10 @@ import * as sim from './providers/simulated';
 import { authRegister, authLogin, authVerify, authLogout } from './auth';
 
 
+async function readBody(req: Request): Promise<any> {
+  try { return await req.json(); } catch { return {}; }
+}
+
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff' };
 const TFS: Tf[] = ['5M', '15M', '1H', '1D', '1W'];
@@ -69,9 +73,7 @@ case path === '/api/auth/me': {
   const r = await authVerify(env, token);
   return json(r.valid ? { valid: true, name: r.name } : { valid: false });
 }
-async function readBody(req: Request): Promise<any> {
-  try { return await req.json(); } catch { return {}; }
-}
+
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(req.url);
