@@ -18,13 +18,13 @@ const ENERGY: { sym: string; name: string; unit: string }[] = [
   { sym: 'XB1', name: 'RBOB Gasoline', unit: '$/gal' },
 ];
 const AGRI: { sym: string; name: string; unit: string }[] = [
-  { sym: 'C1', name: 'Corn Front', unit: '$/bu' },
-  { sym: 'S1', name: 'Soybeans Front', unit: '$/bu' },
-  { sym: 'W1', name: 'Wheat Front', unit: '$/bu' },
-  { sym: 'CT1', name: 'Cotton', unit: '¢/lb' },
-  { sym: 'SB1', name: 'Sugar', unit: '¢/lb' },
-  { sym: 'LC1', name: 'Live Cattle', unit: '¢/lb' },
-  { sym: 'FC1', name: 'Feeder Cattle', unit: '¢/lb' },
+  { sym: 'C1', name: 'Corn Front', unit: 'cents/bu' },
+  { sym: 'S1', name: 'Soybeans Front', unit: 'cents/bu' },
+  { sym: 'W1', name: 'Wheat Front', unit: 'cents/bu' },
+  { sym: 'CT1', name: 'Cotton', unit: 'cents/lb' },
+  { sym: 'SB1', name: 'Sugar', unit: 'cents/lb' },
+  { sym: 'LC1', name: 'Live Cattle', unit: 'cents/lb' },
+  { sym: 'FC1', name: 'Feeder Cattle', unit: 'cents/lb' },
 ];
 const ENERGY_CAL = [
   { when: 'WED 09:30', event: 'EIA Petroleum Status', note: 'weekly stocks' },
