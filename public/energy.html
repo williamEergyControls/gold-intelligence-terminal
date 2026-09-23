@@ -136,7 +136,7 @@ html,body{overflow-x:hidden}
     opts = opts || {};
     opts.headers = opts.headers || {};
     var token = localStorage.getItem('git-token');
-    if (token && String(url).indexOf('/api/') === 0 || String(url).indexOf('/api/') > -1 && !String(url).includes('/api/auth/')) {
+    if (token) {
       opts.headers['x-session'] = token;
     }
     return _fetch(url, opts);
@@ -146,6 +146,10 @@ html,body{overflow-x:hidden}
   }
 })();
 </script>
+<script>window.PAGE_CONFIG = { type: 'energy', api: '/api/page/energy', sym: 'CL1', heroUnit: '$/BBL' };</script>
+<script src="/js/pages.js"></script>
+</body>
+</html>
 <script src="/js/pages.js"></script>
 </body>
 </html>
