@@ -37,6 +37,34 @@ function adminOk(req: Request, env: Env, url: URL): boolean {
   return req.headers.get('x-admin') === t || url.searchParams.get('key') === t;
 }
 
+
+/* ===== AUTH ===== */
+case path === '/api/auth/register': {
+  if (req.method !== 'POST') return json({ error: 'POST ONLY' }, 405);
+  const body = await readBody(req);
+  const r = await authRegister(env, String(body.name || ''), String(body.password || ''));
+  if (!r.ok) return json({ error: r.error }, 400);
+  return json({ ok: true, token: r.token, name: r.name });
+}
+case path === '/api/auth/login': {
+  if (req.method !== 'POST') return json({ error: 'POST ONLY' }, 405);
+  const body = await readBody(req);
+  const r = await authLogin(env, String(body.name || ''), String(body.password || ''));
+  if (!r.ok) return json({ error: r.error }, 401);
+  return json({ ok: true, token: r.token, name: r.name });
+}
+case path === '/api/auth/logout': {
+  if (req.method !== 'POST') return json({ error: 'POST ONLY' }, 405);
+  const body = await readBody(req);
+  await authLogout(env, String(body.token || ''));
+  return json({ ok: true });
+}
+case path === '/api/auth/me': {
+  const token = req.headers.get('x-session') || url.searchParams.get('token') || '';
+  const r = await authVerify(env, token);
+  return json(r.valid ? { valid: true, name: r.name } : { valid: false });
+}
+
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(req.url);
