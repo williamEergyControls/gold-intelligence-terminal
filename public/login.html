@@ -3,74 +3,136 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GIT/4 - OPERATOR LOGIN</title>
+<title>GIT/4 - OPERATOR ACCESS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/terminal.css">
 <style>
 body{display:flex;align-items:center;justify-content:center;min-height:100dvh}
-.lbox{width:380px;max-width:92vw}
-.lhead{text-align:center;margin-bottom:14px}
-.lhead .lx{width:16px;height:16px;background:var(--gold);display:inline-block;margin-bottom:10px}
-.lhead h1{font:700 15px var(--disp);letter-spacing:.24em;color:#f0f5f8}
-.lhead p{font:9.5px var(--mono);color:var(--dim);letter-spacing:.18em;margin-top:5px}
-.lfield{margin-bottom:10px}
-.lfield label{display:block;font:600 8.5px var(--mono);letter-spacing:.16em;color:var(--dim);margin-bottom:4px}
-.lfield input{width:100%;background:var(--panel3);border:1px solid var(--line);color:var(--txt);font:13px var(--mono);padding:9px 10px;outline:none}
+.lbox{width:400px;max-width:94vw}
+.lhead{text-align:center;margin-bottom:16px}
+.lhead .lx{width:18px;height:18px;background:var(--gold);display:inline-block;margin-bottom:12px}
+.lhead h1{font:700 16px var(--disp);letter-spacing:.26em;color:#f0f5f8}
+.lhead p{font:9px var(--mono);color:var(--dim);letter-spacing:.2em;margin-top:6px}
+.lfield{margin-bottom:12px}
+.lfield label{display:block;font:600 8.5px var(--mono);letter-spacing:.16em;color:var(--dim);margin-bottom:5px}
+.lfield input{width:100%;background:var(--panel3);border:1px solid var(--line);color:var(--txt);font:13px var(--mono);padding:10px 12px;outline:none;transition:border-color .2s}
 .lfield input:focus{border-color:var(--gold)}
-.lbtn{width:100%;margin-top:6px}
-.lnote{font:8.5px var(--mono);color:var(--dim);letter-spacing:.06em;line-height:1.7;margin-top:14px;text-align:center}
-.lerr{font:10px var(--mono);color:var(--dn);margin-top:8px;text-align:center;min-height:14px}
+.lfield input::placeholder{color:var(--dim);font-size:11px}
+.lbtn{width:100%;margin-top:4px;font-size:12px}
+.lswitch{text-align:center;margin-top:14px;font:10px var(--mono);color:var(--dim)}
+.lswitch a{color:var(--cyan);cursor:pointer;text-decoration:underline}
+.lerr{font:10px var(--mono);color:var(--dn);margin-top:10px;text-align:center;min-height:16px;letter-spacing:.04em}
+.lok{font:10px var(--mono);color:var(--up);margin-top:10px;text-align:center;min-height:16px}
+.lnote{font:8px var(--mono);color:var(--dim);letter-spacing:.06em;line-height:1.8;margin-top:16px;text-align:center;border-top:1px dashed var(--line2);padding-top:12px}
+.lmode{display:flex;gap:0;margin-bottom:14px;border:1px solid var(--line)}
+.lmode button{flex:1;font:600 10px var(--mono);letter-spacing:.14em;padding:8px 0;color:var(--dim);background:var(--panel3)}
+.lmode button.on{color:var(--gold);background:#141007}
 </style>
 </head>
 <body>
+<div id="crt"></div>
 <div class="lbox">
   <div class="lhead">
     <span class="lx"></span>
     <h1>GOLD INTELLIGENCE TERMINAL</h1>
-    <p>OPERATOR ACCESS - GIT/4.2.26</p>
+    <p>OPERATOR ACCESS - GIT/4.2.26 - SECURE</p>
   </div>
   <div class="panel sig">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Operator Sign-In</span></div>
+    <div class="p-hd"><span class="sq"></span><span class="ttl" id="formTitle">Sign In</span></div>
     <div class="p-bd">
-      <div class="lfield"><label>OPERATOR NAME</label><input id="lname" maxlength="24" autocomplete="off"></div>
-      <div class="lfield"><label>ACCESS PIN (4-8 DIGITS)</label><input id="lpin" type="password" maxlength="8" inputmode="numeric"></div>
+      <div class="lmode">
+        <button id="modeLogin" class="on">SIGN IN</button>
+        <button id="modeReg">SIGN UP</button>
+      </div>
+      <div class="lfield"><label>OPERATOR NAME</label><input id="lname" maxlength="24" autocomplete="username"></div>
+      <div class="lfield"><label id="plabel">PASSWORD</label><input id="lpass" type="password" maxlength="128" autocomplete="current-password"></div>
+      <div class="lfield" id="pass2row" style="display:none"><label>CONFIRM PASSWORD</label><input id="lpass2" type="password" maxlength="128" autocomplete="new-password"></div>
       <button class="runbtn lbtn" id="lgo">SIGN IN</button>
       <div class="lerr" id="lerr"></div>
-      <div class="lnote">FIRST TIME? ENTER ANY NAME + PIN TO CREATE YOUR DESK PROFILE.<br>PROFILE + BASKET SAVED ON THIS DEVICE ONLY.<br>PRIVACY SCREEN - NOT BANK-GRADE SECURITY.</div>
+      <div class="lok" id="lok"></div>
+      <div class="lnote">CREDENTIALS ENCRYPTED (PBKDF2-SHA256, 100K ITERATIONS)<br>STORED IN CLOUDFLARE D1 - SQL INJECTION IMMUNE<br>SESSIONS EXPIRE IN 7 DAYS - FAILED ATTEMPTS RATE LIMITED<br><br>THIS IS A RESEARCH TERMINAL - NOT FINANCIAL ADVICE</div>
     </div>
   </div>
 </div>
 <script>
 (function(){
 'use strict';
-/* session helpers (shared key names with home.js) */
-function sess(){ try { return JSON.parse(localStorage.getItem('git-session')||'null'); } catch(e){ return null; } }
-function hash(s){ var h=5381; for(var i=0;i<s.length;i++){ h=((h<<5)+h+s.charCodeAt(i))>>>0; } return h.toString(36); }
-function go(){ var s=sess(); if(s && Date.now()-s.ts < 30*864e5){ location.href='/'; } }
-go();
-var name=document.getElementById('lname'), pin=document.getElementById('lpin'), err=document.getElementById('lerr');
-function submit(){
-  var n=name.value.trim(), p=pin.value.trim();
-  if(n.length<2){ err.textContent='ENTER OPERATOR NAME (2+ CHARS)'; return; }
-  if(!/^\d{4,8}$/.test(p)){ err.textContent='PIN MUST BE 4-8 DIGITS'; return; }
-  var existing=null;
-  try{ existing=JSON.parse(localStorage.getItem('git-cred')||'null'); }catch(e){}
-  if(existing && existing.name===n){
-    if(existing.ph!==hash(n+p)){ err.textContent='PIN DOES NOT MATCH THIS OPERATOR'; return; }
-  } else if(existing && existing.name!==n){
-    if(!confirm('A DIFFERENT OPERATOR EXISTS ON THIS DEVICE. REPLACE WITH '+n.toUpperCase()+'? (WATCHLIST/PROFILE WILL RESET)')) return;
-    localStorage.removeItem('git-profile'); localStorage.removeItem('git-watch');
-  }
-  localStorage.setItem('git-cred', JSON.stringify({name:n, ph:hash(n+p)}));
-  localStorage.setItem('git-session', JSON.stringify({name:n, ts:Date.now()}));
-  var pf={}; try{ pf=JSON.parse(localStorage.getItem('git-profile')||'{}'); }catch(e){}
-  pf.name=n; localStorage.setItem('git-profile', JSON.stringify(pf));
-  location.href='/';
+var mode = 'login';
+var name = document.getElementById('lname');
+var pass = document.getElementById('lpass');
+var pass2 = document.getElementById('lpass2');
+var pass2row = document.getElementById('pass2row');
+var err = document.getElementById('lerr');
+var ok = document.getElementById('lok');
+var btn = document.getElementById('lgo');
+var bLogin = document.getElementById('modeLogin');
+var bReg = document.getElementById('modeReg');
+var formTitle = document.getElementById('formTitle');
+var plabel = document.getElementById('plabel');
+
+/* check existing session via API */
+fetch('/api/auth/me', { headers: { 'x-session': localStorage.getItem('git-token') || '' } })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if(d && d.valid){ location.href = '/'; }
+  }).catch(function(){});
+
+function setMode(m){
+  mode = m;
+  bLogin.classList.toggle('on', m === 'login');
+  bReg.classList.toggle('on', m === 'reg');
+  formTitle.textContent = m === 'login' ? 'Sign In' : 'Create Account';
+  btn.textContent = m === 'login' ? 'SIGN IN' : 'CREATE ACCOUNT';
+  pass2row.style.display = m === 'reg' ? '' : 'none';
+  plabel.textContent = m === 'reg' ? 'PASSWORD (6+ CHARS)' : 'PASSWORD';
+  err.textContent = ''; ok.textContent = '';
 }
-document.getElementById('lgo').addEventListener('click', submit);
-pin.addEventListener('keydown', function(e){ if(e.key==='Enter') submit(); });
-name.addEventListener('keydown', function(e){ if(e.key==='Enter') pin.focus(); });
+bLogin.addEventListener('click', function(){ setMode('login'); });
+bReg.addEventListener('click', function(){ setMode('reg'); });
+
+function show(txt, isOk){
+  if(isOk){ ok.textContent = txt; err.textContent = ''; }
+  else{ err.textContent = txt; ok.textContent = ''; }
+}
+
+function submit(){
+  var n = name.value.trim();
+  var p = pass.value;
+  if(n.length < 2){ show('ENTER OPERATOR NAME (2+ CHARS)'); return; }
+  if(!p){ show('ENTER PASSWORD'); return; }
+  if(mode === 'reg'){
+    if(p.length < 6){ show('PASSWORD MUST BE 6+ CHARACTERS'); return; }
+    if(p !== pass2.value){ show('PASSWORDS DO NOT MATCH'); return; }
+  }
+  btn.disabled = true; btn.textContent = mode === 'login' ? 'VERIFYING...' : 'CREATING...';
+  show('', true);
+  fetch(mode === 'login' ? '/api/auth/login' : '/api/auth/register', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: n, password: p })
+  })
+  .then(function(r){ return r.json().then(function(d){ return { status: r.status, data: d }; }); })
+  .then(function(res){
+    btn.disabled = false; btn.textContent = mode === 'login' ? 'SIGN IN' : 'CREATE ACCOUNT';
+    if(res.data && res.data.ok && res.data.token){
+      localStorage.setItem('git-token', res.data.token);
+      localStorage.setItem('git-name', res.data.name || n);
+      show('ACCESS GRANTED - REDIRECTING...', true);
+      setTimeout(function(){ location.href = '/'; }, 600);
+    } else {
+      show(res.data && res.data.error ? res.data.error : 'AUTHENTICATION FAILED');
+    }
+  })
+  .catch(function(e){
+    btn.disabled = false; btn.textContent = mode === 'login' ? 'SIGN IN' : 'CREATE ACCOUNT';
+    show('CONNECTION ERROR - ' + String(e && e.message || e));
+  });
+}
+btn.addEventListener('click', submit);
+pass.addEventListener('keydown', function(e){ if(e.key === 'Enter') submit(); });
+pass2.addEventListener('keydown', function(e){ if(e.key === 'Enter') submit(); });
+name.addEventListener('keydown', function(e){ if(e.key === 'Enter') pass.focus(); });
 })();
 </script>
 </body>
