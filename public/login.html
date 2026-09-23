@@ -72,11 +72,20 @@ var formTitle = document.getElementById('formTitle');
 var plabel = document.getElementById('plabel');
 
 /* check existing session via API */
-fetch('/api/auth/me', { headers: { 'x-session': localStorage.getItem('git-token') || '' } })
-  .then(function(r){ return r.json(); })
-  .then(function(d){
-    if(d && d.valid){ location.href = '/'; }
-  }).catch(function(){});
+var tok = localStorage.getItem('git-token');
+if (tok) {
+  fetch('/api/auth/me', { headers: { 'x-session': tok } })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d && d.valid === true) {
+        location.replace('/');
+      } else {
+        localStorage.removeItem('git-token');
+        localStorage.removeItem('git-name');
+      }
+    })
+    .catch(function(){ });
+}
 
 function setMode(m){
   mode = m;
