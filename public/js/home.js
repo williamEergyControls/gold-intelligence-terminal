@@ -38,7 +38,7 @@ setInterval(() => { $('#clock').textContent = new Date().toLocaleTimeString('en-
  $('#clock').textContent = new Date().toLocaleTimeString('en-GB');
 
 /* ---------- profile ---------- */
-const DEF = { name: SESS.name || '', wf: 15, we: 10, wi: 10, wh: 30, wg: 10 };
+const DEF = { name: NAME || '', wf: 15, we: 10, wi: 10, wh: 30, wg: 10 };
 let P = Object.assign({}, DEF, (() => { try { return JSON.parse(localStorage.getItem('git-profile') || '{}'); } catch (e) { return {}; } })());
 const save = () => localStorage.setItem('git-profile', JSON.stringify(P));
 const op = $('#opname'); if (op) { op.value = P.name; op.addEventListener('input', () => { P.name = op.value.slice(0, 24); save(); }); }
