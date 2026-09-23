@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GIT/4 - SEARCH</title>
+<link rel="stylesheet" href="/css/terminal.css">
+<style>
+html,body{overflow-x:hidden}
+.swrap{max-width:800px;margin:0 auto;padding:20px clamp(10px,3vw,30px)}
+.sbar{display:flex;gap:8px;margin-bottom:16px}
+.sbar input{flex:1;background:var(--panel3);border:1px solid var(--line);color:var(--txt);font:14px var(--mono);padding:12px 14px;outline:none}
+.sbar input:focus{border-color:var(--gold)}
+.sbar button{font:700 11px var(--disp);letter-spacing:.16em;color:var(--gold);border:1px solid var(--goldDk);background:#131008;padding:0 20px;cursor:pointer}
+.sbar button:hover{background:var(--gold);color:#000}
+.sresult{border:1px solid var(--line);background:var(--panel);padding:12px;margin-bottom:6px;cursor:pointer;display:block;text-decoration:none}
+.sresult:hover{border-color:var(--gold)}
+.sresult .rt{font:600 8px var(--mono);color:var(--dim);letter-spacing:.14em}
+.sresult .rh{font:600 12px var(--mono);color:var(--txt);margin-top:3px}
+.sresult .rs{font:9px var(--mono);color:var(--mut);margin-top:2px}
+.shint{font:9px var(--mono);color:var(--dim);text-align:center;margin-top:20px;letter-spacing:.1em}
+</style>
+</head>
+<body>
+<script>try{var m=localStorage.getItem('git-theme')||'auto';if(m==='day'||(m==='auto'&&matchMedia('(prefers-color-scheme: light)').matches))document.body.classList.add('day')}catch(e){}</script>
+<div id="crt"></div>
+<header id="top">
+  <div class="logo"><span class="lx"></span><span class="lt">GOLD INTELLIGENCE TERMINAL</span><span class="lv">GIT/4.2.26 - SEARCH</span></div>
+  <nav class="gochips">
+    <a class="gchip" href="/" style="text-decoration:none">HOME</a>
+    <a class="gchip" href="/gold.html" style="text-decoration:none">GOLD</a>
+    <a class="gchip" href="/ai.html" style="text-decoration:none">AI</a>
+  </nav>
+  <div class="tsright"><span id="clock">--:--:--</span></div>
+</header>
+<div class="swrap">
+  <div class="sbar">
+    <input id="sq" placeholder="SEARCH PAGES, NEWS, DATA..." autocomplete="off" autofocus>
+    <button id="sgo">SEARCH</button>
+  </div>
+  <div id="sresults"><div class="shint">TYPE TO SEARCH ACROSS ALL TERMINAL DATA</div></div>
+</div>
+<script>
+(function(){
+var _f=window.fetch;
+window.fetch=function(u,o){o=o||{};o.headers=o.headers||{};var t=localStorage.getItem('git-token');if(t){o.headers['x-session']=t}return _f(u,o)};
+if(!localStorage.getItem('git-token')){location.replace('/login.html')}
+var sq=document.getElementById('sq'),sres=document.getElementById('sresults');
+var debounce=null;
+function search(){
+  var q=sq.value.trim();
+  if(q.length<2){sres.innerHTML='<div class="shint">TYPE AT LEAST 2 CHARACTERS</div>';return;}
+  sres.innerHTML='<div class="shint">SEARCHING...</div>';
+  fetch('/api/search?q='+encodeURIComponent(q)).then(function(r){return r.json()}).then(function(d){
+    if(!d.results||!d.results.length){sres.innerHTML='<div class="shint">NO RESULTS FOR "'+q.toUpperCase()+'"</div>';return;}
+    var h='';
+    d.results.forEach(function(r){
+      if(r.type==='PAGE'){
+        h+='<a class="sresult" href="'+r.url+'"><span class="rt">PAGE</span><div class="rh">'+r.title+'</div><div class="rs">'+r.source+'</div></a>';
+      } else if(r.type==='NEWS'){
+        var url=r.url!=='#'?r.url:'#';
+        h+='<a class="sresult" href="'+esc(url)+'" '+(url!=='#'?'target="_blank" rel="noopener"':'')+'><span class="rt">NEWS</span><div class="rh">'+r.title+'</div><div class="rs">'+r.source+'</div></a>';
+      } else if(r.type==='DATA'){
+        h+='<a class="sresult" href="'+r.url+'"><span class="rt">DATA</span><div class="rh">'+r.title+'</div><div class="rs">'+r.source+'</div></a>';
+      }
+    });
+    sres.innerHTML=h;
+  }).catch(function(e){
+    sres.innerHTML='<div class="shint">SEARCH ERROR</div>';
+  });
+}
+sq.addEventListener('input',function(){
+  clearTimeout(debounce);
+  debounce=setTimeout(search,300);
+});
+sq.addEventListener('keydown',function(e){if(e.key==='Enter')search()});
+document.getElementById('sgo').addEventListener('click',search);
+var esc=function(s){return String(s||'').replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+})();
+</script>
+</body>
+</html>
