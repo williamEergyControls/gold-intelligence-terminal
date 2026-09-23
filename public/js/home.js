@@ -13,13 +13,24 @@ async function getJSON(u) { const r = await fetch(u); if (!r.ok) throw new Error
 
 let B = null;
 
-/* ---------- session ---------- */
-let SESS = null;
-try { SESS = JSON.parse(localStorage.getItem('git-session') || 'null'); } catch (e) { }
-if (!SESS || Date.now() - SESS.ts > 30 * 864e5) { location.replace('/login.html'); return; }
-const badge = $('#opbadge'); if (badge) badge.textContent = (SESS.name || 'OPERATOR').toUpperCase();
+/* ---------- session via D1 token ---------- */
+const TOKEN = localStorage.getItem('git-token') || '';
+const NAME = localStorage.getItem('git-name') || '';
+if (!TOKEN) { location.replace('/login.html'); return; }
+/* verify with server on load */
+fetch('/api/auth/me', { headers: { 'x-session': TOKEN } })
+  .then(r => r.json())
+  .then(d => {
+    if (!d.valid) { localStorage.removeItem('git-token'); localStorage.removeItem('git-name'); location.replace('/login.html'); }
+  })
+  .catch(() => { /* offline: allow local session */ });
+const badge = $('#opbadge'); if (badge) badge.textContent = (NAME || 'OPERATOR').toUpperCase();
 const lo = $('#logout');
-if (lo) lo.addEventListener('click', () => { localStorage.removeItem('git-session'); location.href = '/login.html'; });
+if (lo) lo.addEventListener('click', async () => {
+  try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: TOKEN }) }); } catch (e) { }
+  localStorage.removeItem('git-token'); localStorage.removeItem('git-name'); localStorage.removeItem('git-session');
+  location.href = '/login.html';
+});
 
 /* ---------- clock ---------- */
 setInterval(() => { $('#clock').textContent = new Date().toLocaleTimeString('en-GB'); }, 1000);
