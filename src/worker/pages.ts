@@ -83,7 +83,8 @@ export async function buildEnergyPage(env: Env): Promise<PagePayload> {
     const prod = ((2 * xb.price + 1 * ho.price) * 42) / 3; // 2 gal-gasoline + 1 gal-distillate per 3 bbl; inputs already $/gal
     spreads.push({ label: '3-2-1 Crack Spread', value: (prod - cl.price).toFixed(2) + ' $/bbl [CALC]', change: null });
   }
-  const ratios = xau && cl ? [{ label: 'GOLD / OIL', value: +(xau.price / cl.price).toFixed(1), unit: 'barrels per ounce' }] : [];
+   // grains quote in CENTS per bushel on Yahoo - convert to dollars for the ratio
+  const ratios = xau && c ? [{ label: 'GOLD / CORN', value: +(xau.price / (c.price / 100)).toFixed(0), unit: 'bushels per ounce' }] : [];
 
   let eiaRows: PagePayload['eia'];
   try {
