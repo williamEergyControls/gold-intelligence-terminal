@@ -1,5 +1,5 @@
 /* ================================================================
-   GIT/4.2.26 - HOME PORTAL RUNTIME. ASCII only.
+   GIT/4.2.26 - HOME RUNTIME - session, profile, watchlist, AI
    ================================================================ */
 (function () {
 'use strict';
@@ -13,22 +13,20 @@ async function getJSON(u) { const r = await fetch(u); if (!r.ok) throw new Error
 
 let B = null;
 
+/* ---------- session ---------- */
+let SESS = null;
+try { SESS = JSON.parse(localStorage.getItem('git-session') || 'null'); } catch (e) { }
+if (!SESS || Date.now() - SESS.ts > 30 * 864e5) { location.replace('/login.html'); return; }
+const badge = $('#opbadge'); if (badge) badge.textContent = (SESS.name || 'OPERATOR').toUpperCase();
+const lo = $('#logout');
+if (lo) lo.addEventListener('click', () => { localStorage.removeItem('git-session'); location.href = '/login.html'; });
+
+/* ---------- clock ---------- */
 setInterval(() => { $('#clock').textContent = new Date().toLocaleTimeString('en-GB'); }, 1000);
  $('#clock').textContent = new Date().toLocaleTimeString('en-GB');
 
-/* boot */
-const bootEl = $('#boot');
-if (bootEl) bootEl.addEventListener('click', () => { bootEl.classList.add('off'); setTimeout(() => bootEl.remove(), 500); });
-(function seq() {
-  const box = $('#bootLines'); const L = ['GIT/4.2.26 - HOME', '', 'PROFILE .......... LOADED', 'FEEDS ............ CONNECTING', 'RATES ............ FRED', '', 'READY.'];
-  let i = 0; const t = setInterval(() => {
-    if (i >= L.length) { clearInterval(t); if (bootEl) { bootEl.classList.add('off'); setTimeout(() => bootEl.remove(), 500); } return; }
-    const d = document.createElement('div'); d.textContent = L[i++]; box.appendChild(d);
-  }, 110);
-})();
-
-/* profile */
-const DEF = { name: '', wf: 15, we: 10, wi: 10, wh: 30, wg: 10 };
+/* ---------- profile ---------- */
+const DEF = { name: SESS.name || '', wf: 15, we: 10, wi: 10, wh: 30, wg: 10 };
 let P = Object.assign({}, DEF, (() => { try { return JSON.parse(localStorage.getItem('git-profile') || '{}'); } catch (e) { return {}; } })());
 const save = () => localStorage.setItem('git-profile', JSON.stringify(P));
 const op = $('#opname'); if (op) { op.value = P.name; op.addEventListener('input', () => { P.name = op.value.slice(0, 24); save(); }); }
@@ -38,10 +36,9 @@ const op = $('#opname'); if (op) { op.value = P.name; op.addEventListener('input
   el.addEventListener('input', () => { P[id] = +el.value; el.nextElementSibling.textContent = P[id] + '%'; save(); calc(); });
 });
 
-/* real inflation */
 function calc() {
   if (!B) return;
-  const c = B.macro.components || {};
+  const c = B.macro && B.macro.components ? B.macro.components : {};
   const d = (B.series && B.series.dailyCloses) || [];
   const n = Math.min(252, d.length - 2);
   const goldYoY = (d.length > 60 && n > 0) ? (d[d.length - 1] / d[d.length - 1 - n] - 1) * 100 : 0;
@@ -56,15 +53,15 @@ function calc() {
   $('#riRest').textContent = 'REST ' + rest + '%';
 }
 
-/* render */
+/* ---------- render ---------- */
 function renderGold() {
   const g = B.gold, p = g.changePct ?? 0;
   $('#px').textContent = fmt(g.price);
   const bc = $('#pxc'); bc.className = 'bigchg ' + cls(p);
-  bc.innerHTML = (p >= 0 ? '+ ' : '- ') + fmt(Math.abs(g.change)) + '  (' + sgn(p) + fmt(p) + '%)';
+  bc.innerHTML = (p >= 0 ? 'UP +' : 'DN ') + fmt(Math.abs(g.change)) + '  (' + sgn(p) + fmt(p) + '%)';
   $('#gsrc').textContent = String(g.source).toUpperCase() + ' - ' + (g.delay === 'simulated' ? 'SIM' : 'NEAR LIVE');
   const ch = $('#gchip'); ch.textContent = g.delay === 'simulated' ? 'SIM' : 'NEAR LIVE'; ch.className = 'chip ' + (g.delay === 'simulated' ? 'ai' : 'near');
-  const m = B.ml;
+  const m = B.ml ?? null;
   $('#mlLine').innerHTML = m
     ? 'ML SIGNAL: <b class="' + (m.p >= 0.5 ? 'up' : 'dn') + '">' + esc(m.direction) + ' ' + (m.p * 100).toFixed(0) + '%</b> - REGIME <b class="gold">' + esc(m.regime.state) + '</b> - AGREE ' + m.final.agreeing + '/10 - ACC ' + esc(m.final.accStatus) + ' - <a href="/gold.html" style="color:var(--cyan)">FULL DESK</a>'
     : 'ML WARMING - first prediction appears within the hour';
@@ -76,7 +73,7 @@ function renderGold() {
 function renderRates() {
   const keys = ['US10Y', 'REAL10Y', 'BREAKEV', 'SOFR', 'EFFR'];
   let h = keys.map(k => {
-    const r = (B.macro.rows || []).find(x => x.key === k); if (!r) return '';
+    const r = (B.macro && B.macro.rows ? B.macro.rows : []).find(x => x.key === k); if (!r) return '';
     const d = (r.value - r.prior) * 100;
     return '<div class="ri"><span class="n">' + esc(r.label) + '</span><span class="gold">' + fmt(r.value, 2) + '%</span><span class="' + (d <= 0 ? 'up' : 'dn') + '" style="justify-self:end;font-size:9px">' + (d <= 0 ? 'v ' : '^ ') + fmt(Math.abs(d), 1) + 'bp</span></div>';
   }).join('');
@@ -85,18 +82,24 @@ function renderRates() {
   h += '<div class="footnote">10Y / REAL / BREAKEVEN / SOFR (REPO) / EFFR - FRED DAILY OFFICIAL - DXY NEAR-LIVE</div>';
   $('#ratesBody').innerHTML = h;
 }
-function renderNews() {
-  $('#nwList').innerHTML = (B.news.gold || []).slice(0, 5).map(n => {
-    const sc = n.sentiment === 'bull' ? 'b' : (n.sentiment === 'bear' ? 's' : 'n');
-    const st = n.sentiment === 'bull' ? 'BULL' : (n.sentiment === 'bear' ? 'BEAR' : 'NEUT');
-    const link = (n.url && n.url !== '#') ? '<a href="' + esc(safeUrl(n.url)) + '" target="_blank" rel="noopener noreferrer">OPEN</a>' : 'SIM';
-    return '<li><time>' + new Date(n.publishedTs).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + '</time><span class="tag">' + esc(n.source) + '</span><p>' + esc(n.title) + '</p><span class="sent ' + sc + '">' + st + '</span><div class="sum">// ' + esc(n.sentimentNote) + ' - ' + link + '</div></li>';
-  }).join('');
+function renderAlerts() {
+  const list = B.alerts || [];
+  $('#alCount').textContent = list.length + ' ACTIVE';
+  $('#alList').innerHTML = list.map(a =>
+    '<div class="al ' + a.se + '"><span class="g">' + (a.se === 'crit' ? '#' : a.se === 'warn' ? '^' : 'o') + '</span><time>' + esc(a.t) + '</time><p>' + esc(a.txt) + '</p></div>').join('') || '<div class="al info"><span class="g">o</span><p class="mut">NO ALERTS</p></div>';
 }
 function renderHealth() {
   const on = B.health.filter(h => h.status === 'online').length, tot = B.health.length;
   const hc = $('#hChip'); hc.textContent = on + '/' + tot + ' ONLINE'; hc.className = 'chip ' + (on === tot ? 'live' : (on ? 'near' : 'ai'));
   $('#hBody').innerHTML = B.health.map(h => (h.status === 'online' ? '<span class="up">o</span> ' : '<span class="dim">-</span> ') + esc(h.name.toUpperCase()) + ' - ' + esc(h.status.toUpperCase())).join('<br>');
+}
+function renderNews() {
+  $('#nwList').innerHTML = ((B.news && B.news.gold) || []).slice(0, 6).map(n => {
+    const sc = n.sentiment === 'bull' ? 'b' : (n.sentiment === 'bear' ? 's' : 'n');
+    const st = n.sentiment === 'bull' ? 'BULL' : (n.sentiment === 'bear' ? 'BEAR' : 'NEUT');
+    const link = (n.url && n.url !== '#') ? '<a href="' + esc(safeUrl(n.url)) + '" target="_blank" rel="noopener noreferrer">OPEN</a>' : 'SIM';
+    return '<li><time>' + new Date(n.publishedTs).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + '</time><span class="tag">' + esc(n.source) + '</span><p>' + esc(n.title) + '</p><span class="sent ' + sc + '">' + st + '</span><div class="sum">// ' + esc(n.sentimentNote) + ' - ' + link + '</div></li>';
+  }).join('');
 }
 function renderTape() {
   const h = (B.tape || []).map(t => {
@@ -105,9 +108,40 @@ function renderTape() {
   }).join('');
   $('#tapeA').innerHTML = h; $('#tapeB').innerHTML = h;
 }
-function renderAll() { renderTape(); renderGold(); renderRates(); renderNews(); renderHealth(); calc(); }
+function renderAll() { renderTape(); renderGold(); renderRates(); renderAlerts(); renderHealth(); renderNews(); calc(); }
 
-/* AI with profile */
+/* ---------- watchlist ---------- */
+let WATCH = [];
+try { WATCH = JSON.parse(localStorage.getItem('git-watch') || '[]'); } catch (e) { }
+const saveWatch = () => { localStorage.setItem('git-watch', JSON.stringify(WATCH)); loadWatch(); };
+async function loadWatch() {
+  const wc = $('#wcount'); if (wc) wc.textContent = WATCH.length + '';
+  if (!WATCH.length) { $('#watchList').innerHTML = '<div class="footnote">EMPTY - ADD A TICKER ABOVE</div>'; return; }
+  try {
+    const r = await getJSON('/api/watch?syms=' + encodeURIComponent(WATCH.join(',')));
+    $('#watchList').innerHTML = (r.quotes || []).map(q => {
+      const ch = q.changePct ?? 0;
+      const del = '<span class="del" data-sym="' + esc(q.symbol) + '">x</span>';
+      return '<div class="watchrow"><b>' + esc(q.symbol) + '</b><span class="mut">' + esc(q.name || '') + '</span><span class="r"><b>' + fmt(q.price, 2) + '</b></span><span class="r ' + cls(ch) + '">' + sgn(ch) + fmt(ch, 2) + '%</span>' + del + '</div>';
+    }).join('');
+    document.querySelectorAll('#watchList .del').forEach(d => d.addEventListener('click', () => {
+      WATCH = WATCH.filter(s => s !== d.dataset.sym); saveWatch();
+    }));
+  } catch (e) { $('#watchList').innerHTML = '<div class="footnote">WATCH QUOTES PENDING</div>'; }
+}
+const addgo = $('#addgo');
+if (addgo) addgo.addEventListener('click', () => {
+  const v = ($('#addsym').value || '').trim().toUpperCase();
+  if (!v) return;
+  if (!WATCH.includes(v) && WATCH.length < 12) WATCH.push(v);
+  $('#addsym').value = '';
+  saveWatch();
+});
+ $('#addsym').addEventListener('keydown', e => { if (e.key === 'Enter') addgo.click(); });
+loadWatch();
+setInterval(() => { if (!document.hidden) loadWatch(); }, 30000);
+
+/* ---------- AI with profile ---------- */
 const aOut = $('#aOut');
 function line(txt) { const d = document.createElement('div'); d.className = 'ln'; d.textContent = txt || ''; aOut.appendChild(d); aOut.scrollTop = 1e9; return d; }
 function typeInto(el, txt, cps) {
@@ -116,10 +150,9 @@ function typeInto(el, txt, cps) {
   });
 }
 let busy = false;
-const runBtn = $('#runA');
-if (runBtn) runBtn.addEventListener('click', async () => {
+ $('#runA').addEventListener('click', async () => {
   if (busy || !B) return; busy = true;
-  runBtn.disabled = true; runBtn.textContent = 'ANALYZING...';
+  const btn = $('#runA'); btn.disabled = true; btn.textContent = 'ANALYZING...';
   aOut.innerHTML = '';
   try {
     const r = await fetch('/api/ai/analyst', {
@@ -135,11 +168,11 @@ if (runBtn) runBtn.addEventListener('click', async () => {
     await typeInto(line(''), '\n' + ai.text, 60);
     if (ai.aiErrors && ai.aiErrors.length) line('> AI TRIED: ' + ai.aiErrors.join(' | '));
   } catch (e) { line('> ANALYST UNAVAILABLE - ' + String(e && e.message || e)); }
-  runBtn.disabled = false; runBtn.textContent = 'RUN ANALYST - WITH YOUR PROFILE';
+  btn.disabled = false; btn.textContent = 'RUN ANALYST - WITH YOUR PROFILE';
   busy = false;
 });
 
-/* init + polls */
+/* ---------- init + polls ---------- */
 (async function init() {
   try { B = await getJSON('/api/bootstrap?tf=1D'); renderAll(); }
   catch (e) { const s = $('#status .mid'); if (s) s.textContent = 'API ERROR - ' + String(e && e.message || e); }
@@ -159,7 +192,7 @@ setInterval(async () => {
   } catch (e) { }
 }, 20000);
 
-/* theme */
+/* ---------- theme ---------- */
 (function () {
   let mode = localStorage.getItem('git-theme') || 'auto';
   const isDay = () => mode === 'day' || (mode === 'auto' && matchMedia('(prefers-color-scheme: light)').matches);
