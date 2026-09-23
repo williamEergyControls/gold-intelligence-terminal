@@ -286,6 +286,23 @@
 </footer>
 
 <!-- CORE RUNTIME (the only script — renders everything from /api/*) -->
+<script>
+(function(){
+  var _fetch = window.fetch;
+  window.fetch = function(url, opts) {
+    opts = opts || {};
+    opts.headers = opts.headers || {};
+    var token = localStorage.getItem('git-token');
+    if (token && String(url).indexOf('/api/') === 0 || String(url).indexOf('/api/') > -1 && !String(url).includes('/api/auth/')) {
+      opts.headers['x-session'] = token;
+    }
+    return _fetch(url, opts);
+  };
+  if (!localStorage.getItem('git-token')) {
+    location.replace('/login.html');
+  }
+})();
+</script>
 <script type="module" src="/js/app.js"></script>
 </body>
 </html>
