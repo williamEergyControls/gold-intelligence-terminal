@@ -5,18 +5,11 @@ import { aiAnalyst, newsSentimentHourly } from './ai/analyst';
 import { firstOk, persistHealthRows, ensureSecrets, secret } from './providers/provider';
 import { trainAndStore, predictAndStore, gradeOutcomes } from './ml/pipeline';
 import { buildEnergyPage, buildAgriPage } from './pages';
+import { authRegister, authLogin, authVerify, authLogout } from './auth';
 import * as yahoo from './providers/yahoo';
 import * as metalsdev from './providers/metalsdev';
 import * as goldapicom from './providers/goldapicom';
-import * as goldapiio from './providers/goldapiio';
 import * as sim from './providers/simulated';
-import { authRegister, authLogin, authVerify, authLogout } from './auth';
-
-
-async function readBody(req: Request): Promise<any> {
-  try { return await req.json(); } catch { return {}; }
-}
-
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff' };
 const TFS: Tf[] = ['5M', '15M', '1H', '1D', '1W'];
@@ -31,8 +24,6 @@ function allow(ip: string, max = 240, windowMs = 60_000): boolean {
   return h.n <= max;
 }
 
-
-
 const qMemo = new Map<string, { v: any; ts: number }>();
 function memo<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
   const m = qMemo.get(key);
@@ -46,32 +37,8 @@ function adminOk(req: Request, env: Env, url: URL): boolean {
   return req.headers.get('x-admin') === t || url.searchParams.get('key') === t;
 }
 
-
-/* ===== AUTH ===== */
-case path === '/api/auth/register': {
-  if (req.method !== 'POST') return json({ error: 'POST ONLY' }, 405);
-  const body = await readBody(req);
-  const r = await authRegister(env, String(body.name || ''), String(body.password || ''));
-  if (!r.ok) return json({ error: r.error }, 400);
-  return json({ ok: true, token: r.token, name: r.name });
-}
-case path === '/api/auth/login': {
-  if (req.method !== 'POST') return json({ error: 'POST ONLY' }, 405);
-  const body = await readBody(req);
-  const r = await authLogin(env, String(body.name || ''), String(body.password || ''));
-  if (!r.ok) return json({ error: r.error }, 401);
-  return json({ ok: true, token: r.token, name: r.name });
-}
-case path === '/api/auth/logout': {
-  if (req.method !== 'POST') return json({ error: 'POST ONLY' }, 405);
-  const body = await readBody(req);
-  await authLogout(env, String(body.token || ''));
-  return json({ ok: true });
-}
-case path === '/api/auth/me': {
-  const token = req.headers.get('x-session') || url.searchParams.get('token') || '';
-  const r = await authVerify(env, token);
-  return json(r.valid ? { valid: true, name: r.name } : { valid: false });
+async function readBody(req: Request): Promise<any> {
+  try { return await req.json(); } catch { return {}; }
 }
 
 export default {
@@ -85,21 +52,50 @@ export default {
 
     try {
       switch (true) {
+        /* ===== AUTH ===== */
+        case path === '/api/auth/register': {
+          if (req.method !== 'POST') return json({ error: 'POST ONLY' }, 405);
+          const body = await readBody(req);
+          const r = await authRegister(env, String(body.name || ''), String(body.password || ''));
+          if (!r.ok) return json({ error: r.error }, 400);
+          return json({ ok: true, token: r.token, name: r.name });
+        }
+        case path === '/api/auth/login': {
+          if (req.method !== 'POST') return json({ error: 'POST ONLY' }, 405);
+          const body = await readBody(req);
+          const r = await authLogin(env, String(body.name || ''), String(body.password || ''));
+          if (!r.ok) return json({ error: r.error }, 401);
+          return json({ ok: true, token: r.token, name: r.name });
+        }
+        case path === '/api/auth/logout': {
+          if (req.method !== 'POST') return json({ error: 'POST ONLY' }, 405);
+          const body = await readBody(req);
+          await authLogout(env, String(body.token || ''));
+          return json({ ok: true });
+        }
+        case path === '/api/auth/me': {
+          const token = req.headers.get('x-session') || url.searchParams.get('token') || '';
+          const r = await authVerify(env, token);
+          return json(r.valid ? { valid: true, name: r.name } : { valid: false });
+        }
+
+        /* ===== DIAGNOSTICS ===== */
         case path === '/api/env': {
           if (!adminOk(req, env, url)) return json({ error: 'ADMIN_LOCKED', hint: 'set ADMIN_TOKEN secret, then pass ?key=TOKEN' }, 403);
           const mk = (n: string) => { const v = secret(env, n); return v ? `SET (${v.length} chars)` : 'MISSING'; };
-          return json({ METALS_API_KEY: mk('METALS_API_KEY'), FRED_API_KEY: mk('FRED_API_KEY'), GOLDAPI_KEY: mk('GOLDAPI_KEY'), EIA_API_KEY: mk('EIA_API_KEY'), ADMIN_TOKEN: mk('ADMIN_TOKEN'), aiEnabled: env.AI_ENABLED ?? 'MISSING', checkedAt: new Date().toISOString() });
+          return json({ METALS_API_KEY: mk('METALS_API_KEY'), FRED_API_KEY: mk('FRED_API_KEY'), ADMIN_TOKEN: mk('ADMIN_TOKEN'), aiEnabled: env.AI_ENABLED ?? 'MISSING', checkedAt: new Date().toISOString() });
         }
         case path === '/api/health': {
           const boot = await cachedBoot(env, '15M');
           return json({ mode: boot.v.mode, builtAt: boot.v.builtAt, stale: boot.stale, providers: boot.v.health });
         }
+
+        /* ===== CORE DATA ===== */
         case path === '/api/bootstrap': {
           const tf = parseTf(url.searchParams.get('tf'));
           const boot = await cachedBoot(env, tf);
           return json(boot.v);
         }
-        /* LIGHT quote poll — gold-api.com primary (free, no key, no limit) */
         case path === '/api/quote': {
           const out: any = { ts: Date.now() };
           try {
@@ -112,7 +108,7 @@ export default {
               const s = await memo('q:silver', 60e3, () => yahoo.yahooQuote(env, 'XAG:USD'));
               out.gold = g.price; out.silver = s.price; out.source = 'yahoo(unofficial)';
             } catch {
-              const l = await metalsdev.metalsdevLatest(env); // quota-protected last resort
+              const l = await metalsdev.metalsdevLatest(env);
               out.gold = l.gold; out.silver = l.silver; out.source = 'metals.dev';
             }
           }
@@ -120,7 +116,6 @@ export default {
           out.dxy = d.price; out.dxyPct = d.changePct ?? null;
           return json(out);
         }
-        /* candles now accepts ?sym= (defaults XAU:USD — home page unchanged) */
         case path === '/api/candles': {
           const tf = parseTf(url.searchParams.get('tf'));
           const sym = url.searchParams.get('sym') ?? 'XAU:USD';
@@ -133,15 +128,16 @@ export default {
           );
           return json({ tf, sym, ...r.v, stale: r.stale, ageMs: r.ageMs });
         }
+
         /* ===== EXPANSION PAGES ===== */
         case path === '/api/page/energy': {
           const cache = new AppCache(env.CACHE);
-          const r = await cache.wrap('page:agri', 300, () => buildAgriPage(env));
+          const r = await cache.wrap('page:energy', 900, () => buildEnergyPage(env));
           return json(r.v);
         }
         case path === '/api/page/agri': {
           const cache = new AppCache(env.CACHE);
-          const r = await cache.wrap('page:agri', 300, () => buildAgriPage(env));
+          const r = await cache.wrap('page:agri', 900, () => buildAgriPage(env));
           return json(r.v);
         }
         case path === '/api/watch': {
@@ -152,7 +148,7 @@ export default {
           return json({ quotes: r.v });
         }
 
-          
+        /* ===== ML ===== */
         case path === '/api/ml/train': {
           if (!adminOk(req, env, url)) return json({ error: 'ADMIN_LOCKED', hint: 'set ADMIN_TOKEN secret, then pass ?key=TOKEN' }, 403);
           const tr = await trainAndStore(env);
@@ -164,6 +160,8 @@ export default {
           if (raw) return json(raw);
           return json({ status: 'WARMING', note: 'first predictions appear within ~5 minutes of cron' });
         }
+
+        /* ===== DATA SLICES ===== */
         case path === '/api/macro': {
           const b = await cachedBoot(env, '15M');
           return json(b.v.macro);
@@ -177,8 +175,9 @@ export default {
           const b = await cachedBoot(env, '15M');
           return json(path === '/api/analytics' ? b.v.analytics : { ...b.v.why, movePct: b.v.gold.changePct });
         }
+
+        /* ===== AI ===== */
         case path === '/api/ai/analyst': {
-          // optional POST body { profile } — HOME page sends the operator's custom basket
           let profile: any = null;
           try { if (req.method === 'POST') profile = (await req.json())?.profile ?? null; } catch { }
           const cachedAi = profile ? null : (await env.CACHE.get('ai:cache', 'json')) as any;
@@ -197,7 +196,8 @@ export default {
           if (!profile) await env.CACHE.put('ai:cache', JSON.stringify(out), { expirationTtl: 1200 });
           return json(out);
         }
-        default: return json({ error: 'UNKNOWN_ENDPOINT', endpoints: ['/api/health', '/api/bootstrap', '/api/quote', '/api/candles?sym=', '/api/page/energy', '/api/page/agri', '/api/ml', '/api/macro', '/api/news', '/api/analytics', '/api/why-gold', '/api/ai/analyst'] }, 404);
+
+        default: return json({ error: 'UNKNOWN_ENDPOINT', endpoints: ['/api/auth/register', '/api/auth/login', '/api/auth/logout', '/api/auth/me', '/api/health', '/api/bootstrap', '/api/quote', '/api/candles', '/api/page/energy', '/api/page/agri', '/api/watch', '/api/ml', '/api/macro', '/api/news', '/api/analytics', '/api/why-gold', '/api/ai/analyst'] }, 404);
       }
     } catch (e) {
       return json({ error: 'UPSTREAM_FAILURE', detail: String((e as Error).message).slice(0, 300) }, 502);
@@ -208,7 +208,7 @@ export default {
     await ensureSecrets(env);
     const hourly = event.cron === '0 * * * *';
 
-    // (1) warm site cache + history — every run
+    // (1) warm site cache + write history - every run
     ctx.waitUntil((async () => {
       try {
         const boot = await buildBootstrap(env, '15M');
@@ -226,7 +226,7 @@ export default {
       } catch (e) { console.error('CRON_SITE_FAIL', String((e as Error).message).slice(0, 300)); }
     })());
 
-      // (1a) WARM THE PAGES every 15 min — energy/agri data ready on load
+    // (1a) WARM THE PAGES every 15 min
     if (new Date(event.scheduledTime).getUTCMinutes() % 15 === 0) {
       ctx.waitUntil((async () => {
         try {
@@ -238,17 +238,6 @@ export default {
     }
 
     if (!hourly) return;
-
-    // (1b) GoldAPI.io DAILY SEED — 2 calls/day, gated 20h (quota: ~100/mo)
-    ctx.waitUntil((async () => {
-      try {
-        const last = await env.CACHE.get('goldio:last', 'json') as { t: number } | null;
-        if (last && Date.now() - last.t < 20 * 36e5) return;
-        const seed = await goldapiio.goldapiIoSeed(env);
-        await env.CACHE.put('goldio:daily', JSON.stringify(seed), { expirationTtl: 172800 });
-        await env.CACHE.put('goldio:last', JSON.stringify({ t: Date.now() }), { expirationTtl: 172800 });
-      } catch (e) { console.error('GOLDIO_SEED_FAIL', String((e as Error).message).slice(0, 200)); }
-    })());
 
     // (2) ML: retrain weekly, predict+grade (6h throttle)
     ctx.waitUntil((async () => {
