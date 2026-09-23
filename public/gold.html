@@ -30,18 +30,19 @@
 <!-- TOP BAR -->
 <header id="top">
   <div class="logo"><span class="lx"></span><span class="lt">GOLD INTELLIGENCE TERMINAL</span><span class="lv">GIT/4.2.26</span></div>
-  <nav class="gochips">
-    <a class="gchip" href="/" style="text-decoration:none">HOME</a>
-    <button class="gchip" data-goto="p-gold">GOLD</button>
-    <button class="gchip" data-goto="p-chart">CHART</button>
-    <button class="gchip" data-goto="p-why">WHY</button>
-    <button class="gchip" data-goto="p-fx">FX</button>
-    <button class="gchip" data-goto="p-news">NEWS</button>
-    <button class="gchip" data-goto="p-health">DATA</button>
-    <a class="gchip" href="/energy.html" style="text-decoration:none">ENERGY</a>
-    <a class="gchip" href="/agri.html" style="text-decoration:none">AGRI</a>
-    <a class="gchip" href="/fx.html" style="text-decoration:none">FX</a>
-  </nav>
+<nav class="gochips">
+  <a class="gchip" href="/" style="text-decoration:none">HOME</a>
+  <button class="gchip" data-goto="p-gold">GOLD</button>
+  <button class="gchip" data-goto="p-chart">CHART</button>
+  <button class="gchip" data-goto="p-why">WHY</button>
+  <button class="gchip" data-goto="p-fx">FX</button>
+  <button class="gchip" data-goto="p-news">NEWS</button>
+  <button class="gchip" data-goto="p-health">DATA</button>
+  <a class="gchip" href="/energy.html" style="text-decoration:none">ENERGY</a>
+  <a class="gchip" href="/agri.html" style="text-decoration:none">AGRI</a>
+  <a class="gchip" href="/shipping.html" style="text-decoration:none">SHIPPING</a>
+  <a class="gchip" href="/ai.html" style="text-decoration:none">AI</a>
+</nav>
   <div class="cmdbar" id="cmdOpen"><span class="pr">&gt;</span><span class="hint">ENTER COMMAND · CTRL+K</span><span class="cur"></span></div>
   <div class="tsright">
     <span class="livedot" id="feedDot"><i></i><span id="feedTxt">FEED —</span></span>
@@ -287,22 +288,9 @@
 
 <!-- CORE RUNTIME (the only script — renders everything from /api/*) -->
 <script>
-(function(){
-  var _fetch = window.fetch;
-  window.fetch = function(url, opts) {
-    opts = opts || {};
-    opts.headers = opts.headers || {};
-    var token = localStorage.getItem('git-token');
-    if (token) {
-      opts.headers['x-session'] = token;
-    }
-    return _fetch(url, opts);
-  };
-  if (!localStorage.getItem('git-token')) {
-    location.replace('/login.html');
-  }
-})();
+(function(){var _f=window.fetch;window.fetch=function(u,o){o=o||{};o.headers=o.headers||{};var t=localStorage.getItem('git-token');if(t){o.headers['x-session']=t}return _f(u,o)};if(!localStorage.getItem('git-token')){location.replace('/login.html')}})();
 </script>
+
 <script type="module" src="/js/app.js"></script>
 </body>
 </html>
