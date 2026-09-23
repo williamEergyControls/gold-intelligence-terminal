@@ -107,6 +107,15 @@ export default {
           const r = await cache.wrap('page:agri', 300, () => buildAgriPage(env));
           return json(r.v);
         }
+        case path === '/api/watch': {
+          const syms = (url.searchParams.get('syms') || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean).slice(0, 12);
+          if (!syms.length) return json({ quotes: [] });
+          const cache = new AppCache(env.CACHE);
+          const r = await cache.wrap('watch:' + syms.join(','), 120, () => yahoo.yahooBatchQuotes(syms).catch(() => sim.simQuotes(syms)));
+          return json({ quotes: r.v });
+        }
+
+          
         case path === '/api/ml/train': {
           if (!adminOk(req, env, url)) return json({ error: 'ADMIN_LOCKED', hint: 'set ADMIN_TOKEN secret, then pass ?key=TOKEN' }, 403);
           const tr = await trainAndStore(env);
