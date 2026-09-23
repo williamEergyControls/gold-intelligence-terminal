@@ -15,6 +15,7 @@ let B = null;
 
 /* ---------- session via D1 token ---------- */
 const TOKEN = localStorage.getItem('git-token') || '';
+const AH = { 'x-session': TOKEN };
 const NAME = localStorage.getItem('git-name') || '';
 if (!TOKEN) { location.replace('/login.html'); return; }
 fetch('/api/auth/me', { headers: { 'x-session': TOKEN } })
@@ -185,12 +186,12 @@ let busy = false;
 
 /* ---------- init + polls ---------- */
 (async function init() {
-  try { B = await getJSON('/api/bootstrap?tf=1D'); renderAll(); }
+  try { B = await getJSON('/api/bootstrap?tf=1D', AH); renderAll(); }
   catch (e) { const s = $('#status .mid'); if (s) s.textContent = 'API ERROR - ' + String(e && e.message || e); }
 })();
 setInterval(async () => {
   if (document.hidden || !B) return;
-  try { B = await getJSON('/api/bootstrap?tf=1D'); renderAll(); } catch (e) { }
+  try { B = await getJSON('/api/bootstrap?tf=1D', AH); renderAll(); } catch (e) { }
 }, 60000);
 setInterval(async () => {
   if (document.hidden || !B) return;
