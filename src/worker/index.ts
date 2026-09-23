@@ -11,35 +11,39 @@ import * as metalsdev from './providers/metalsdev';
 import * as goldapicom from './providers/goldapicom';
 import * as sim from './providers/simulated';
 
-const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff' };
+const JH = { 'content-type': 'application/json; charset=utf-8' };
 const TFS: Tf[] = ['5M', '15M', '1H', '1D', '1W'];
-
 const hits = new Map<string, { n: number; w: number }>();
-function allow(ip: string, max = 240, windowMs = 60_000): boolean {
+const qMemo = new Map<string, { v: any; ts: number }>();
+
+function allow(ip: string): boolean {
   const now = Date.now();
   const h = hits.get(ip);
-  if (!h || now - h.w > windowMs) { hits.set(ip, { n: 1, w: now }); return true; }
+  if (!h || now - h.w > 60000) { hits.set(ip, { n: 1, w: now }); return true; }
   h.n++;
   if (hits.size > 5000) hits.clear();
-  return h.n <= max;
+  return h.n <= 240;
 }
-
-const qMemo = new Map<string, { v: any; ts: number }>();
 function memo<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
   const m = qMemo.get(key);
   if (m && Date.now() - m.ts < ttlMs) return Promise.resolve(m.v as T);
   return fn().then(v => { qMemo.set(key, { v, ts: Date.now() }); return v; });
 }
-
 function adminOk(req: Request, env: Env, url: URL): boolean {
   const t = secret(env, 'ADMIN_TOKEN');
   if (!t) return false;
   return req.headers.get('x-admin') === t || url.searchParams.get('key') === t;
 }
-
 async function readBody(req: Request): Promise<any> {
   try { return await req.json(); } catch { return {}; }
 }
+function json(v: unknown, status = 200): Response {
+  return new Response(JSON.stringify(v), { status, headers: JH });
+}
+async function cachedBoot(env: Env, tf: Tf) {
+  return new AppCache(env.CACHE).wrap('boot:' + tf, 300, () => buildBootstrap(env, tf));
+}
+function parseTf(s: string | null): Tf { return TFS.includes(s as Tf) ? (s as Tf) : '15M'; }
 
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -49,156 +53,136 @@ export default {
     const ip = req.headers.get('CF-Connecting-IP') ?? 'local';
     if (!allow(ip)) return json({ error: 'RATE_LIMITED' }, 429);
     await ensureSecrets(env);
-
     try {
-      switch (true) {
-        /* ===== AUTH ===== */
-        case path === '/api/auth/register': {
-          if (req.method !== 'POST') return json({ error: 'POST ONLY' }, 405);
-          const body = await readBody(req);
-          const r = await authRegister(env, String(body.name || ''), String(body.password || ''));
-          if (!r.ok) return json({ error: r.error }, 400);
-          return json({ ok: true, token: r.token, name: r.name });
-        }
-        case path === '/api/auth/login': {
-          if (req.method !== 'POST') return json({ error: 'POST ONLY' }, 405);
-          const body = await readBody(req);
-          const r = await authLogin(env, String(body.name || ''), String(body.password || ''));
-          if (!r.ok) return json({ error: r.error }, 401);
-          return json({ ok: true, token: r.token, name: r.name });
-        }
-        case path === '/api/auth/logout': {
-          if (req.method !== 'POST') return json({ error: 'POST ONLY' }, 405);
-          const body = await readBody(req);
-          await authLogout(env, String(body.token || ''));
-          return json({ ok: true });
-        }
-        case path === '/api/auth/me': {
-          const token = req.headers.get('x-session') || url.searchParams.get('token') || '';
-          const r = await authVerify(env, token);
-          return json(r.valid ? { valid: true, name: r.name } : { valid: false });
-        }
-
-        /* ===== DIAGNOSTICS ===== */
-        case path === '/api/env': {
-          if (!adminOk(req, env, url)) return json({ error: 'ADMIN_LOCKED', hint: 'set ADMIN_TOKEN secret, then pass ?key=TOKEN' }, 403);
-          const mk = (n: string) => { const v = secret(env, n); return v ? `SET (${v.length} chars)` : 'MISSING'; };
-          return json({ METALS_API_KEY: mk('METALS_API_KEY'), FRED_API_KEY: mk('FRED_API_KEY'), ADMIN_TOKEN: mk('ADMIN_TOKEN'), aiEnabled: env.AI_ENABLED ?? 'MISSING', checkedAt: new Date().toISOString() });
-        }
-        case path === '/api/health': {
-          const boot = await cachedBoot(env, '15M');
-          return json({ mode: boot.v.mode, builtAt: boot.v.builtAt, stale: boot.stale, providers: boot.v.health });
-        }
-
-        /* ===== CORE DATA ===== */
-        case path === '/api/bootstrap': {
-          const tf = parseTf(url.searchParams.get('tf'));
-          const boot = await cachedBoot(env, tf);
-          return json(boot.v);
-        }
-        case path === '/api/quote': {
-          const out: any = { ts: Date.now() };
-          try {
-            const g = await goldapicom.goldapiComQuote('XAU:USD');
-            const s = await goldapicom.goldapiComQuote('XAG:USD');
-            out.gold = g.price; out.silver = s.price; out.source = 'gold-api.com';
-          } catch {
-            try {
-              const g = await memo('q:gold', 60e3, () => yahoo.yahooQuote(env, 'XAU:USD'));
-              const s = await memo('q:silver', 60e3, () => yahoo.yahooQuote(env, 'XAG:USD'));
-              out.gold = g.price; out.silver = s.price; out.source = 'yahoo(unofficial)';
-            } catch {
-              const l = await metalsdev.metalsdevLatest(env);
-              out.gold = l.gold; out.silver = l.silver; out.source = 'metals.dev';
-            }
-          }
-          const d = await memo('q:dxy', 60e3, () => yahoo.yahooQuote(env, 'DXY'));
-          out.dxy = d.price; out.dxyPct = d.changePct ?? null;
-          return json(out);
-        }
-        case path === '/api/candles': {
-          const tf = parseTf(url.searchParams.get('tf'));
-          const sym = url.searchParams.get('sym') ?? 'XAU:USD';
-          const cache = new AppCache(env.CACHE);
-          const r = await cache.wrap(`candles:${sym}:${tf}`, tf === '1D' ? 3600 : 300, () =>
-            firstOk([
-              { name: 'yahoo', fn: () => yahoo.yahooCandles(env, sym, tf) },
-              { name: 'simulated', fn: () => Promise.resolve(sim.simCandles(sym, tf)) },
-            ]).then(rr => ({ candles: rr.value, source: rr.provider === 'yahoo' ? 'yahoo(unofficial)' : 'simulated', delay: rr.provider === 'yahoo' ? 'near-live' : 'simulated', ts: Date.now() }))
-          );
-          return json({ tf, sym, ...r.v, stale: r.stale, ageMs: r.ageMs });
-        }
-
-        /* ===== EXPANSION PAGES ===== */
-        case path === '/api/page/energy': {
-          const cache = new AppCache(env.CACHE);
-          const r = await cache.wrap('page:energy', 900, () => buildEnergyPage(env));
-          return json(r.v);
-        }
-        case path === '/api/page/agri': {
-          const cache = new AppCache(env.CACHE);
-          const r = await cache.wrap('page:agri', 900, () => buildAgriPage(env));
-          return json(r.v);
-        }
-        case path === '/api/watch': {
-          const syms = (url.searchParams.get('syms') || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean).slice(0, 12);
-          if (!syms.length) return json({ quotes: [] });
-          const cache = new AppCache(env.CACHE);
-          const r = await cache.wrap('watch:' + syms.join(','), 120, () => yahoo.yahooBatchQuotes(syms).catch(() => sim.simQuotes(syms)));
-          return json({ quotes: r.v });
-        }
-
-        /* ===== ML ===== */
-        case path === '/api/ml/train': {
-          if (!adminOk(req, env, url)) return json({ error: 'ADMIN_LOCKED', hint: 'set ADMIN_TOKEN secret, then pass ?key=TOKEN' }, 403);
-          const tr = await trainAndStore(env);
-          await predictAndStore(env);
-          return json(tr);
-        }
-        case path === '/api/ml': {
-          const raw = await env.CACHE.get('ml:snap', 'json');
-          if (raw) return json(raw);
-          return json({ status: 'WARMING', note: 'first predictions appear within ~5 minutes of cron' });
-        }
-
-        /* ===== DATA SLICES ===== */
-        case path === '/api/macro': {
-          const b = await cachedBoot(env, '15M');
-          return json(b.v.macro);
-        }
-        case path === '/api/news': {
-          const b = await cachedBoot(env, '15M');
-          return json(b.v.news);
-        }
-        case path === '/api/analytics':
-        case path === '/api/why-gold': {
-          const b = await cachedBoot(env, '15M');
-          return json(path === '/api/analytics' ? b.v.analytics : { ...b.v.why, movePct: b.v.gold.changePct });
-        }
-
-        /* ===== AI ===== */
-        case path === '/api/ai/analyst': {
-          let profile: any = null;
-          try { if (req.method === 'POST') profile = (await req.json())?.profile ?? null; } catch { }
-          const cachedAi = profile ? null : (await env.CACHE.get('ai:cache', 'json')) as any;
-          if (cachedAi && Date.now() - cachedAi.ts < 600e3) return json(cachedAi);
-          const b = await cachedBoot(env, parseTf(url.searchParams.get('tf')));
-          const out = await aiAnalyst(env, b.v.analytics, b.v.why, {
-            ml: (b.v as any).ml ?? null,
-            profile,
-            dxy: b.v.dxy.changePct,
-            realYield: b.v.why.drivers[0]?.delta,
-            newsSentiment: {
-              bull: b.v.news.gold.filter(n => n.sentiment === 'bull').length,
-              bear: b.v.news.gold.filter(n => n.sentiment === 'bear').length,
-            },
-          });
-          if (!profile) await env.CACHE.put('ai:cache', JSON.stringify(out), { expirationTtl: 1200 });
-          return json(out);
-        }
-
-        default: return json({ error: 'UNKNOWN_ENDPOINT', endpoints: ['/api/auth/register', '/api/auth/login', '/api/auth/logout', '/api/auth/me', '/api/health', '/api/bootstrap', '/api/quote', '/api/candles', '/api/page/energy', '/api/page/agri', '/api/watch', '/api/ml', '/api/macro', '/api/news', '/api/analytics', '/api/why-gold', '/api/ai/analyst'] }, 404);
+      if (path === '/api/auth/register' && req.method === 'POST') {
+        const b = await readBody(req);
+        const r = await authRegister(env, String(b.name || ''), String(b.password || ''));
+        return r.ok ? json({ ok: true, token: r.token, name: r.name }) : json({ error: r.error }, 400);
       }
+      if (path === '/api/auth/login' && req.method === 'POST') {
+        const b = await readBody(req);
+        const r = await authLogin(env, String(b.name || ''), String(b.password || ''));
+        return r.ok ? json({ ok: true, token: r.token, name: r.name }) : json({ error: r.error }, 401);
+      }
+      if (path === '/api/auth/logout' && req.method === 'POST') {
+        const b = await readBody(req);
+        await authLogout(env, String(b.token || ''));
+        return json({ ok: true });
+      }
+      if (path === '/api/auth/me') {
+        const token = req.headers.get('x-session') || url.searchParams.get('token') || '';
+        const r = await authVerify(env, token);
+        return json(r.valid ? { valid: true, name: r.name } : { valid: false });
+      }
+      if (path === '/api/env') {
+        if (!adminOk(req, env, url)) return json({ error: 'ADMIN_LOCKED' }, 403);
+        const mk = (n: string) => { const v = secret(env, n); return v ? 'SET' : 'MISSING'; };
+        return json({ METALS_API_KEY: mk('METALS_API_KEY'), FRED_API_KEY: mk('FRED_API_KEY'), ADMIN_TOKEN: mk('ADMIN_TOKEN'), checkedAt: new Date().toISOString() });
+      }
+      if (path === '/api/health') {
+        const boot = await cachedBoot(env, '15M');
+        return json({ mode: boot.v.mode, builtAt: boot.v.builtAt, stale: boot.stale, providers: boot.v.health });
+      }
+      if (path === '/api/bootstrap') {
+        const tf = parseTf(url.searchParams.get('tf'));
+        const boot = await cachedBoot(env, tf);
+        return json(boot.v);
+      }
+      if (path === '/api/quote') {
+        const out: any = { ts: Date.now() };
+        try {
+          const g = await goldapicom.goldapiComQuote('XAU:USD');
+          const s = await goldapicom.goldapiComQuote('XAG:USD');
+          out.gold = g.price; out.silver = s.price; out.source = 'gold-api.com';
+        } catch {
+          try {
+            const g = await memo('q:gold', 60000, () => yahoo.yahooQuote(env, 'XAU:USD'));
+            const s = await memo('q:silver', 60000, () => yahoo.yahooQuote(env, 'XAG:USD'));
+            out.gold = g.price; out.silver = s.price; out.source = 'yahoo(unofficial)';
+          } catch {
+            const l = await metalsdev.metalsdevLatest(env);
+            out.gold = l.gold; out.silver = l.silver; out.source = 'metals.dev';
+          }
+        }
+        const d = await memo('q:dxy', 60000, () => yahoo.yahooQuote(env, 'DXY'));
+        out.dxy = d.price; out.dxyPct = d.changePct ?? null;
+        return json(out);
+      }
+      if (path === '/api/candles') {
+        const tf = parseTf(url.searchParams.get('tf'));
+        const sym = url.searchParams.get('sym') ?? 'XAU:USD';
+        const cache = new AppCache(env.CACHE);
+        const r = await cache.wrap('candles:' + sym + ':' + tf, tf === '1D' ? 3600 : 300, () =>
+          firstOk([
+            { name: 'yahoo', fn: () => yahoo.yahooCandles(env, sym, tf) },
+            { name: 'simulated', fn: () => Promise.resolve(sim.simCandles(sym, tf)) },
+          ]).then(rr => ({ candles: rr.value, source: rr.provider === 'yahoo' ? 'yahoo(unofficial)' : 'simulated', delay: rr.provider === 'yahoo' ? 'near-live' : 'simulated', ts: Date.now() }))
+        );
+        return json({ tf, sym, ...r.v, stale: r.stale, ageMs: r.ageMs });
+      }
+      if (path === '/api/page/energy') {
+        const cache = new AppCache(env.CACHE);
+        const r = await cache.wrap('page:energy', 900, () => buildEnergyPage(env));
+        return json(r.v);
+      }
+      if (path === '/api/page/agri') {
+        const cache = new AppCache(env.CACHE);
+        const r = await cache.wrap('page:agri', 900, () => buildAgriPage(env));
+        return json(r.v);
+      }
+      if (path === '/api/watch') {
+        const syms = (url.searchParams.get('syms') || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean).slice(0, 12);
+        if (!syms.length) return json({ quotes: [] });
+        const cache = new AppCache(env.CACHE);
+        const r = await cache.wrap('watch:' + syms.join(','), 120, () => yahoo.yahooBatchQuotes(syms).catch(() => sim.simQuotes(syms)));
+        return json({ quotes: r.v });
+      }
+      if (path === '/api/ml/train') {
+        if (!adminOk(req, env, url)) return json({ error: 'ADMIN_LOCKED' }, 403);
+        const tr = await trainAndStore(env);
+        await predictAndStore(env);
+        return json(tr);
+      }
+      if (path === '/api/ml') {
+        const raw = await env.CACHE.get('ml:snap', 'json');
+        return raw ? json(raw) : json({ status: 'WARMING' });
+      }
+      if (path === '/api/macro') {
+        const b = await cachedBoot(env, '15M');
+        return json(b.v.macro);
+      }
+      if (path === '/api/news') {
+        const b = await cachedBoot(env, '15M');
+        return json(b.v.news);
+      }
+      if (path === '/api/analytics') {
+        const b = await cachedBoot(env, '15M');
+        return json(b.v.analytics);
+      }
+      if (path === '/api/why-gold') {
+        const b = await cachedBoot(env, '15M');
+        return json({ ...b.v.why, movePct: b.v.gold.changePct });
+      }
+      if (path === '/api/ai/analyst') {
+        let profile: any = null;
+        try { if (req.method === 'POST') profile = (await req.json())?.profile ?? null; } catch { }
+        const cachedAi = profile ? null : (await env.CACHE.get('ai:cache', 'json')) as any;
+        if (cachedAi && Date.now() - cachedAi.ts < 600000) return json(cachedAi);
+        const b = await cachedBoot(env, parseTf(url.searchParams.get('tf')));
+        const out = await aiAnalyst(env, b.v.analytics, b.v.why, {
+          ml: (b.v as any).ml ?? null,
+          profile,
+          dxy: b.v.dxy.changePct,
+          realYield: b.v.why.drivers[0]?.delta,
+          newsSentiment: {
+            bull: b.v.news.gold.filter(n => n.sentiment === 'bull').length,
+            bear: b.v.news.gold.filter(n => n.sentiment === 'bear').length,
+          },
+        });
+        if (!profile) await env.CACHE.put('ai:cache', JSON.stringify(out), { expirationTtl: 1200 });
+        return json(out);
+      }
+      return json({ error: 'UNKNOWN_ENDPOINT' }, 404);
     } catch (e) {
       return json({ error: 'UPSTREAM_FAILURE', detail: String((e as Error).message).slice(0, 300) }, 502);
     }
@@ -207,8 +191,6 @@ export default {
   async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
     await ensureSecrets(env);
     const hourly = event.cron === '0 * * * *';
-
-    // (1) warm site cache + write history - every run
     ctx.waitUntil((async () => {
       try {
         const boot = await buildBootstrap(env, '15M');
@@ -225,8 +207,6 @@ export default {
         await env.CACHE.put('prevday:XAU:USD', JSON.stringify({ d: day, c: boot.gold.price }), { expirationTtl: 259200 });
       } catch (e) { console.error('CRON_SITE_FAIL', String((e as Error).message).slice(0, 300)); }
     })());
-
-    // (1a) WARM THE PAGES every 15 min
     if (new Date(event.scheduledTime).getUTCMinutes() % 15 === 0) {
       ctx.waitUntil((async () => {
         try {
@@ -236,17 +216,14 @@ export default {
         } catch (e) { console.error('PAGE_WARM_FAIL', String((e as Error).message).slice(0, 200)); }
       })());
     }
-
     if (!hourly) return;
-
-    // (2) ML: retrain weekly, predict+grade (6h throttle)
     ctx.waitUntil((async () => {
       try {
         const lastMl = await env.CACHE.get('ml:last', 'json') as { t: number } | null;
-        if (lastMl && Date.now() - lastMl.t < 6 * 36e5) return;
+        if (lastMl && Date.now() - lastMl.t < 21600000) return;
         let mlOk = true;
         const last = await env.DB.prepare('SELECT MAX(trained_at) t FROM ml_models WHERE active=1').first<{ t: number | null }>();
-        if (!last?.t || Date.now() - last.t > 7 * 864e5) {
+        if (!last?.t || Date.now() - last.t > 604800000) {
           const tr = await trainAndStore(env);
           if (!tr.ok) { mlOk = false; console.error('ML_TRAIN_FAIL', tr.error); }
         }
@@ -255,21 +232,13 @@ export default {
         if (mlOk) await env.CACHE.put('ml:last', JSON.stringify({ t: Date.now() }), { expirationTtl: 86400 });
       } catch (e) { console.error('ML_CRON_FAIL', String((e as Error).message).slice(0, 300)); }
     })());
-
-    // (3) hourly Llama news sentiment
     ctx.waitUntil((async () => {
       try {
         const lastNse = await env.CACHE.get('nse:last', 'json') as { t: number } | null;
-        if (lastNse && Date.now() - lastNse.t < 36e5) return;
+        if (lastNse && Date.now() - lastNse.t < 3600000) return;
         await newsSentimentHourly(env);
         await env.CACHE.put('nse:last', JSON.stringify({ t: Date.now() }), { expirationTtl: 86400 });
-      } catch { /* never breaks the site */ }
+      } catch { }
     })());
   },
 };
-
-async function cachedBoot(env: Env, tf: Tf) {
-  return new AppCache(env.CACHE).wrap(`boot:${tf}`, 300, () => buildBootstrap(env, tf));
-}
-function parseTf(s: string | null): Tf { return TFS.includes(s as Tf) ? (s as Tf) : '15M'; }
-function json(v: unknown, status = 200): Response { return new Response(JSON.stringify(v), { status, headers: JSON_HEADERS }); }
