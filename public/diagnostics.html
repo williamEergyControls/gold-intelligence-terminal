@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GIT/4 - DIAGNOSTICS (ADMIN)</title>
+<link rel="stylesheet" href="/css/terminal.css">
+<style>
+html,body{overflow-x:hidden}
+.dwrap{max-width:1200px;margin:0 auto;padding:20px}
+.dsec{border:1px solid var(--line);background:var(--panel);margin-bottom:12px}
+.dsec .p-hd{display:flex;align-items:center;gap:8px;height:28px;padding:0 9px;background:var(--panel2);border-bottom:1px solid var(--line)}
+.dsec .sq{width:6px;height:6px;background:var(--gold)}
+.dsec .ttl{font:600 10px var(--disp);letter-spacing:.16em;color:#d4dbe1}
+.dsec .p-bd{padding:10px}
+.drow{display:grid;grid-template-columns:200px 1fr;gap:10px;padding:5px 0;border-top:1px dashed var(--line2);font:11px var(--mono)}
+.drow:first-child{border-top:none}
+.drow .dk{color:var(--dim)}
+.drow .dv{color:var(--txt)}
+.flow-node{display:inline-block;border:1px solid var(--line);padding:4px 8px;margin:3px;font:10px var(--mono);color:var(--txt);background:var(--panel2)}
+.flow-arrow{display:inline-block;color:var(--dim);font:12px var(--mono);margin:0 4px}
+</style>
+</head>
+<body>
+<div id="crt"></div>
+<header id="top">
+  <div class="logo"><span class="lx"></span><span class="lt">GOLD INTELLIGENCE TERMINAL</span><span class="lv">GIT/4.2.26 - DIAGNOSTICS</span></div>
+  <div class="tsright"><span id="clock">--:--:--</span></div>
+</header>
+<div class="dwrap">
+  <div class="dsec"><div class="p-hd"><span class="sq"></span><span class="ttl">Worker Status</span></div><div class="p-bd" id="dWorker">Loading...</div></div>
+  <div class="dsec"><div class="p-hd"><span class="sq"></span><span class="ttl">ML Engine Status</span></div><div class="p-bd" id="dML">Loading...</div></div>
+  <div class="dsec"><div class="p-hd"><span class="sq"></span><span class="ttl">Auth System</span></div><div class="p-bd" id="dAuth">Loading...</div></div>
+  <div class="dsec"><div class="p-hd"><span class="sq"></span><span class="ttl">Data Flow Map</span></div><div class="p-bd" id="dFlow">Loading...</div></div>
+</div>
+<script>
+(function(){
+var _f=window.fetch;
+window.fetch=function(u,o){o=o||{};o.headers=o.headers||{};var t=localStorage.getItem('git-token');if(t){o.headers['x-session']=t}return _f(u,o)};
+if(!localStorage.getItem('git-token')){location.replace('/login.html')}
+setInterval(function(){document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-GB')},1000);
+
+fetch('/api/admin/diagnostics').then(function(r){
+  if(r.status===403){document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;font:14px IBM Plex Mono;color:#ff4f5e">FORBIDDEN - ADMIN ACCESS REQUIRED</div>';return null;}
+  return r.json();
+}).then(function(d){
+  if(!d)return;
+
+  var w='';
+  w+='<div class="drow"><span class="dk">MODE</span><span class="dv '+(d.worker.mode==='live'?'up':'dn')+'">'+d.worker.mode.toUpperCase()+'</span></div>';
+  w+='<div class="drow"><span class="dk">BUILT</span><span class="dv">'+new Date(d.worker.builtAt).toLocaleString()+'</span></div>';
+  w+='<div class="drow"><span class="dk">STALE</span><span class="dv">'+(d.worker.stale?'YES':'NO')+'</span></div>';
+  w+='<div class="drow"><span class="dk">PROVIDERS</span><span class="dv">'+d.worker.providers.map(function(p){return '<span class="'+(p.status==='online'?'up':'dim')+'">'+p.name+': '+p.status+'</span>'}).join(' | ')+'</span></div>';
+  document.getElementById('dWorker').innerHTML=w;
+
+  var m='';
+  m+='<div class="drow"><span class="dk">LATEST SIGNAL</span><span class="dv">'+(d.ml.latestSignal?d.ml.latestSignal.direction+' '+(d.ml.latestSignal.p*100).toFixed(0)+'% ('+d.ml.latestSignal.regime+')':'NONE')+'</span></div>';
+  m+='<div class="drow"><span class="dk">MODELS TRAINED</span><span class="dv">'+d.ml.models.length+'</span></div>';
+  m+='<div class="drow"><span class="dk">TOTAL PREDICTIONS</span><span class="dv">'+d.ml.totalPredictions+'</span></div>';
+  m+='<div class="drow"><span class="dk">GRADED OUTCOMES</span><span class="dv">'+d.ml.gradedOutcomes+'</span></div>';
+  m+='<div class="drow"><span class="dk">ACCURACY</span><span class="dv '+(d.ml.accuracy!=='PENDING'?'gold':'dim')+'">'+d.ml.accuracy+'</span></div>';
+  document.getElementById('dML').innerHTML=m;
+
+  var a='';
+  a+='<div class="drow"><span class="dk">TOTAL USERS</span><span class="dv">'+d.auth.totalUsers+'</span></div>';
+  a+='<div class="drow"><span class="dk">ACTIVE SESSIONS</span><span class="dv">'+d.auth.activeSessions+'</span></div>';
+  document.getElementById('dAuth').innerHTML=a;
+
+  var f='';
+  var flows=d.dataFlow;
+  for(var key in flows){
+    f+='<div class="drow"><span class="dk">'+key.toUpperCase()+'</span><span class="dv">'+flows[key].split('->').map(function(s){return '<span class="flow-node">'+s.trim()+'</span>'}).join('<span class="flow-arrow">→</span>')+'</span></div>';
+  }
+  document.getElementById('dFlow').innerHTML=f;
+}).catch(function(e){
+  document.getElementById('dWorker').textContent='ERROR: '+e.message;
+});
+})();
+</script>
+</body>
+</html>
