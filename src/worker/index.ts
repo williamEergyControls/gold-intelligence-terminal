@@ -186,7 +186,180 @@ export default {
         await predictAndStore(env);
         return json(tr);
       }
+        /* ===== SHIPPING ===== */
+      if (path === '/api/page/shipping') {
+        const cache = new AppCache(env.CACHE);
+        const r = await cache.wrap('page:shipping', 900, async () => {
+          const { buildShippingPanel } = await import('./providers/shipping');
+          const panel = await buildShippingPanel(env);
+          const newsR = await new AppCache(env.CACHE).wrap('news:shipping', 3600, async () => {
+            const gdelt = await import('./providers/gdelt');
+            try { return await gdelt.gdeltNews(env, ['macro']); } catch { return []; }
+          });
+          panel.news = (newsR.v as any[]).filter(n =>
+            n.title?.toLowerCase().includes('ship') || n.title?.toLowerCase().includes('freight') ||
+            n.title?.toLowerCase().includes('port') || n.title?.toLowerCase().includes('cargo') ||
+            n.title?.toLowerCase().includes('container') || n.title?.toLowerCase().includes('red sea')
+          ).slice(0, 8);
+          return panel;
+        });
+        return json(r.v);
+      }
 
+      /* ===== AI DEEP ANALYSIS ===== */
+      if (path === '/api/ai/ask') {
+        if (req.method !== 'POST') return json({ error: 'POST ONLY' }, 405);
+        const b = await readBody(req);
+        const question = String(b.question || '').slice(0, 500);
+        if (!question) return json({ error: 'ENTER A QUESTION' }, 400);
+
+        // Gather comprehensive data for the AI to analyze
+        const boot = await cachedBoot(env, '1D');
+        const mlSnap = await env.CACHE.get('ml:snap', 'json');
+        const newsCache = await env.CACHE.get('news', 'json');
+
+        const context = {
+          gold: { price: boot.v.gold.price, change: boot.v.gold.changePct, source: boot.v.gold.source },
+          silver: { price: boot.v.silver.price, change: boot.v.silver.changePct },
+          dxy: { price: boot.v.dxy.price, change: boot.v.dxy.changePct },
+          macro: boot.v.macro.rows.slice(0, 10),
+          analytics: boot.v.analytics,
+          why: boot.v.why,
+          ml: mlSnap,
+          newsSummary: {
+            bullCount: (boot.v.news.gold || []).filter((n: any) => n.sentiment === 'bull').length,
+            bearCount: (boot.v.news.gold || []).filter((n: any) => n.sentiment === 'bear').length,
+            topHeadlines: (boot.v.news.gold || []).slice(0, 5).map((n: any) => n.title),
+          },
+          question,
+        };
+
+        const SYSTEM = `You are a senior gold market analyst. Answer the operator's question using ONLY the data provided.
+Rules: 1. Use ONLY the numbers in the JSON. 2. Be direct and specific. 3. Reference exact figures. 4. Max 10 lines. 5. End with: NOT FINANCIAL ADVICE.`;
+
+        try {
+          const res: any = await env.AI!.run('@cf/meta/llama-3.1-8b-instruct', {
+            messages: [
+              { role: 'system', content: SYSTEM },
+              { role: 'user', content: JSON.stringify(context) }
+            ],
+            max_tokens: 500, temperature: 0.3,
+          });
+          const text = String(res?.response ?? '').trim();
+          if (!text) throw new Error('empty');
+          return json({ ok: true, answer: text, engine: 'llama-3.1-8b', ts: Date.now() });
+        } catch (e) {
+          // deterministic fallback
+          const w = boot.v.why;
+          const g = boot.v.gold;
+          return json({
+            ok: true,
+            answer: `Gold is ${g.changePct >= 0 ? 'up' : 'down'} ${(Math.abs(g.changePct ?? 0)).toFixed(2)}% at $${g.price}. ` +
+              `Top driver: ${w.drivers[0]?.name} ${w.drivers[0]?.delta}. ` +
+              `ML signal: ${mlSnap ? mlSnap.direction + ' ' + (mlSnap.p * 100).toFixed(0) + '%' : 'warming'}. ` +
+              `News sentiment: ${context.newsSummary.bullCount} bull vs ${context.newsSummary.bearCount} bear. ` +
+              `Your question: "${question}" requires deeper analysis. NOT FINANCIAL ADVICE.`,
+            engine: 'deterministic', ts: Date.now()
+          });
+        }
+      }
+
+      /* ===== SEARCH ===== */
+      if (path === '/api/search') {
+        const q = (url.searchParams.get('q') || '').toLowerCase().slice(0, 100);
+        if (!q || q.length < 2) return json({ results: [] });
+        const results: { type: string; title: string; url: string; source: string }[] = [];
+
+        // Search pages
+        const PAGES = [
+          { title: 'Gold Terminal', url: '/gold.html', keywords: 'gold xau price chart why moving miners heatmap inflation cpi' },
+          { title: 'Energy Terminal', url: '/energy.html', keywords: 'energy oil wti brent natural gas heating rbob eia crude' },
+          { title: 'Agri Terminal', url: '/agri.html', keywords: 'agri corn wheat soybean cattle cotton sugar water weather usda' },
+          { title: 'FX Terminal', url: '/fx.html', keywords: 'fx forex dollar dxy euro yen pound currency majors' },
+          { title: 'Water Terminal', url: '/water.html', keywords: 'water nq h2o california drought river usgs gauge' },
+          { title: 'Land Terminal', url: '/land.html', keywords: 'land farm farmland acre rent usda nass values' },
+          { title: 'Stablecoin Terminal', url: '/stable.html', keywords: 'stablecoin tether usdt usdc dai peg crypto' },
+          { title: 'Shipping Terminal', url: '/shipping.html', keywords: 'shipping freight container port baltic bdi suez red sea' },
+          { title: 'AI Analysis', url: '/ai.html', keywords: 'ai analyst machine learning ml deep analysis question ask' },
+        ];
+        for (const p of PAGES) {
+          if (p.title.toLowerCase().includes(q) || p.keywords.includes(q)) {
+            results.push({ type: 'PAGE', title: p.title, url: p.url, source: 'NAV' });
+          }
+        }
+
+        // Search news
+        try {
+          const boot = await cachedBoot(env, '15M');
+          const allNews = [...(boot.v.news.gold || []), ...(boot.v.news.mining || []), ...(boot.v.news.macro || [])];
+          for (const n of allNews) {
+            if (n.title.toLowerCase().includes(q) || n.source.toLowerCase().includes(q)) {
+              results.push({ type: 'NEWS', title: n.title, url: n.url !== '#' ? n.url : '#', source: n.source });
+            }
+            if (results.length > 20) break;
+          }
+        } catch { /* news optional */ }
+
+        // Search macro data
+        try {
+          const boot = await cachedBoot(env, '15M');
+          for (const r of boot.v.macro.rows) {
+            if (r.label.toLowerCase().includes(q) || r.key.toLowerCase().includes(q)) {
+              results.push({ type: 'DATA', title: `${r.label}: ${r.value}%`, url: '/gold.html', source: r.source });
+            }
+          }
+        } catch { /* macro optional */ }
+
+        return json({ query: q, results: results.slice(0, 20) });
+      }
+
+      /* ===== ADMIN DIAGNOSTICS ===== */
+      if (path === '/api/admin/diagnostics') {
+        if (auth.role !== 'admin') return json({ error: 'FORBIDDEN' }, 403);
+        const boot = await cachedBoot(env, '15M');
+        const mlSnap = await env.CACHE.get('ml:snap', 'json');
+        const mlModels = await env.DB.prepare('SELECT id, name, trained_at, active FROM ml_models ORDER BY id DESC LIMIT 5').all();
+        const predictionCount = await env.DB.prepare('SELECT COUNT(*) as n FROM predictions').first();
+        const outcomeCount = await env.DB.prepare('SELECT COUNT(*) as n, SUM(correct) as c FROM prediction_outcomes').first();
+        const userCount = await env.DB.prepare('SELECT COUNT(*) as n FROM users').first();
+        const sessionCount = await env.DB.prepare('SELECT COUNT(*) as n FROM sessions WHERE expires_at > ?').bind(Date.now()).first();
+
+        return json({
+          worker: {
+            mode: boot.v.mode,
+            builtAt: boot.v.builtAt,
+            stale: boot.stale,
+            providers: boot.v.health,
+          },
+          ml: {
+            hasSnapshot: !!mlSnap,
+            models: mlModels.results,
+            totalPredictions: predictionCount?.n ?? 0,
+            gradedOutcomes: outcomeCount?.n ?? 0,
+            accuracy: outcomeCount?.n > 0 ? ((outcomeCount?.c ?? 0) / outcomeCount.n * 100).toFixed(1) + '%' : 'PENDING',
+            latestSignal: mlSnap ? { direction: mlSnap.direction, p: mlSnap.p, regime: mlSnap.regime?.state } : null,
+          },
+          auth: {
+            totalUsers: userCount?.n ?? 0,
+            activeSessions: sessionCount?.n ?? 0,
+          },
+          cache: {
+            note: 'KV keys expire via TTL - no manual purge needed',
+            keysActive: 'auto-managed',
+          },
+          dataFlow: {
+            gold: 'gold-api.com -> Yahoo -> metals.dev -> sim',
+            news: 'GDELT -> keyword sentiment + hourly Llama sentiment',
+            macro: 'FRED (CPI/PCE/PPI/SOFR/EFFR/yields)',
+            energy: 'Yahoo futures -> EIA weekly',
+            agri: 'Yahoo futures -> USGS water -> Open-Meteo weather',
+            shipping: 'Yahoo futures -> public indices -> Open-Meteo marine',
+            stable: 'CoinGecko (live, no key)',
+            ml: 'Hourly cron -> train weekly -> predict 6h -> grade 5d',
+          },
+          timestamp: new Date().toISOString(),
+        });
+      }
       return json({ error: 'UNKNOWN_ENDPOINT' }, 404);
     } catch (e) {
       return json({ error: 'UPSTREAM_FAILURE', detail: String((e as Error).message).slice(0, 300) }, 502);
