@@ -129,6 +129,23 @@ html,body{overflow-x:hidden}
 </footer>
 
 <script>window.PAGE_CONFIG = { type: 'energy', api: '/api/page/energy', sym: 'CL1', heroUnit: '$/BBL' };</script>
+<script>
+(function(){
+  var _fetch = window.fetch;
+  window.fetch = function(url, opts) {
+    opts = opts || {};
+    opts.headers = opts.headers || {};
+    var token = localStorage.getItem('git-token');
+    if (token && String(url).indexOf('/api/') === 0 || String(url).indexOf('/api/') > -1 && !String(url).includes('/api/auth/')) {
+      opts.headers['x-session'] = token;
+    }
+    return _fetch(url, opts);
+  };
+  if (!localStorage.getItem('git-token')) {
+    location.replace('/login.html');
+  }
+})();
+</script>
 <script src="/js/pages.js"></script>
 </body>
 </html>
