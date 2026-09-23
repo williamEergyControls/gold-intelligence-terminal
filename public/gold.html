@@ -293,7 +293,7 @@
     opts = opts || {};
     opts.headers = opts.headers || {};
     var token = localStorage.getItem('git-token');
-    if (token && String(url).indexOf('/api/') === 0 || String(url).indexOf('/api/') > -1 && !String(url).includes('/api/auth/')) {
+    if (token) {
       opts.headers['x-session'] = token;
     }
     return _fetch(url, opts);
@@ -303,6 +303,9 @@
   }
 })();
 </script>
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>
 <script type="module" src="/js/app.js"></script>
 </body>
 </html>
