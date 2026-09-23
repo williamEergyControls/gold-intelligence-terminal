@@ -17,21 +17,21 @@ let B = null;
 const TOKEN = localStorage.getItem('git-token') || '';
 const NAME = localStorage.getItem('git-name') || '';
 if (!TOKEN) { location.replace('/login.html'); return; }
-/* verify with server on load */
 fetch('/api/auth/me', { headers: { 'x-session': TOKEN } })
   .then(r => r.json())
   .then(d => {
-    if (!d.valid) { localStorage.removeItem('git-token'); localStorage.removeItem('git-name'); location.replace('/login.html'); }
+    if (!d.valid) { localStorage.clear(); location.replace('/login.html'); }
+    else { localStorage.setItem('git-role', d.role || 'operator'); }
   })
-  .catch(() => { /* offline: allow local session */ });
+  .catch(() => { });
 const badge = $('#opbadge'); if (badge) badge.textContent = (NAME || 'OPERATOR').toUpperCase();
 const lo = $('#logout');
 if (lo) lo.addEventListener('click', async () => {
   try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: TOKEN }) }); } catch (e) { }
-  localStorage.removeItem('git-token'); localStorage.removeItem('git-name'); localStorage.removeItem('git-session');
+  localStorage.removeItem('git-token'); localStorage.removeItem('git-name'); localStorage.removeItem('git-role');
   location.href = '/login.html';
 });
-
+   
 /* ---------- clock ---------- */
 setInterval(() => { $('#clock').textContent = new Date().toLocaleTimeString('en-GB'); }, 1000);
  $('#clock').textContent = new Date().toLocaleTimeString('en-GB');
