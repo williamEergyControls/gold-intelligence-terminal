@@ -10,6 +10,9 @@ import * as metalsdev from './providers/metalsdev';
 import * as goldapicom from './providers/goldapicom';
 import * as goldapiio from './providers/goldapiio';
 import * as sim from './providers/simulated';
+import { authRegister, authLogin, authVerify, authLogout } from './auth';
+
+
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff' };
 const TFS: Tf[] = ['5M', '15M', '1H', '1D', '1W'];
@@ -23,6 +26,8 @@ function allow(ip: string, max = 240, windowMs = 60_000): boolean {
   if (hits.size > 5000) hits.clear();
   return h.n <= max;
 }
+
+
 
 const qMemo = new Map<string, { v: any; ts: number }>();
 function memo<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
@@ -64,7 +69,9 @@ case path === '/api/auth/me': {
   const r = await authVerify(env, token);
   return json(r.valid ? { valid: true, name: r.name } : { valid: false });
 }
-
+async function readBody(req: Request): Promise<any> {
+  try { return await req.json(); } catch { return {}; }
+}
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(req.url);
