@@ -5,7 +5,7 @@ import { aiAnalyst, newsSentimentHourly } from './ai/analyst';
 import { firstOk, persistHealthRows, ensureSecrets, secret } from './providers/provider';
 import { trainAndStore, predictAndStore, gradeOutcomes } from './ml/pipeline';
 import { buildEnergyPage, buildAgriPage } from './pages';
-import { authRegister, authLogin, authVerify, authLogout } from './auth';
+import { authRegister, authLogin, authVerify, authLogout, requireAuth } from './auth';
 import * as yahoo from './providers/yahoo';
 import * as metalsdev from './providers/metalsdev';
 import * as goldapicom from './providers/goldapicom';
@@ -29,11 +29,6 @@ function memo<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
   if (m && Date.now() - m.ts < ttlMs) return Promise.resolve(m.v as T);
   return fn().then(v => { qMemo.set(key, { v, ts: Date.now() }); return v; });
 }
-function adminOk(req: Request, env: Env, url: URL): boolean {
-  const t = secret(env, 'ADMIN_TOKEN');
-  if (!t) return false;
-  return req.headers.get('x-admin') === t || url.searchParams.get('key') === t;
-}
 async function readBody(req: Request): Promise<any> {
   try { return await req.json(); } catch { return {}; }
 }
@@ -53,16 +48,18 @@ export default {
     const ip = req.headers.get('CF-Connecting-IP') ?? 'local';
     if (!allow(ip)) return json({ error: 'RATE_LIMITED' }, 429);
     await ensureSecrets(env);
+
     try {
+      /* ===================== PUBLIC ROUTES (no auth) ===================== */
       if (path === '/api/auth/register' && req.method === 'POST') {
         const b = await readBody(req);
         const r = await authRegister(env, String(b.name || ''), String(b.password || ''));
-        return r.ok ? json({ ok: true, token: r.token, name: r.name }) : json({ error: r.error }, 400);
+        return r.ok ? json({ ok: true, token: r.token, name: r.name, role: r.role }) : json({ error: r.error }, 400);
       }
       if (path === '/api/auth/login' && req.method === 'POST') {
         const b = await readBody(req);
         const r = await authLogin(env, String(b.name || ''), String(b.password || ''));
-        return r.ok ? json({ ok: true, token: r.token, name: r.name }) : json({ error: r.error }, 401);
+        return r.ok ? json({ ok: true, token: r.token, name: r.name, role: r.role }) : json({ error: r.error }, 401);
       }
       if (path === '/api/auth/logout' && req.method === 'POST') {
         const b = await readBody(req);
@@ -72,17 +69,17 @@ export default {
       if (path === '/api/auth/me') {
         const token = req.headers.get('x-session') || url.searchParams.get('token') || '';
         const r = await authVerify(env, token);
-        return json(r.valid ? { valid: true, name: r.name } : { valid: false });
-      }
-      if (path === '/api/env') {
-        if (!adminOk(req, env, url)) return json({ error: 'ADMIN_LOCKED' }, 403);
-        const mk = (n: string) => { const v = secret(env, n); return v ? 'SET' : 'MISSING'; };
-        return json({ METALS_API_KEY: mk('METALS_API_KEY'), FRED_API_KEY: mk('FRED_API_KEY'), ADMIN_TOKEN: mk('ADMIN_TOKEN'), checkedAt: new Date().toISOString() });
+        return json(r.valid ? { valid: true, name: r.name, role: r.role } : { valid: false });
       }
       if (path === '/api/health') {
         const boot = await cachedBoot(env, '15M');
-        return json({ mode: boot.v.mode, builtAt: boot.v.builtAt, stale: boot.stale, providers: boot.v.health });
+        return json({ mode: boot.v.mode, builtAt: boot.v.builtAt, stale: boot.stale });
       }
+
+      /* ===================== AUTH REQUIRED BELOW ===================== */
+      const auth = await requireAuth(req, env);
+      if (!auth.valid) return json({ error: 'UNAUTHORIZED', hint: 'sign in first' }, 401);
+
       if (path === '/api/bootstrap') {
         const tf = parseTf(url.searchParams.get('tf'));
         const boot = await cachedBoot(env, tf);
@@ -116,7 +113,7 @@ export default {
           firstOk([
             { name: 'yahoo', fn: () => yahoo.yahooCandles(env, sym, tf) },
             { name: 'simulated', fn: () => Promise.resolve(sim.simCandles(sym, tf)) },
-          ]).then(rr => ({ candles: rr.value, source: rr.provider === 'yahoo' ? 'yahoo(unofficial)' : 'simulated', delay: rr.provider === 'yahoo' ? 'near-live' : 'simulated', ts: Date.now() }))
+          ]).then(rr => ({ candles: rr.value, source: rr.provider === 'yahoo' ? 'yahoo(unofficial)' : 'simulated', ts: Date.now() }))
         );
         return json({ tf, sym, ...r.v, stale: r.stale, ageMs: r.ageMs });
       }
@@ -136,12 +133,6 @@ export default {
         const cache = new AppCache(env.CACHE);
         const r = await cache.wrap('watch:' + syms.join(','), 120, () => yahoo.yahooBatchQuotes(syms).catch(() => sim.simQuotes(syms)));
         return json({ quotes: r.v });
-      }
-      if (path === '/api/ml/train') {
-        if (!adminOk(req, env, url)) return json({ error: 'ADMIN_LOCKED' }, 403);
-        const tr = await trainAndStore(env);
-        await predictAndStore(env);
-        return json(tr);
       }
       if (path === '/api/ml') {
         const raw = await env.CACHE.get('ml:snap', 'json');
@@ -182,6 +173,20 @@ export default {
         if (!profile) await env.CACHE.put('ai:cache', JSON.stringify(out), { expirationTtl: 1200 });
         return json(out);
       }
+
+      /* ===================== ADMIN ONLY ===================== */
+      if (auth.role !== 'admin') return json({ error: 'FORBIDDEN - ADMIN ONLY' }, 403);
+
+      if (path === '/api/env') {
+        const mk = (n: string) => { const v = secret(env, n); return v ? 'SET' : 'MISSING'; };
+        return json({ METALS_API_KEY: mk('METALS_API_KEY'), FRED_API_KEY: mk('FRED_API_KEY'), ADMIN_TOKEN: mk('ADMIN_TOKEN'), checkedAt: new Date().toISOString() });
+      }
+      if (path === '/api/ml/train') {
+        const tr = await trainAndStore(env);
+        await predictAndStore(env);
+        return json(tr);
+      }
+
       return json({ error: 'UNKNOWN_ENDPOINT' }, 404);
     } catch (e) {
       return json({ error: 'UPSTREAM_FAILURE', detail: String((e as Error).message).slice(0, 300) }, 502);
