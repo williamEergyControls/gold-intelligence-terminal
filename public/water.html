@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GIT/4 - WATER TERMINAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/terminal.css">
+<style>
+html,body{overflow-x:hidden}
+.wgrid{display:grid;grid-template-columns:repeat(12,1fr);gap:clamp(5px,.45vw,8px);width:100%;max-width:2560px;margin:0 auto;padding:8px clamp(8px,.6vw,14px)}
+#w-hero{grid-column:1/5;grid-row:1/3;min-height:340px}
+#w-charts{grid-column:5/13;grid-row:1;min-height:280px}
+#w-gauges{grid-column:5/9;grid-row:2;min-height:240px}
+#w-price{grid-column:9/13;grid-row:2;min-height:240px}
+#w-news{grid-column:1/8;grid-row:3;min-height:240px}
+#w-drought{grid-column:8/13;grid-row:3;min-height:240px}
+.bigpx{font:600 clamp(30px,2.4vw,44px)/1 var(--mono);color:#f2e9d4}
+.bigchg{font:600 13px var(--mono);margin-top:6px}
+.wrow{display:grid;grid-template-columns:140px 80px 1fr;align-items:center;gap:8px;padding:4px 0;border-top:1px dashed var(--line2);font:11px var(--mono)}
+.wrow:first-child{border-top:none}
+.wrow .name{color:var(--mut)}
+.wrow .val{color:var(--cyan);font-weight:600}
+.gauge-bar{height:6px;background:var(--grid);border:1px solid var(--line2);position:relative}
+.gauge-bar i{position:absolute;inset:0 auto 0 0;background:var(--cyan)}
+@media (max-width:1100px){
+  .wgrid{grid-template-columns:1fr 1fr}
+  .wgrid>*{grid-column:auto!important;grid-row:auto!important;min-height:230px}
+  #w-hero,#w-charts,#w-news{grid-column:1/-1!important}
+  #tape{display:none}
+}
+@media (max-width:700px){.wgrid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<script>try{var m=localStorage.getItem('git-theme')||'auto';if(m==='day'||(m==='auto'&&matchMedia('(prefers-color-scheme: light)').matches))document.body.classList.add('day')}catch(e){}</script>
+<div id="crt"></div>
+<header id="top">
+  <div class="logo"><span class="lx"></span><span class="lt">GOLD INTELLIGENCE TERMINAL</span><span class="lv">GIT/4.2.26 - WATER</span></div>
+  <nav class="gochips">
+    <a class="gchip" href="/" style="text-decoration:none">HOME</a>
+    <a class="gchip" href="/gold.html" style="text-decoration:none">GOLD</a>
+    <a class="gchip" href="/energy.html" style="text-decoration:none">ENERGY</a>
+    <a class="gchip" href="/agri.html" style="text-decoration:none">AGRI</a>
+    <a class="gchip" href="/fx.html" style="text-decoration:none">FX</a>
+    <a class="gchip" href="/water.html" style="text-decoration:none">WATER</a>
+    <a class="gchip" href="/land.html" style="text-decoration:none">LAND</a>
+    <a class="gchip" href="/stable.html" style="text-decoration:none">STABLE</a>
+  </nav>
+  <div class="tsright">
+    <button id="themeBtn" style="font:600 9px var(--mono);color:var(--mut);border:1px solid var(--line);padding:3px 8px;background:none;cursor:pointer">AUTO</button>
+    <span id="clock">--:--:--</span>
+  </div>
+</header>
+<div id="tape"><div class="tape-in"><span id="tapeA"></span><span id="tapeB"></span></div></div>
+<main class="wgrid">
+  <section id="w-hero" class="panel sig">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">CA Water Index (NQH2O)</span>
+      <span class="chip month">DAILY</span><span class="src">FRED - NASDAQ VELES</span></div>
+    <div class="p-bd">
+      <div class="bigpx" id="nqh2oPx">--</div>
+      <div class="bigchg" id="nqh2oChg">--</div>
+      <div class="secH" style="margin-top:12px">WATER MARKET SUMMARY</div>
+      <div id="waterSummary" class="mut" style="font:10px var(--mono);line-height:1.8">Loading...</div>
+    </div>
+  </section>
+  <section id="w-charts" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Water Price History - NQH2O</span><span class="src">FRED - 2Y DAILY</span></div>
+    <div class="ch-wrap" style="flex:1;position:relative;min-height:0"><canvas id="chCv" style="position:absolute;inset:0;width:100%;height:100%;cursor:crosshair"></canvas></div>
+    <div class="ch-read" id="chRead">HOVER CHART</div>
+  </section>
+  <section id="w-gauges" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">USGS River Gauges</span><span class="chip near">LIVE</span><span class="src">USGS NWIS</span></div>
+    <div class="p-bd" id="gaugeList"></div>
+  </section>
+  <section id="w-price" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Water Rights & Pricing</span><span class="chip evt">REFERENCE</span></div>
+    <div class="p-bd" id="pricingList"></div>
+  </section>
+  <section id="w-news" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Water News</span><span class="chip near">GDELT</span></div>
+    <div class="p-bd"><ul class="nwl" id="nwList"></ul></div>
+  </section>
+  <section id="w-drought" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Drought Monitor</span><span class="chip month">WEEKLY</span><span class="src">USDM REFERENCE</span></div>
+    <div class="p-bd" id="droughtBody"></div>
+  </section>
+</main>
+<footer id="status"><span>GIT-4.2.26 - WATER DESK</span><span class="mid">NOT FINANCIAL ADVICE - EVERY VALUE SHOWS ITS SOURCE</span></footer>
+<script>
+(function(){
+var _fetch=window.fetch;
+window.fetch=function(u,o){o=o||{};o.headers=o.headers||{};var t=localStorage.getItem('git-token');if(t){o.headers['x-session']=t;}return _fetch(u,o);};
+if(!localStorage.getItem('git-token')){location.replace('/login.html');}
+})();
+</script>
+<script src="/js/water.js"></script>
+</body>
+</html>
