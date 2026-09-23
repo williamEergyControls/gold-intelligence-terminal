@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GIT/4 - LAND TERMINAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/terminal.css">
+<style>
+html,body{overflow-x:hidden}
+.lgrid{display:grid;grid-template-columns:repeat(12,1fr);gap:clamp(5px,.45vw,8px);width:100%;max-width:2560px;margin:0 auto;padding:8px clamp(8px,.6vw,14px)}
+#l-hero{grid-column:1/5;grid-row:1/3;min-height:340px}
+#l-charts{grid-column:5/13;grid-row:1;min-height:280px}
+#l-farm{grid-column:5/9;grid-row:2;min-height:240px}
+#l-rent{grid-column:9/13;grid-row:2;min-height:240px}
+#l-news{grid-column:1/8;grid-row:3;min-height:240px}
+#l-map{grid-column:8/13;grid-row:3;min-height:240px}
+.bigpx{font:600 clamp(30px,2.4vw,44px)/1 var(--mono);color:#f2e9d4}
+.bigchg{font:600 13px var(--mono);margin-top:6px}
+.lrow{display:grid;grid-template-columns:120px 80px 1fr;align-items:center;gap:8px;padding:4px 0;border-top:1px dashed var(--line2);font:11px var(--mono)}
+.lrow:first-child{border-top:none}
+.lrow .name{color:var(--mut)}
+.lrow .val{color:var(--gold);font-weight:600}
+@media (max-width:1100px){
+  .lgrid{grid-template-columns:1fr 1fr}
+  .lgrid>*{grid-column:auto!important;grid-row:auto!important;min-height:230px}
+  #l-hero,#l-charts,#l-news{grid-column:1/-1!important}
+  #tape{display:none}
+}
+@media (max-width:700px){.lgrid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<script>try{var m=localStorage.getItem('git-theme')||'auto';if(m==='day'||(m==='auto'&&matchMedia('(prefers-color-scheme: light)').matches))document.body.classList.add('day')}catch(e){}</script>
+<div id="crt"></div>
+<header id="top">
+  <div class="logo"><span class="lx"></span><span class="lt">GOLD INTELLIGENCE TERMINAL</span><span class="lv">GIT/4.2.26 - LAND</span></div>
+  <nav class="gochips">
+    <a class="gchip" href="/" style="text-decoration:none">HOME</a>
+    <a class="gchip" href="/gold.html" style="text-decoration:none">GOLD</a>
+    <a class="gchip" href="/energy.html" style="text-decoration:none">ENERGY</a>
+    <a class="gchip" href="/agri.html" style="text-decoration:none">AGRI</a>
+    <a class="gchip" href="/fx.html" style="text-decoration:none">FX</a>
+    <a class="gchip" href="/water.html" style="text-decoration:none">WATER</a>
+    <a class="gchip" href="/land.html" style="text-decoration:none">LAND</a>
+    <a class="gchip" href="/stable.html" style="text-decoration:none">STABLE</a>
+  </nav>
+  <div class="tsright">
+    <button id="themeBtn" style="font:600 9px var(--mono);color:var(--mut);border:1px solid var(--line);padding:3px 8px;background:none;cursor:pointer">AUTO</button>
+    <span id="clock">--:--:--</span>
+  </div>
+</header>
+<div id="tape"><div class="tape-in"><span id="tapeA"></span><span id="tapeB"></span></div></div>
+<main class="lgrid">
+  <section id="l-hero" class="panel sig">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">US Farmland Values</span>
+      <span class="chip month">QUARTERLY</span><span class="src">USDA NASS</span></div>
+    <div class="p-bd">
+      <div class="bigpx" id="landPx">--</div>
+      <div class="bigchg" id="landChg">--</div>
+      <div class="secH" style="margin-top:12px">LAND MARKET SUMMARY</div>
+      <div id="landSummary" class="mut" style="font:10px var(--mono);line-height:1.8">Loading...</div>
+    </div>
+  </section>
+  <section id="l-charts" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Farmland Value Index</span><span class="src">USDA / FRED</span></div>
+    <div class="ch-wrap" style="flex:1;position:relative;min-height:0"><canvas id="chCv" style="position:absolute;inset:0;width:100%;height:100%;cursor:crosshair"></canvas></div>
+    <div class="ch-read" id="chRead">HOVER CHART</div>
+  </section>
+  <section id="l-farm" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Farm Real Estate by Region</span><span class="chip month">ANNUAL</span></div>
+    <div class="p-bd" id="farmBody"></div>
+  </section>
+  <section id="l-rent" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Cash Rent Levels</span><span class="chip month">ANNUAL</span></div>
+    <div class="p-bd" id="rentBody"></div>
+  </section>
+  <section id="l-news" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Land & Farm News</span><span class="chip near">GDELT</span></div>
+    <div class="p-bd"><ul class="nwl" id="nwList"></ul></div>
+  </section>
+  <section id="l-map" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Gold / Land Ratio</span><span class="chip evt">CALC</span></div>
+    <div class="p-bd" id="ratioBody"></div>
+  </section>
+</main>
+<footer id="status"><span>GIT-4.2.26 - LAND DESK</span><span class="mid">NOT FINANCIAL ADVICE - EVERY VALUE SHOWS ITS SOURCE</span></footer>
+<script>
+(function(){
+var _fetch=window.fetch;
+window.fetch=function(u,o){o=o||{};o.headers=o.headers||{};var t=localStorage.getItem('git-token');if(t){o.headers['x-session']=t;}return _fetch(u,o);};
+if(!localStorage.getItem('git-token')){location.replace('/login.html');}
+})();
+</script>
+<script src="/js/land.js"></script>
+</body>
+</html>
