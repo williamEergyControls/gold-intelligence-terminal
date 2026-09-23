@@ -87,6 +87,23 @@ html,body{overflow-x:hidden}
 </main>
 <footer id="status"><span>GIT-4.2.26 - FX DESK</span><span class="mid">NOT FINANCIAL ADVICE - EVERY VALUE SHOWS ITS SOURCE</span></footer>
 <script>window.PAGE_CONFIG={type:'fx',api:'/api/bootstrap?tf=1D',sym:'DXY',heroUnit:'INDEX'};</script>
+<script>
+(function(){
+  var _fetch = window.fetch;
+  window.fetch = function(url, opts) {
+    opts = opts || {};
+    opts.headers = opts.headers || {};
+    var token = localStorage.getItem('git-token');
+    if (token && String(url).indexOf('/api/') === 0 || String(url).indexOf('/api/') > -1 && !String(url).includes('/api/auth/')) {
+      opts.headers['x-session'] = token;
+    }
+    return _fetch(url, opts);
+  };
+  if (!localStorage.getItem('git-token')) {
+    location.replace('/login.html');
+  }
+})();
+</script>
 <script src="/js/fx.js"></script>
 </body>
 </html>
