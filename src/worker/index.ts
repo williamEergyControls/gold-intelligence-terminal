@@ -132,7 +132,7 @@ export default {
         const syms = (url.searchParams.get('syms') || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean).slice(0, 12);
         if (!syms.length) return json({ quotes: [] }, 200);
         const c = new AppCache(env.CACHE);
-        const r = await c.wrap('watch:' + syms.join(',')), 120, () => yahoo.yahooBatchQuotes(syms).catch(() => sim.simQuotes(syms)));
+        const r = await c.wrap('watch:' + syms.join(','), 120, () => yahoo.yahooBatchQuotes(syms).catch(() => sim.simQuotes(syms)));
         return json({ quotes: r.v }, 200);
       }
       if (path === '/api/macro') return json((await cachedBoot(env, '15M')).v.macro, 200);
