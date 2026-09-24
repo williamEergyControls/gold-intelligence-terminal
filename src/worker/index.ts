@@ -1,11 +1,11 @@
 import type { Env, Tf } from './types';
-import { AppCache, K } from './cache';
-import { buildBootstrap, getCandles } from './bootstrap';
+import { AppCache } from './cache';
+import { buildBootstrap } from './bootstrap';
 import { aiAnalyst } from './ai/analyst';
 import { agentChat } from './ai/chat';
 import { persistHealthRows } from './providers/provider';
 import { ensureSchema } from './schema';
-import { mlTick, mlStatus, ML_CRON } from './ml/pipeline';
+import { trainAndStore, predictAndStore, gradeOutcomes } from './ml/pipeline';
 import { authRegister, authLogin, authVerify, authLogout, requireAuth } from './auth';
 import { buildEnergyPage, buildAgriPage } from './pages';
 import * as yahoo from './providers/yahoo';
@@ -36,7 +36,7 @@ function json(v: unknown, status: number): Response {
   return new Response(JSON.stringify(v), { status, headers: JH });
 }
 async function cachedBoot(env: Env, tf: Tf) {
-  return new AppCache(env.CACHE).wrap(K('boot:' + tf), 30, () => buildBootstrap(env, tf), { persist: false });
+  return new AppCache(env.CACHE).wrap('boot:' + tf, 30, () => buildBootstrap(env, tf));
 }
 function parseTf(s: string | null): Tf { return TFS.includes(s as Tf) ? (s as Tf) : '15M'; }
 
@@ -87,8 +87,12 @@ export default {
       }
       if (path === '/api/candles') {
         const tf = parseTf(url.searchParams.get('tf'));
-        const c = await getCandles(env, tf);
-        return json({ tf, candles: c.candles, source: c.source, delay: c.source === 'simulated' ? 'simulated' : 'near-live', ts: Date.now() - c.ageMs, stale: c.stale, ageMs: c.ageMs }, 200);
+        const sym = url.searchParams.get('sym') || 'XAU:USD';
+        const cache = new AppCache(env.CACHE);
+        const r = await cache.wrap('candles:' + sym + ':' + tf, tf === '1D' ? 3600 : 300, () =>
+          yahoo.yahooCandles(env, sym, tf).catch(() => Promise.resolve(sim.simCandles(sym, tf)))
+        );
+        return json({ tf, sym, candles: r.v, source: 'yahoo', stale: r.stale, ageMs: r.ageMs }, 200);
       }
       if (path === '/api/quote') {
         const out: any = { ts: Date.now() };
@@ -104,17 +108,17 @@ export default {
       }
       if (path === '/api/page/energy') {
         const c = new AppCache(env.CACHE);
-        const r = await c.wrap(K('page:energy'), 900, () => buildEnergyPage(env));
+        const r = await c.wrap('page:energy', 900, () => buildEnergyPage(env));
         return json(r.v, 200);
       }
       if (path === '/api/page/agri') {
         const c = new AppCache(env.CACHE);
-        const r = await c.wrap(K('page:agri'), 900, () => buildAgriPage(env));
+        const r = await c.wrap('page:agri', 900, () => buildAgriPage(env));
         return json(r.v, 200);
       }
       if (path === '/api/page/shipping') {
         const c = new AppCache(env.CACHE);
-        const r = await c.wrap(K('page:shipping'), 900, async () => {
+        const r = await c.wrap('page:shipping', 900, async () => {
           try {
             const shp = await import('./providers/shipping');
             return await shp.buildShippingPanel(env);
@@ -128,7 +132,7 @@ export default {
         const syms = (url.searchParams.get('syms') || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean).slice(0, 12);
         if (!syms.length) return json({ quotes: [] }, 200);
         const c = new AppCache(env.CACHE);
-        const r = await c.wrap(K('watch:' + syms.join(',')), 120, () => yahoo.yahooBatchQuotes(syms).catch(() => sim.simQuotes(syms)));
+        const r = await c.wrap('watch:' + syms.join(',')), 120, () => yahoo.yahooBatchQuotes(syms).catch(() => sim.simQuotes(syms)));
         return json({ quotes: r.v }, 200);
       }
       if (path === '/api/macro') return json((await cachedBoot(env, '15M')).v.macro, 200);
@@ -138,7 +142,10 @@ export default {
         const b = await cachedBoot(env, '15M');
         return json({ ...b.v.why, movePct: b.v.gold.changePct }, 200);
       }
-      if (path === '/api/ml') return json(await mlStatus(env), 200);
+     if (path === '/api/ml') {
+        const raw = await env.CACHE.get('ml:snap', 'json');
+        return raw ? json(raw, 200) : json({ status: 'WARMING' }, 200);
+        }
       if (path === '/api/ai/analyst') {
         if (!allow('ai:' + ip, 6, 60000)) return json({ error: 'RATE_LIMITED' }, 429);
         const b = await cachedBoot(env, parseTf(url.searchParams.get('tf')));
@@ -167,7 +174,7 @@ export default {
         const q = String(b.question || '').slice(0, 500);
         if (!q) return json({ error: 'ENTER A QUESTION' }, 400);
         const boot = await cachedBoot(env, '1D');
-        const ml = await env.CACHE.get(K('ml:snap'), 'json');
+        const ml = await env.CACHE.get('ml:snap', 'json');
         const ctx = {
           gold: { price: boot.v.gold.price, change: boot.v.gold.changePct },
           silver: { price: boot.v.silver.price },
@@ -228,12 +235,13 @@ export default {
         return json({ METALS_API_KEY: mk('METALS_API_KEY'), FRED_API_KEY: mk('FRED_API_KEY'), ADMIN_TOKEN: mk('ADMIN_TOKEN') }, 200);
       }
       if (path === '/api/ml/train') {
-        const tr = await (await import('./ml/pipeline')).trainAndStore(env);
-        return json(tr, 200);
-      }
+          const tr = await trainAndStore(env);
+          await predictAndStore(env);
+          return json(tr, 200);
+        }
       if (path === '/api/admin/diagnostics') {
         const b = await cachedBoot(env, '15M');
-        const ml = await env.CACHE.get(K('ml:snap'), 'json');
+        const ml = await env.CACHE.get('ml:snap', 'json');
         const models = await env.DB.prepare('SELECT id, name, trained_at, active FROM ml_models ORDER BY id DESC LIMIT 5').all();
         const pc = await env.DB.prepare('SELECT COUNT(*) as n FROM predictions').first();
         const oc = await env.DB.prepare('SELECT COUNT(*) as n, SUM(correct) as c FROM prediction_outcomes').first();
@@ -263,15 +271,28 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext) {
-    if (controller.cron === ML_CRON) {
-      ctx.waitUntil(mlTick(env).catch(() => { }));
-      return;
-    }
+   if (controller.cron === '0 * * * *') {
+        ctx.waitUntil((async () => {
+          try {
+            const lastMl = await env.CACHE.get('ml:last', 'json') as { t: number } | null;
+            if (lastMl && Date.now() - lastMl.t < 21600000) return;
+            const last = await env.DB.prepare('SELECT MAX(trained_at) t FROM ml_models WHERE active=1').first<{ t: number | null }>();
+            if (!last?.t || Date.now() - last.t > 604800000) {
+              const tr = await trainAndStore(env);
+              if (!tr.ok) console.error('ML_TRAIN_FAIL', tr.error);
+            }
+            await predictAndStore(env);
+            await gradeOutcomes(env);
+            await env.CACHE.put('ml:last', JSON.stringify({ t: Date.now() }), { expirationTtl: 86400 });
+          } catch (e) { console.error('ML_CRON_FAIL', String((e as Error).message).slice(0, 200)); }
+        })());
+        return;
+      }
     ctx.waitUntil((async () => {
       try {
         await ensureSchema(env).catch(() => { });
         const boot = await buildBootstrap(env, '15M');
-        await new AppCache(env.CACHE).write(K('boot:15M'), boot, 30);
+        await new AppCache(env.CACHE).write('boot:15M', boot, 30);
         const stmts = [
           env.DB.prepare('INSERT OR REPLACE INTO price_snapshots(ts,symbol,price,source) VALUES(?,?,?,?)')
             .bind(Date.now(), 'XAU:USD', boot.gold.price, boot.gold.source),
@@ -282,8 +303,8 @@ export default {
         // warm the expansion pages
         try {
           const c = new AppCache(env.CACHE);
-          await c.write(K('page:energy'), await buildEnergyPage(env), 900);
-          await c.write(K('page:agri'), await buildAgriPage(env), 900);
+          await c.write('page:energy', await buildEnergyPage(env), 900);
+          await c.write('age:agri', await buildAgriPage(env), 900);
         } catch { }
       } catch (e) { console.error('cron warm failed', String((e as Error)?.message ?? e)); }
     })());
