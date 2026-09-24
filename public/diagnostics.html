@@ -3,77 +3,129 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GIT/4 - DIAGNOSTICS (ADMIN)</title>
+<title>GIT/4 - DIAGNOSTICS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/terminal.css">
 <style>
-html,body{overflow-x:hidden}
-.dwrap{max-width:1200px;margin:0 auto;padding:20px}
-.dsec{border:1px solid var(--line);background:var(--panel);margin-bottom:12px}
-.dsec .p-hd{display:flex;align-items:center;gap:8px;height:28px;padding:0 9px;background:var(--panel2);border-bottom:1px solid var(--line)}
-.dsec .sq{width:6px;height:6px;background:var(--gold)}
-.dsec .ttl{font:600 10px var(--disp);letter-spacing:.16em;color:#d4dbe1}
-.dsec .p-bd{padding:10px}
-.drow{display:grid;grid-template-columns:200px 1fr;gap:10px;padding:5px 0;border-top:1px dashed var(--line2);font:11px var(--mono)}
+html,body{overflow-x:auto}
+.dwrap{max-width:1400px;margin:0 auto;padding:16px}
+.dsec{border:1px solid var(--line);background:var(--panel);margin-bottom:10px}
+.dsec .dh{display:flex;align-items:center;gap:8px;height:28px;padding:0 10px;background:var(--panel2);border-bottom:1px solid var(--line)}
+.dsec .dh .sq{width:6px;height:6px;background:var(--gold)}
+.dsec .dh .ttl{font:600 10px var(--disp);letter-spacing:.16em;color:#d4dbe1}
+.dsec .db{padding:10px}
+.drow{display:grid;grid-template-columns:180px 1fr;gap:10px;padding:4px 0;border-top:1px dashed var(--line2);font:11px var(--mono)}
 .drow:first-child{border-top:none}
 .drow .dk{color:var(--dim)}
 .drow .dv{color:var(--txt)}
-.flow-node{display:inline-block;border:1px solid var(--line);padding:4px 8px;margin:3px;font:10px var(--mono);color:var(--txt);background:var(--panel2)}
-.flow-arrow{display:inline-block;color:var(--dim);font:12px var(--mono);margin:0 4px}
+.dgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px}
+.status-ok{color:var(--up)}
+.status-warn{color:var(--amber)}
+.status-bad{color:var(--dn)}
+td{padding:3px 6px;border-top:1px dashed var(--line2);font:10px var(--mono)}
+th{font:600 8px var(--mono);color:var(--dim);letter-spacing:.12em;text-align:left;padding:3px 6px}
+table{width:100%;border-collapse:collapse}
 </style>
 </head>
 <body>
+<script>try{var m=localStorage.getItem('git-theme')||'auto';if(m==='day'||(m==='auto'&&matchMedia('(prefers-color-scheme: light)').matches))document.body.classList.add('day')}catch(e){}</script>
 <div id="crt"></div>
 <header id="top">
-  <div class="logo"><span class="lx"></span><span class="lt">GOLD INTELLIGENCE TERMINAL</span><span class="lv">GIT/4.2.26 - DIAGNOSTICS</span></div>
+  <div class="logo"><span class="lx"></span><span class="lt">GOLD INTELLIGENCE TERMINAL</span><span class="lv">GIT/4.2.26 - DIAG</span></div>
+  <nav class="gochips">
+    <a class="gchip" href="/" style="text-decoration:none">HOME</a>
+    <a class="gchip" href="/gold.html" style="text-decoration:none">GOLD</a>
+    <a class="gchip" href="/ai.html" style="text-decoration:none">AI</a>
+  </nav>
   <div class="tsright"><span id="clock">--:--:--</span></div>
 </header>
+
 <div class="dwrap">
-  <div class="dsec"><div class="p-hd"><span class="sq"></span><span class="ttl">Worker Status</span></div><div class="p-bd" id="dWorker">Loading...</div></div>
-  <div class="dsec"><div class="p-hd"><span class="sq"></span><span class="ttl">ML Engine Status</span></div><div class="p-bd" id="dML">Loading...</div></div>
-  <div class="dsec"><div class="p-hd"><span class="sq"></span><span class="ttl">Auth System</span></div><div class="p-bd" id="dAuth">Loading...</div></div>
-  <div class="dsec"><div class="p-hd"><span class="sq"></span><span class="ttl">Data Flow Map</span></div><div class="p-bd" id="dFlow">Loading...</div></div>
+  <div class="dsec"><div class="dh"><span class="sq"></span><span class="ttl">Worker Status</span></div><div class="db" id="dWorker">Loading...</div></div>
+
+  <div class="dgrid">
+    <div class="dsec"><div class="dh"><span class="sq"></span><span class="ttl">API Providers</span></div><div class="db" id="dProviders">Loading...</div></div>
+    <div class="dsec"><div class="dh"><span class="sq"></span><span class="ttl">ML Engine</span></div><div class="db" id="dML">Loading...</div></div>
+    <div class="dsec"><div class="dh"><span class="sq"></span><span class="ttl">Auth & Users</span></div><div class="db" id="dAuth">Loading...</div></div>
+  </div>
+
+  <div class="dsec"><div class="dh"><span class="sq"></span><span class="ttl">D1 Database Tables</span></div><div class="db" id="dDB">Loading...</div></div>
+  <div class="dsec"><div class="dh"><span class="sq"></span><span class="ttl">KV Cache Status</span></div><div class="db" id="dCache">Loading...</div></div>
+  <div class="dsec"><div class="dh"><span class="sq"></span><span class="ttl">Data Flow Map</span></div><div class="db" id="dFlow">Loading...</div></div>
 </div>
+
 <script>
 (function(){
 var _f=window.fetch;
 window.fetch=function(u,o){o=o||{};o.headers=o.headers||{};var t=localStorage.getItem('git-token');if(t){o.headers['x-session']=t}return _f(u,o)};
 if(!localStorage.getItem('git-token')){location.replace('/login.html')}
+
 setInterval(function(){document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-GB')},1000);
 
 fetch('/api/admin/diagnostics').then(function(r){
-  if(r.status===403){document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;font:14px IBM Plex Mono;color:#ff4f5e">FORBIDDEN - ADMIN ACCESS REQUIRED</div>';return null;}
+  if(r.status===403){
+    document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;font:14px IBM Plex Mono;color:#ff4f5e;text-align:center">FORBIDDEN<br><br>ADMIN ACCESS REQUIRED<br><br><a href="/" style="color:var(--cyan)">BACK TO HOME</a></div>';
+    return null;
+  }
   return r.json();
 }).then(function(d){
   if(!d)return;
 
-  var w='';
-  w+='<div class="drow"><span class="dk">MODE</span><span class="dv '+(d.worker.mode==='live'?'up':'dn')+'">'+d.worker.mode.toUpperCase()+'</span></div>';
+  /* Worker */
+  var w='<div class="drow"><span class="dk">MODE</span><span class="dv '+(d.worker.mode==='live'?'status-ok':'status-bad')+'">'+d.worker.mode.toUpperCase()+'</span></div>';
   w+='<div class="drow"><span class="dk">BUILT</span><span class="dv">'+new Date(d.worker.builtAt).toLocaleString()+'</span></div>';
-  w+='<div class="drow"><span class="dk">STALE</span><span class="dv">'+(d.worker.stale?'YES':'NO')+'</span></div>';
-  w+='<div class="drow"><span class="dk">PROVIDERS</span><span class="dv">'+d.worker.providers.map(function(p){return '<span class="'+(p.status==='online'?'up':'dim')+'">'+p.name+': '+p.status+'</span>'}).join(' | ')+'</span></div>';
+  w+='<div class="drow"><span class="dk">STATUS</span><span class="dv '+(d.worker.stale?'status-warn':'status-ok')+'">'+(d.worker.stale?'STALE CACHE':'FRESH')+'</span></div>';
   document.getElementById('dWorker').innerHTML=w;
 
+  /* Providers */
+  var p='<table><tr><th>SOURCE</th><th>STATUS</th><th>TYPE</th><th>LATENCY</th></tr>';
+  (d.worker.providers||[]).forEach(function(pr){
+    var col=pr.status==='online'?'status-ok':(pr.status==='degraded'?'status-warn':(pr.status==='idle'?'':'status-bad'));
+    p+='<tr><td>'+pr.name.toUpperCase()+'</td><td class="'+col+'">'+pr.status.toUpperCase()+'</td><td>'+(pr.delay||'-')+'</td><td>'+(pr.latencyMs!=null?pr.latencyMs+'ms':'-')+'</td></tr>';
+  });
+  p+='</table>';
+  document.getElementById('dProviders').innerHTML=p;
+
+  /* ML */
   var m='';
-  m+='<div class="drow"><span class="dk">LATEST SIGNAL</span><span class="dv">'+(d.ml.latestSignal?d.ml.latestSignal.direction+' '+(d.ml.latestSignal.p*100).toFixed(0)+'% ('+d.ml.latestSignal.regime+')':'NONE')+'</span></div>';
-  m+='<div class="drow"><span class="dk">MODELS TRAINED</span><span class="dv">'+d.ml.models.length+'</span></div>';
-  m+='<div class="drow"><span class="dk">TOTAL PREDICTIONS</span><span class="dv">'+d.ml.totalPredictions+'</span></div>';
-  m+='<div class="drow"><span class="dk">GRADED OUTCOMES</span><span class="dv">'+d.ml.gradedOutcomes+'</span></div>';
-  m+='<div class="drow"><span class="dk">ACCURACY</span><span class="dv '+(d.ml.accuracy!=='PENDING'?'gold':'dim')+'">'+d.ml.accuracy+'</span></div>';
+  if(d.ml.signal){
+    m+='<div class="drow"><span class="dk">LATEST SIGNAL</span><span class="dv '+(d.ml.signal.dir==='BULLISH'?'status-ok':'status-bad')+'">'+d.ml.signal.dir+' '+(d.ml.signal.p*100).toFixed(0)+'% ('+d.ml.signal.regime+')</span></div>';
+  }
+  m+='<div class="drow"><span class="dk">MODELS TRAINED</span><span class="dv">'+(d.ml.models?d.ml.models.length:0)+'</span></div>';
+  m+='<div class="drow"><span class="dk">PREDICTIONS</span><span class="dv">'+d.ml.predictions+'</span></div>';
+  m+='<div class="drow"><span class="dk">GRADED</span><span class="dv">'+d.ml.graded+'</span></div>';
+  m+='<div class="drow"><span class="dk">ACCURACY</span><span class="dv '+(d.ml.accuracy!=='PENDING'?'gold':'')+'">'+d.ml.accuracy+'</span></div>';
   document.getElementById('dML').innerHTML=m;
 
-  var a='';
-  a+='<div class="drow"><span class="dk">TOTAL USERS</span><span class="dv">'+d.auth.totalUsers+'</span></div>';
-  a+='<div class="drow"><span class="dk">ACTIVE SESSIONS</span><span class="dv">'+d.auth.activeSessions+'</span></div>';
+  /* Auth */
+  var a='<div class="drow"><span class="dk">TOTAL USERS</span><span class="dv">'+d.auth.users+'</span></div>';
+  a+='<div class="drow"><span class="dk">ACTIVE SESSIONS</span><span class="dv">'+d.auth.sessions+'</span></div>';
   document.getElementById('dAuth').innerHTML=a;
 
+  /* Database */
+  var db='<div class="drow"><span class="dk">DB NAME</span><span class="dv">gold-terminal</span></div>';
+  db+='<div class="drow"><span class="dk">TABLES</span><span class="dv">users, sessions, price_snapshots, provider_health, ml_models, predictions, prediction_outcomes, daily_bars</span></div>';
+  db+='<div class="drow"><span class="dk">ML MODELS</span><span class="dv">'+(d.ml.models?d.ml.models.length:0)+' rows</span></div>';
+  db+='<div class="drow"><span class="dk">PREDICTIONS</span><span class="dv">'+d.ml.predictions+' rows</span></div>';
+  db+='<div class="drow"><span class="dk">GRADED OUTCOMES</span><span class="dv">'+d.ml.graded+' rows</span></div>';
+  document.getElementById('dDB').innerHTML=db;
+
+  /* Cache */
+  var c='<div class="drow"><span class="dk">KV NAMESPACE</span><span class="dv">GOLD_CACHE</span></div>';
+  c+='<div class="drow"><span class="dk">MANAGEMENT</span><span class="dv status-ok">AUTO-EXPIRE VIA TTL</span></div>';
+  c+='<div class="drow"><span class="dk">KEYS</span><span class="dv">boot:* candles:* page:* news:* fx macro ml:snap ai:cache</span></div>';
+  c+='<div class="drow"><span class="dk">NOTE</span><span class="dv mut">Cache clears automatically via TTL. No manual purge needed.</span></div>';
+  document.getElementById('dCache').innerHTML=c;
+
+  /* Data Flow */
   var f='';
-  var flows=d.dataFlow;
-  for(var key in flows){
-    f+='<div class="drow"><span class="dk">'+key.toUpperCase()+'</span><span class="dv">'+flows[key].split('->').map(function(s){return '<span class="flow-node">'+s.trim()+'</span>'}).join('<span class="flow-arrow">→</span>')+'</span></div>';
+  for(var key in d.dataFlow){
+    f+='<div class="drow"><span class="dk">'+key.toUpperCase()+'</span><span class="dv">'+d.dataFlow[key]+'</span></div>';
   }
   document.getElementById('dFlow').innerHTML=f;
 }).catch(function(e){
-  document.getElementById('dWorker').textContent='ERROR: '+e.message;
+  document.getElementById('dWorker').textContent='ERROR: '+e.message+' (may need admin role - check D1 users table)';
 });
 })();
 </script>
