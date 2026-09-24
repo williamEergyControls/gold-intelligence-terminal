@@ -136,7 +136,7 @@ function render(){
 
   fetch('/api/bootstrap?tf=1D').then(function(r){return r.json()}).then(function(b){
     if(b.gold&&D.futures&&D.futures.length>0){
-      var oil=D.futures.find(function(f){return f.name.includes('Crude')});
+      var oil=D.futures.find(function(f){return f.name.indexOf('Crude')>-1});
       if(oil){
         var ratio=b.gold.price/oil.price;
         $('#ratioBody').innerHTML='<div class="bi"><span class="n">GOLD PRICE</span><span class="gold">$'+fmt(b.gold.price,0)+'</span><span class="dim">/OZ</span></div>'+
