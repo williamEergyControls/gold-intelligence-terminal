@@ -3,297 +3,467 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GIT/4.2.26 · GOLD</title>
+<title>GIT/4 - GOLD TERMINAL</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/terminal.css">
+<style>
+html,body{overflow-x:hidden}
+.ggrid{display:grid;grid-template-columns:repeat(24,1fr);gap:clamp(5px,.45vw,8px);width:100%;max-width:2560px;margin:0 auto;padding:8px clamp(8px,.6vw,14px);grid-template-rows:auto auto auto auto}
+#g-hero{grid-column:1/7;grid-row:1}
+#g-chart{grid-column:7/20;grid-row:1;min-height:420px}
+#g-why{grid-column:20/25;grid-row:1/3}
+#g-heat{grid-column:1/9;grid-row:2}
+#g-dxy{grid-column:9/14;grid-row:2}
+#g-ry{grid-column:14/19;grid-row:2}
+#g-ratio{grid-column:19/25;grid-row:2}
+#g-ml{grid-column:1/9;grid-row:3}
+#g-news{grid-column:9/17;grid-row:3;min-height:300px}
+#g-nav{grid-column:17/25;grid-row:3;min-height:300px}
+.bigpx{font:600 clamp(36px,2.8vw,54px)/1 var(--mono);color:#f4ecd8}
+.bigchg{font:600 13px var(--mono);margin-top:5px}
+.hero .stat6 div{padding:4px 2px;border-top:1px dashed var(--line2)}
+.hero .stat6 div:nth-child(-n+3){border-top:none}
+.hero .stat6 label{display:block;font:600 8px var(--mono);color:var(--dim);letter-spacing:.14em;margin-bottom:2px}
+.hero .stat6{display:grid;grid-template-columns:repeat(3,1fr);font:10.5px var(--mono)}
+.navgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+a.navcard{border:1px solid var(--line);background:var(--panel);padding:10px;text-decoration:none;display:block}
+a.navcard:hover{border-color:var(--gold)}
+.navcard .nt{font:700 11px var(--disp);letter-spacing:.16em;color:var(--gold)}
+.navcard .nd{font:9px var(--mono);color:var(--mut);margin-top:4px}
+.vs .mini{height:140px;position:relative;border:1px solid var(--line2);background:var(--panel3)}
+.vs .mini canvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
+.vs .stat{display:flex;justify-content:space-between;gap:8px;margin-top:6px;font:10px var(--mono);color:var(--mut)}
+.vs .stat b{color:var(--txt)}
+.vs .note{margin-top:4px;font:9px var(--mono);color:var(--dim)}
+.hm{display:grid;grid-template-columns:repeat(9,1fr);gap:3px}
+.hc{border:1px solid #1a2127;padding:4px 5px;min-height:40px;overflow:hidden}
+.hc .t{font:700 10px var(--mono);color:#e8eef2}
+.hc .c{font:700 10px var(--mono);margin-top:1px}
+.hm-sum{display:flex;gap:6px;margin-bottom:7px;flex-wrap:wrap}
+.hm-sum span{font:600 9px var(--mono);border:1px solid var(--line);padding:2px 7px;color:var(--mut)}
+@media (min-width:1101px) and (max-width:1560px){
+  .ggrid{grid-template-columns:repeat(12,1fr);grid-template-rows:none}
+  #g-hero{grid-column:1/4;grid-row:1}
+  #g-chart{grid-column:4/13;grid-row:1;min-height:380px}
+  #g-why{grid-column:1/4;grid-row:2}
+  #g-heat{grid-column:4/13;grid-row:2}
+  #g-dxy{grid-column:1/5;grid-row:3}
+  #g-ry{grid-column:5/9;grid-row:3}
+  #g-ratio{grid-column:9/13;grid-row:3}
+  #g-ml{grid-column:1/6;grid-row:4}
+  #g-news{grid-column:6/13;grid-row:4}
+  #g-nav{grid-column:1/13;grid-row:5}
+}
+@media (max-width:1100px){
+  .ggrid{grid-template-columns:1fr 1fr;grid-template-rows:none}
+  .ggrid>section{grid-column:auto!important;grid-row:auto!important;min-height:260px}
+  #g-hero,#g-chart,#g-why,#g-heat,#g-news,#g-nav{grid-column:1/-1!important}
+  #g-chart{min-height:360px}
+}
+@media (max-width:700px){.ggrid{grid-template-columns:1fr}.bigpx{font-size:32px}}
+</style>
 </head>
 <body>
 <script>try{var m=localStorage.getItem('git-theme')||'auto';if(m==='day'||(m==='auto'&&matchMedia('(prefers-color-scheme: light)').matches))document.body.classList.add('day')}catch(e){}</script>
-
+<script>if(!localStorage.getItem('git-token'))location.replace('/login.html')</script>
 <div id="crt"></div>
 
-<!-- BOOT -->
-<div id="boot"><div id="bootLines"></div><div class="bootft">CLICK ANYWHERE TO SKIP</div></div>
-
-<!-- COMMAND PALETTE -->
-<div id="pal"><div class="palbox">
-  <div class="palin"><span class="pr">▸</span><input id="palIn" placeholder="TYPE COMMAND — TRY /WHY-GOLD · /CPI · /DATA-HEALTH" autocomplete="off" spellcheck="false"></div>
-  <ul class="pallist" id="palList"></ul>
-  <div class="palft">↑↓ NAVIGATE · ENTER EXECUTE · ESC CLOSE</div>
-</div></div>
-
-<!-- TOOLTIP + TOASTS -->
-<div id="tip"></div><div id="toasts"></div>
-
-<!-- TOP BAR -->
 <header id="top">
   <div class="logo"><span class="lx"></span><span class="lt">GOLD INTELLIGENCE TERMINAL</span><span class="lv">GIT/4.2.26</span></div>
-<nav class="gochips">
-  <a class="gchip" href="/" style="text-decoration:none">HOME</a>
-  <button class="gchip" data-goto="p-gold">GOLD</button>
-  <button class="gchip" data-goto="p-chart">CHART</button>
-  <button class="gchip" data-goto="p-why">WHY</button>
-  <button class="gchip" data-goto="p-fx">FX</button>
-  <button class="gchip" data-goto="p-news">NEWS</button>
-  <button class="gchip" data-goto="p-health">DATA</button>
-  <a class="gchip" href="/energy.html" style="text-decoration:none">ENERGY</a>
-  <a class="gchip" href="/agri.html" style="text-decoration:none">AGRI</a>
-  <a class="gchip" href="/shipping.html" style="text-decoration:none">SHIPPING</a>
-  <a class="gchip" href="/ai.html" style="text-decoration:none">AI</a>
-</nav>
-  <div class="cmdbar" id="cmdOpen"><span class="pr">&gt;</span><span class="hint">ENTER COMMAND · CTRL+K</span><span class="cur"></span></div>
+  <nav class="gochips">
+    <a class="gchip" href="/" style="text-decoration:none">HOME</a>
+    <a class="gchip" href="/gold.html" style="text-decoration:none;color:var(--gold)">GOLD</a>
+    <a class="gchip" href="/energy.html" style="text-decoration:none">ENERGY</a>
+    <a class="gchip" href="/agri.html" style="text-decoration:none">AGRI</a>
+    <a class="gchip" href="/fx.html" style="text-decoration:none">FX</a>
+    <a class="gchip" href="/shipping.html" style="text-decoration:none">SHIPPING</a>
+    <a class="gchip" href="/water.html" style="text-decoration:none">WATER</a>
+    <a class="gchip" href="/ai.html" style="text-decoration:none">AI</a>
+  </nav>
   <div class="tsright">
-    <span class="livedot" id="feedDot"><i></i><span id="feedTxt">FEED —</span></span>
-    <button id="themeBtn" title="CYCLE AUTO / DAY / NIGHT" style="font:600 9px var(--mono);letter-spacing:.12em;color:var(--mut);border:1px solid var(--line);padding:3px 8px;background:none;cursor:pointer">◐ AUTO</button>
+    <button id="themeBtn" style="font:600 9px var(--mono);color:var(--mut);border:1px solid var(--line);padding:3px 8px;background:none;cursor:pointer">AUTO</button>
     <span id="clock">--:--:--</span>
-    <span class="opr" id="oprTxt">OPR: DESK-01 · —</span>
   </div>
 </header>
 
-<!-- TICKER TAPE -->
 <div id="tape"><div class="tape-in"><span id="tapeA"></span><span id="tapeB"></span></div></div>
 
-<main>
+<main class="ggrid">
 
-  <!-- SPOT GOLD HERO -->
-  <section id="p-gold" class="panel sig">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Spot Gold · XAU/USD</span>
-      <span class="chip live">—</span><span class="src">AWAITING FEED…</span></div>
+  <!-- GOLD HERO — the only price that matters on this page -->
+  <section id="g-hero" class="panel sig">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Spot Gold - XAU/USD</span>
+      <span class="chip near" id="gChip">--</span><span class="src" id="gSrc">LOADING...</span></div>
     <div class="p-bd hero">
-      <div class="pxmeta"><span>USD / TROY OZ</span><span class="new" id="athTag">—</span></div>
-      <div><div class="bigpx" id="bigPx">—</div><div class="bigchg" id="bigChg">—</div></div>
-      <div class="ba"><span>BID <b id="bid">—</b></span><span class="spr">SPRD</span><span>ASK <b id="ask">—</b></span></div>
-      <div class="rng"><span>L <b id="loV">—</b></span><div class="rtrack"><i id="rmark" style="left:50%"></i></div><span>H <b id="hiV">—</b></span></div>
-      <div class="ohlc">O <b id="oo">—</b> · H <b id="oh">—</b> · L <b id="ol">—</b> · C <b id="oc">—</b> · VOL <b id="ovol">—</b></div>
-      <div class="spk-wrap"><canvas id="sparkCv"></canvas><span class="spk-lb">LAST 90 BARS</span></div>
-      <div class="stat6">
-        <div><label>PREV CLOSE</label><b id="prevC">—</b></div>
-        <div><label>WK</label><b id="stWk">—</b></div>
-        <div><label>1M</label><b id="st1m">—</b></div>
-        <div><label>1Y</label><b id="st1y">—</b></div>
-        <div><label>52W HI</label><b class="gold" id="stAth">—</b></div>
-        <div><label>XAU/XAG</label><b id="ratioV">—</b></div>
+      <div style="font:500 9.5px var(--mono);color:var(--dim);letter-spacing:.14em">USD / TROY OZ</div>
+      <div class="bigpx" id="bigPx">--</div>
+      <div class="bigchg" id="bigChg">--</div>
+      <div style="display:flex;justify-content:space-between;font:10.5px var(--mono);color:var(--mut);border:1px dashed var(--line2);padding:4px 8px;margin-top:6px">
+        <span>BID <b id="bid">--</b></span><span>ASK <b id="ask">--</b></span>
       </div>
-      <div class="regime">REGIME ▸ <b class="gold" id="regTxt">—</b></div>
+      <div class="stat6" style="margin-top:8px">
+        <div><label>OPEN</label><b id="oo">--</b></div>
+        <div><label>HIGH</label><b id="oh">--</b></div>
+        <div><label>LOW</label><b id="ol">--</b></div>
+        <div><label>PREV CLOSE</label><b id="prevC">--</b></div>
+        <div><label>WK</label><b id="stWk">--</b></div>
+        <div><label>1Y</label><b id="st1y">--</b></div>
+      </div>
+      <div style="margin-top:auto;border-top:1px solid var(--line);padding-top:7px;font:9.5px var(--mono);color:var(--mut)">
+        XAU/XAG <b class="gold" id="ratioV">--</b>
+      </div>
     </div>
   </section>
 
-  <!-- MAIN CHART -->
-  <section id="p-chart" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">XAU/USD · Candles</span>
-      <span class="chip live">—</span><span class="src">AWAITING FEED…</span></div>
+  <!-- GOLD CHART -->
+  <section id="g-chart" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">XAU/USD - Candles</span>
+      <span class="chip near" id="chChip">--</span><span class="src" id="chSrc">--</span></div>
     <div class="ch-tools">
       <div class="tgrp" id="tfGrp"><button data-tf="5M">5M</button><button class="on" data-tf="15M">15M</button><button data-tf="1H">1H</button><button data-tf="1D">1D</button><button data-tf="1W">1W</button></div>
       <div class="tgrp"><button id="tCandle" class="on">CANDLE</button><button id="tLine">LINE</button></div>
-      <div class="tgrp"><button id="tMa20" class="on c">MA20</button><button id="tMa50" class="on b">MA50</button><button id="tVol" class="on">VOL</button></div>
-      <span class="ch-info">LAST <b class="gold" id="chLast">—</b> · Δ <b id="chChg">—</b></span>
+      <div class="tgrp"><button id="tMa20" class="on c">MA20</button><button id="tMa50" class="on b">MA50</button></div>
     </div>
     <div class="ch-wrap"><canvas id="chCv"></canvas></div>
-    <div class="ch-read" id="chRead">HOVER CHART FOR OHLC READOUT</div>
+    <div class="ch-read" id="chRead">HOVER CHART FOR OHLC</div>
   </section>
 
   <!-- WHY IS GOLD MOVING -->
-  <section id="p-why" class="panel sig">
+  <section id="g-why" class="panel sig">
     <div class="p-hd"><span class="sq"></span><span class="ttl">Why Is Gold Moving?</span>
-      <span class="chip ai">AI ENGINE · ON-DEMAND</span></div>
-    <div class="p-bd why">
-      <div class="move">MOVE ▸ AWAITING FEED…</div>
-      <div class="drv"></div>
-      <div class="conf"><span class="cl">CONFIDENCE</span><div class="segs" id="confSegs"></div><span class="cv" id="confVal">—</span></div>
-      <div class="evi">
-        <div><h6>EVIDENCE</h6><ul></ul></div>
-        <div><h6>COUNTER</h6><ul></ul></div>
+      <span class="chip ai">AI</span></div>
+    <div class="p-bd why" style="display:flex;flex-direction:column;gap:8px">
+      <div class="move" id="whyMove">LOADING...</div>
+      <div class="drv" id="whyDrv"></div>
+      <div style="display:flex;align-items:center;gap:9px;border-top:1px dashed var(--line2);padding-top:8px">
+        <span style="font:600 8.5px var(--mono);color:var(--dim)">CONF</span>
+        <div style="display:flex;gap:2px;flex:1" id="confSegs"></div>
+        <span style="font:700 13px var(--mono);color:var(--gold)" id="confVal">--</span>
       </div>
-      <button class="runbtn" id="runWhy">▶ RUN INVESTIGATION</button>
-      <div class="sub">ANALYSIS — NOT FINANCIAL ADVICE</div>
-      <div class="console" id="whyOut"><span class="hint">// OUTPUT — AWAITING OPERATOR COMMAND</span></div>
+      <button class="runbtn" id="runWhy">RUN ANALYST</button>
+      <div class="console" id="whyOut" style="flex:1;min-height:100px;background:var(--panel3);border:1px solid var(--line2);padding:7px 9px;font:10px/1.65 var(--mono);color:#b6c1c9;overflow:auto">// CLICK RUN</div>
     </div>
   </section>
 
-  <!-- MINING HEATMAP -->
-  <section id="p-heat" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Mining Equities · Heatmap</span>
-      <span class="chip near">—</span><span class="src">AWAITING FEED…</span></div>
+  <!-- GOLD MINERS HEATMAP -->
+  <section id="g-heat" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Gold Miners</span>
+      <span class="chip near" id="hmChip">--</span><span class="src" id="hmSrc">--</span></div>
     <div class="p-bd">
-      <div class="hm-sum"><span>XAU <b id="hmXau">—</b></span><span>MINERS AVG <b id="hmAvg">—</b></span><span id="hmN">N=—</span></div>
+      <div class="hm-sum" id="hmSum"></div>
       <div class="hm" id="hm"></div>
-      <div class="hm-leg">−3% <i style="background:rgba(255,79,94,.55)"></i><i style="background:rgba(255,79,94,.22)"></i><i style="background:#10151a"></i><i style="background:rgba(19,217,126,.22)"></i><i style="background:rgba(19,217,126,.55)"></i> +3%</div>
-      <div class="hm-focus" id="hmFocus">FOCUS ▸ HOVER A TICKER FOR DETAIL · CLICK TO PIN</div>
     </div>
   </section>
 
   <!-- GOLD VS DXY -->
-  <section id="p-vsdxy" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Gold vs US Dollar</span><span class="src">INDEXED · DAILY · 80 OBS</span></div>
+  <section id="g-dxy" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Gold vs Dollar</span><span class="src">80D INDEXED</span></div>
     <div class="p-bd vs">
       <div class="mini"><canvas id="cvDxy"></canvas></div>
-      <div class="stat"><span>CORR(80D) <b id="corrDxy">—</b></span><span>DXY <b id="stDxyV">—</b></span><span class="tag amber" id="tagDxy">—</span></div>
-      <div class="rd" id="rdDxy">HOVER FOR INDEXED READOUT</div>
-      <div class="note">INVERSE RELATIONSHIP — DXY WEAKNESS REMOVES USD HEADWIND FOR BULLION.</div>
+      <div class="stat"><span>CORR <b id="corrDxy">--</b></span><span>DXY <b id="stDxyV">--</b></span></div>
     </div>
   </section>
 
   <!-- GOLD VS REAL YIELD -->
-  <section id="p-vsry" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Gold vs 10Y Real Yield</span><span class="src">FRED · TIPS 10Y</span></div>
+  <section id="g-ry" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Gold vs Real Yield</span><span class="src">FRED DFII10</span></div>
     <div class="p-bd vs">
       <div class="mini"><canvas id="cvRy"></canvas></div>
-      <div class="stat"><span>CORR(80D) <b id="corrRy">—</b></span><span>TIPS <b id="stRyV">—</b></span><span class="tag amber" id="tagRy">—</span></div>
-      <div class="rd" id="rdRy">HOVER FOR INDEXED READOUT</div>
-      <div class="note">FALLING REAL YIELDS REDUCE THE OPPORTUNITY COST OF HOLDING GOLD.</div>
+      <div class="stat"><span>CORR <b id="corrRy">--</b></span><span>TIPS <b id="stRyV">--</b></span></div>
     </div>
   </section>
 
   <!-- GOLD / SILVER RATIO -->
-  <section id="p-vsaux" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Gold / Silver Ratio</span><span class="src">XAU/XAG · DAILY</span></div>
+  <section id="g-ratio" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Gold / Silver</span><span class="src">80D</span></div>
     <div class="p-bd vs">
-      <div class="mini"><canvas id="cvAux"></canvas></div>
-      <div class="stat"><span>RATIO <b class="gold" id="ratioLast">—</b></span><span>Δ80D <b id="auxD80">—</b></span><span class="tag amber" id="tagAux">—</span></div>
-      <div class="rd" id="rdAux">HOVER FOR RATIO READOUT</div>
-      <div class="note">RATIO &gt;100 → GOLD LEADING SILVER · MONETARY vs INDUSTRIAL DEMAND SPLIT.</div>
+      <div class="mini"><canvas id="cvRatio"></canvas></div>
+      <div class="stat"><span>RATIO <b class="gold" id="ratioLast">--</b></span></div>
     </div>
   </section>
 
-  <!-- INFLATION -->
-  <section id="p-infl" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Inflation · CPI / PCE</span>
-      <span class="chip month">MONTHLY</span><span class="src">BLS · FRED</span></div>
+  <!-- ML SIGNAL -->
+  <section id="g-ml" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">ML Signal</span>
+      <span class="chip ai" id="mlDir">--</span><span class="src">ML ENGINE</span></div>
+    <div class="p-bd" id="mlBody">
+      <div class="footnote">ML WARMING - first prediction within the hour<br><a href="/ai.html" style="color:var(--cyan)">VIEW FULL ML DASHBOARD</a></div>
+    </div>
+  </section>
+
+  <!-- GOLD NEWS ONLY -->
+  <section id="g-news" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Gold News</span>
+      <span class="chip near">GDELT</span></div>
+    <div class="p-bd"><ul class="nwl" id="nwList"></ul></div>
+  </section>
+
+  <!-- NAVIGATION TO OTHER DESKS -->
+  <section id="g-nav" class="panel">
+    <div class="p-hd"><span class="sq"></span><span class="ttl">Other Desks</span></div>
     <div class="p-bd">
-      <table class="tb"><thead><tr><th>METRIC</th><th class="r">Y/Y</th><th class="r">PRIOR</th><th class="r">Δ</th><th></th></tr></thead>
-      <tbody id="inflTb"></tbody></table>
-      <div class="brk"><h6>CPI BREAKDOWN · Y/Y</h6><div id="cpiBrk"></div></div>
-      <div class="inf-foot" id="infFoot">FRED SERIES · LAST OBS —</div>
-    </div>
-  </section>
-
-  <!-- REAL ECONOMY -->
-  <section id="p-realeco" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Real Economy · Cost Pressure</span>
-      <div class="segT" id="rePer"><button data-p="1M">1M</button><button data-p="3M">3M</button><button data-p="6M">6M</button><button data-p="1Y" class="on">1Y</button></div>
-      <span class="src">BLS · FRED · GDELT</span></div>
-    <div class="p-bd re">
-      <div id="reBars"></div>
-      <div class="regline">REGIME ▸ <b class="gold" id="reRegTxt">—</b>
-        <span class="stag">STAGFLATION WATCH <span class="sg" id="stagSg"><i></i><i></i><i></i></span> <b class="gold" id="stagTxt">—</b></span></div>
-      <div class="myidx">
-        <h6 class="secH">MY INFLATION · USER-CONFIGURED BASKET</h6>
-        <div class="wrow"><span>HOUSING</span><input type="range" min="0" max="50" value="30" id="wHou"><b>30%</b></div>
-        <div class="wrow"><span>FOOD</span><input type="range" min="0" max="50" value="15" id="wFood"><b>15%</b></div>
-        <div class="wrow"><span>AUTO INS.</span><input type="range" min="0" max="50" value="10" id="wIns"><b>10%</b></div>
-        <div class="wrow"><span>ENERGY</span><input type="range" min="0" max="50" value="8" id="wEne"><b>8%</b></div>
-        <div class="res">MY INDEX <b id="myIdx">—</b> <span>vs CPI <b id="myCpi">—</b> → GAP <b id="myGap">—</b></span></div>
-        <div class="dis">USER-CONFIGURED · ANALYTICAL INDEX — NOT OFFICIAL CPI · REMAINDER @ CPI WEIGHT</div>
+      <div class="navgrid">
+        <a class="navcard" href="/energy.html"><div class="nt">ENERGY</div><div class="nd">WTI - Brent - NatGas - Heating - EIA</div></a>
+        <a class="navcard" href="/agri.html"><div class="nt">AGRI</div><div class="nd">Corn - Wheat - Soy - Cattle - Water</div></a>
+        <a class="navcard" href="/fx.html"><div class="nt">FX</div><div class="nd">DXY - Majors - ECB - Dollar Strength</div></a>
+        <a class="navcard" href="/shipping.html"><div class="nt">SHIPPING</div><div class="nd">Freight - Ports - Sea - Trade Routes</div></a>
+        <a class="navcard" href="/water.html"><div class="nt">WATER</div><div class="nd">NQH2O - Rivers - Drought</div></a>
+        <a class="navcard" href="/ai.html"><div class="nt">AI / ML</div><div class="nd">Signals - Agents - Ask Analyst - Charts</div></a>
+        <a class="navcard" href="/stable.html"><div class="nt">STABLE</div><div class="nd">USDT - USDC - DAI - Peg Health</div></a>
+        <a class="navcard" href="/land.html"><div class="nt">LAND</div><div class="nd">Farmland - Cash Rent - USDA</div></a>
       </div>
-    </div>
-  </section>
-
-  <!-- FOREX -->
-  <section id="p-fx" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Forex · Majors</span>
-      <span class="chip near">—</span><span class="src">FRANKFURTER · ECB</span></div>
-    <div class="p-bd">
-      <div class="fx-strip" id="fxStrip">—</div>
-      <table class="tb"><thead><tr><th>PAIR</th><th class="r">LAST</th><th class="r">Δ</th><th>WEEK RANGE</th><th></th></tr></thead>
-      <tbody id="fxTb"></tbody></table>
-    </div>
-  </section>
-
-  <!-- ALERTS -->
-  <section id="p-alerts" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Market Alerts</span>
-      <span class="chip live">LIVE</span><span class="src" id="alCount">— ACTIVE</span></div>
-    <div class="p-bd">
-      <div class="alf" id="alF"><button class="on" data-f="all">ALL</button><button data-f="gold">GOLD</button><button data-f="macro">MACRO</button><button data-f="fx">FX</button></div>
-      <div id="alList"></div>
-    </div>
-  </section>
-
-  <!-- NEWS -->
-  <section id="p-news" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">News Intelligence</span>
-      <span class="chip near">—</span><span class="src">GDELT 2.0</span></div>
-    <div class="p-bd">
-      <div class="alf" id="nwF"><button class="on" data-f="gold">GOLD</button><button data-f="mining">MINING</button><button data-f="macro">MACRO</button></div>
-      <ul class="nwl" id="nwList"></ul>
-    </div>
-  </section>
-
-  <!-- SHIPPING -->
-  <section id="p-ship" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Shipping &amp; Freight</span>
-      <span class="chip month">INDEX · D/W</span><span class="src">PUBLIC INDEXES</span></div>
-    <div class="p-bd">
-      <table class="tb"><thead><tr><th>INDICATOR</th><th class="r">VALUE</th><th class="r">Δ</th><th>TYPE</th></tr></thead>
-      <tbody id="shipTb"></tbody></table>
-      <div class="footnote">NO LIVE SPOT FREIGHT CLAIMED — PUBLIC INDEXES &amp; NEWS INDICATORS ONLY.</div>
-    </div>
-  </section>
-
-  <!-- INSURANCE -->
-  <section id="p-ins" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Insurance Inflation</span>
-      <span class="chip month">MONTHLY</span><span class="src">BLS CPI COMPONENTS</span></div>
-    <div class="p-bd">
-      <table class="tb"><thead><tr><th>LINE</th><th class="r">Y/Y</th><th>PRESSURE</th></tr></thead>
-      <tbody id="insTb"></tbody></table>
-      <div class="brk"><h6>WHY IS IT RISING · DRIVERS</h6><div id="insWhy"></div></div>
-      <div class="footnote">OFFICIAL CPI INDEXES — NOT CONSUMER QUOTES · FRED CUSR SERIES · MONTHLY.</div>
-    </div>
-  </section>
-
-  <!-- CENTRAL BANKS -->
-  <section id="p-cb" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Central Banks · Policy</span><span class="src">REFERENCE</span></div>
-    <div class="p-bd">
-      <table class="tb"><thead><tr><th>BANK</th><th class="r">RATE</th><th>NEXT</th><th>STANCE</th><th class="r">GOLD</th></tr></thead>
-      <tbody id="cbTb"></tbody></table>
-      <div class="footnote">OFFICIAL CB GOLD PURCHASES: WGC MONTHLY REPORT (REFERENCE) · NOT YET INGESTED<br>NO LIVE QUOTE ENGINE — REFERENCE DATA ONLY.</div>
-    </div>
-  </section>
-
-  <!-- CALENDAR -->
-  <section id="p-cal" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Economic Calendar</span>
-      <span class="chip evt">EVENT-DRIVEN</span><span class="src">BLS · FED · ECB</span></div>
-    <div class="p-bd cal">
-      <table class="tb"><thead><tr><th>WHEN</th><th>EVENT</th><th class="r">CONS</th><th class="r">PRIOR</th><th>IMP</th></tr></thead>
-      <tbody id="calTb"></tbody></table>
-      <div class="react">NEXT: <b id="nextEv">—</b> · <span class="cd-live" id="cd">T-00:00:00</span><br>
-      EVENT-REACTION ENGINE: PHASE 2 — WILL MEASURE GOLD/DXY/TIPS AROUND RELEASES FROM D1 SNAPSHOTS.</div>
-    </div>
-  </section>
-
-  <!-- DATA HEALTH -->
-  <section id="p-health" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Data Source Health · Registry</span>
-      <span class="chip live" id="healthChip">—/— ONLINE</span><span class="src">PROVENANCE LEDGER</span></div>
-    <div class="p-bd">
-      <div class="ingbar" id="ingbar">MODE — · BUILT — · SOURCES —</div>
-      <table class="tb"><thead><tr><th>SOURCE</th><th>STATUS</th><th>AGE</th><th>TYPE</th><th>LAST UPDATE</th><th class="r">LATENCY</th><th>KEY</th></tr></thead>
-      <tbody id="healthTb"></tbody></table>
     </div>
   </section>
 
 </main>
 
-<!-- STATUS BAR -->
 <footer id="status">
-  <span>GIT-4.2.26 · OPR DESK-01</span>
-  <span class="mid">CONNECTING…</span>
-  <span><b>CTRL+K</b> COMMAND · WORKER→KV→D1 CACHE CHAIN</span>
+  <span>GIT-4.2.26 - GOLD DESK</span>
+  <span class="mid">NOT FINANCIAL ADVICE - EVERY VALUE SHOWS ITS SOURCE</span>
 </footer>
 
-<!-- CORE RUNTIME (the only script — renders everything from /api/*) -->
 <script>
-(function(){var _f=window.fetch;window.fetch=function(u,o){o=o||{};o.headers=o.headers||{};var t=localStorage.getItem('git-token');if(t){o.headers['x-session']=t}return _f(u,o)};if(!localStorage.getItem('git-token')){location.replace('/login.html')}})();
+(function(){var _f=window.fetch;window.fetch=function(u,o){o=o||{};o.headers=o.headers||{};var t=localStorage.getItem('git-token');if(t){o.headers['x-session']=t}return _f(u,o)}})();
 </script>
+<script>
+(function(){
+'use strict';
+var $=function(s){return document.querySelector(s)};
+var fmt=function(n,d){if(n==null||isNaN(n))return'--';d=d==null?2:d;return Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d})};
+var sgn=function(n){return n>0?'+':''};
+var cls=function(v){return(v==null?0:v)>=0?'up':'dn'};
+var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+setInterval(function(){$('#clock').textContent=new Date().toLocaleTimeString('en-GB')},1000);
+ $('#clock').textContent=new Date().toLocaleTimeString('en-GB');
 
-<script type="module" src="/js/app.js"></script>
-</body>
-</html>
-<script type="module" src="/js/app.js"></script>
+var B=null,CH=[],TF='15M';
+var view={type:'candle',ma20:true,ma50:true};
+var mouse={x:0,y:0,in:false},rafQ=false;
+var registry=[];
+
+async function getJSON(u){var r=await fetch(u);if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
+
+function reg(tag,fn){fn._tag=tag;for(var i=registry.length-1;i>=0;i--){if(registry[i]._tag===tag)registry.splice(i,1)}registry.push(fn)}
+
+function setChip(sel,delay,src){var p=$(sel);if(!p)return;var chip=p.querySelector('.chip');var map={'near-live':['NEAR LIVE','near'],eod:['EOD','month'],daily:['DAILY','month'],monthly:['MONTHLY','month'],simulated:['SIM','ai'],realtime:['LIVE','live']};var m=map[delay]||['--',''];if(chip){chip.textContent=m[0];chip.className='chip '+m[1]}var s=p.querySelector('.src');if(s&&src)s.textContent=src}
+
+function renderHero(){
+  if(!B||!B.gold)return;
+  var g=B.gold;
+  setChip('#g-hero',g.delay,String(g.source).toUpperCase());
+  $('#bigPx').textContent=fmt(g.price);
+  var p=g.changePct==null?0:g.changePct;
+  var bc=$('#bigChg');bc.className='bigchg '+cls(p);
+  bc.textContent=(p>=0?'UP +':'DN ')+fmt(Math.abs(g.change==null?0:g.change))+' ('+sgn(p)+fmt(p)+'%)';
+  $('#bid').textContent=fmt(g.bid!=null?g.bid:(g.price-0.3));
+  $('#ask').textContent=fmt(g.ask!=null?g.ask:(g.price+0.3));
+  $('#oo').textContent=fmt(g.open);$('#oh').textContent=fmt(g.high);$('#ol').textContent=fmt(g.low);
+  $('#prevC').textContent=fmt(g.prevClose);
+  var d=(B.series&&B.series.dailyCloses)||[];
+  if(d.length>25){
+    var last=d[d.length-1];
+    var w=d.length>5?(last/d[d.length-6]-1)*100:null;
+    var y=d.length>250?(last/d[d.length-251]-1)*100:null;
+    var sw=$('#stWk');if(sw){sw.textContent=sgn(w)+fmt(w,1)+'%';sw.className=cls(w)}
+    var sy=$('#st1y');if(sy){sy.textContent=sgn(y)+fmt(y,1)+'%';sy.className=cls(y)}
+  }
+  if(B.ratio)$('#ratioV').textContent=fmt(B.ratio,1);
+}
+
+function renderTape(){
+  if(!B||!B.tape)return;
+  var h=B.tape.map(function(t){
+    var ch=t.changePct==null?0:t.changePct;
+    var dg=t.price>500?1:(t.price>20?2:3);
+    return'<span class="tg"><span class="k">'+esc(t.symbol)+'</span><span class="v">'+fmt(t.price,dg)+'</span><span class="c '+cls(ch)+'">'+(ch>=0?'UP':'DN')+sgn(ch)+fmt(Math.abs(ch),1)+'%</span></span>';
+  }).join('');
+  var a=$('#tapeA'),b=$('#tapeB');if(a)a.innerHTML=h;if(b)b.innerHTML=h;
+}
+
+function renderWhy(){
+  if(!B||!B.why)return;
+  var w=B.why;
+  $('#whyMove').innerHTML='<b class="'+cls(w.movePct)+'">GOLD '+sgn(w.movePct)+fmt(w.movePct,2)+'%</b>';
+  var h='';
+  (w.drivers||[]).forEach(function(d){
+    h+='<div style="display:grid;grid-template-columns:1fr 70px 50px 20px;gap:6px;align-items:center;padding:3px 0;font:9.5px var(--mono)"><span style="color:var(--mut)">'+esc(d.name)+'</span><span class="'+(d.dir>=0?'up':'dn')+'" style="text-align:right;font-weight:600">'+esc(d.delta)+'</span><div style="height:5px;background:var(--grid);position:relative"><i style="position:absolute;inset:0 auto 0 0;background:var(--gold);width:'+Math.max(4,d.magnitude)+'%"></i></div><span style="color:var(--dim);text-align:right">'+d.magnitude+'</span></div>';
+  });
+  $('#whyDrv').innerHTML=h;
+  var cs=$('#confSegs');
+  if(cs){cs.innerHTML='';var lit=Math.round(w.confidence/100*20);for(var i=0;i<20;i++){var s=document.createElement('i');if(i<lit)s.style.cssText='flex:1;height:8px;background:var(--gold)';else s.style.cssText='flex:1;height:8px;background:var(--grid);border:1px solid var(--line2)';cs.appendChild(s)}}
+  var cv=$('#confVal');if(cv)cv.textContent=w.confidence+'%';
+}
+
+function renderMiners(){
+  if(!B||!B.miners)return;
+  setChip('#g-heat',B.miners[0]?B.miners[0].delay:'eod',B.miners[0]?String(B.miners[0].source).split('(')[0].toUpperCase():'--');
+  var avg=0;
+  B.miners.forEach(function(m){avg+=(m.changePct||0)});
+  avg=avg/Math.max(1,B.miners.length);
+  $('#hmSum').innerHTML='<span>XAU <b class="'+cls(B.gold?B.gold.changePct:0)+'">'+sgn(B.gold?B.gold.changePct:0)+fmt(B.gold?B.gold.changePct:0,1)+'%</b></span><span>AVG <b class="'+cls(avg)+'">'+sgn(avg)+fmt(avg,1)+'%</b></span><span>N='+B.miners.length+'</span>';
+  var h='';
+  B.miners.forEach(function(m){
+    var c=m.changePct==null?0:m.changePct;
+    var a=0.08+Math.min(1,Math.abs(c)/3)*0.34;
+    h+='<div class="hc" style="background:'+(c>=0?'rgba(19,217,126,'+a+')':'rgba(255,79,94,'+a+')')+'"><div class="t">'+esc(m.symbol)+'</div><div class="c '+cls(c)+'">'+sgn(c)+fmt(Math.abs(c),1)+'%</div></div>';
+  });
+  $('#hm').innerHTML=h;
+}
+
+function renderML(){
+  if(!B||!B.ml||B.ml.status==='WARMING'){return}
+  var m=B.ml;
+  var dir=$('#mlDir');if(dir){dir.textContent=m.direction;dir.className='chip '+(m.p>=0.5?'live':'ai')}
+  $('#mlBody').innerHTML='<div style="font:10.5px var(--mono);color:var(--mut);line-height:2">'+
+    'SIGNAL <b class="'+(m.p>=0.5?'up':'dn')+'">'+m.direction+' '+(m.p*100).toFixed(0)+'%</b><br>'+
+    'REGIME <b class="gold">'+esc(m.regime.state)+'</b><br>'+
+    'CONF <b class="gold">'+(m.final.score*100).toFixed(0)+'%</b> - '+m.final.agreeing+'/10 AGREE<br>'+
+    'ACC <b>'+esc(m.final.accStatus)+'</b><br>'+
+    '<a href="/ai.html" style="color:var(--cyan);font-size:9px">FULL DASHBOARD ></a></div>';
+}
+
+function renderNews(){
+  if(!B||!B.news)return;
+  var nw=$('#nwList');if(!nw)return;
+  nw.innerHTML=(B.news.gold||[]).slice(0,8).map(function(n){
+    var sc=n.sentiment==='bull'?'b':(n.sentiment==='bear'?'s':'n');
+    return'<li><time>'+new Date(n.publishedTs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</time><span class="tag">'+esc(n.source)+'</span><p>'+esc(n.title)+'</p><span class="sent '+sc+'">'+(n.sentiment==='bull'?'BULL':n.sentiment==='bear'?'BEAR':'NEUT')+'</span></li>';
+  }).join('');
+}
+
+/* ---- canvas chart ---- */
+function fit(cv){var r=cv.getBoundingClientRect();var d=Math.min(window.devicePixelRatio||1,2);cv.width=Math.max(1,Math.round(r.width*d));cv.height=Math.max(1,Math.round(r.height*d));var ctx=cv.getContext('2d');ctx.setTransform(d,0,0,d,0,0);return[ctx,r.width,r.height]}
+var sma=function(a,p){return a.map(function(_,i){return i<p-1?null:a.slice(i-p+1,i+1).reduce(function(s,v){return s+v},0)/p})};
+function drawMain(){
+  var cv=$('#chCv');if(!cv||cv.getBoundingClientRect().width<10)return;
+  var f=fit(cv),ctx=f[0],W=f[1],H=f[2];ctx.clearRect(0,0,W,H);
+  var cs=getComputedStyle(document.body);
+  var gold=cs.getPropertyValue('--gold').trim(),up=cs.getPropertyValue('--up').trim(),dn=cs.getPropertyValue('--dn').trim(),grid=cs.getPropertyValue('--grid').trim(),mut=cs.getPropertyValue('--mut').trim();
+  var d=CH,n=d.length;if(!n)return;
+  var padL=6,padR=60,padT=8,axB=16;
+  var plotH=H-padT-axB-20;
+  var m20=view.ma20?sma(d.map(function(k){return k.c}),20):[];
+  var m50=view.ma50?sma(d.map(function(k){return k.c}),50):[];
+  var lo=Infinity,hi=-Infinity;
+  d.forEach(function(k){lo=Math.min(lo,k.l);hi=Math.max(hi,k.h)});
+  [m20,m50].forEach(function(a){a.forEach(function(v){if(v!=null){lo=Math.min(lo,v);hi=Math.max(hi,v)}})});
+  var pad=(hi-lo)*.05;lo-=pad;hi+=pad;
+  var py=function(v){return padT+(hi-v)/(hi-lo)*plotH};
+  var cw=(W-padL-padR)/n,bw=Math.max(1.5,cw*.62);
+  ctx.font='9px IBM Plex Mono';ctx.textBaseline='middle';ctx.textAlign='left';
+  ctx.setLineDash([3,3]);ctx.strokeStyle=grid;ctx.fillStyle=mut;
+  for(var g=0;g<=5;g++){var v=hi-(hi-lo)*g/5,y=py(v);ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(W-padR,y);ctx.stroke();ctx.fillText(fmt(v,1),W-padR+5,y)}
+  ctx.setLineDash([]);
+  d.forEach(function(k,i){var x=padL+cw*i+cw/2,u=k.c>=k.o;ctx.strokeStyle=ctx.fillStyle=u?up:dn;ctx.beginPath();ctx.moveTo(x,py(k.h));ctx.lineTo(x,py(k.l));ctx.stroke();ctx.fillRect(x-bw/2,py(Math.max(k.o,k.c)),bw,Math.max(1,py(Math.min(k.o,k.c))-py(Math.max(k.o,k.c))))});
+  function drawMA(arr,col){ctx.beginPath();var st=false;arr.forEach(function(v,i){if(v==null)return;var x=padL+cw*i+cw/2;st?ctx.lineTo(x,py(v)):ctx.moveTo(x,py(v));st=true});ctx.strokeStyle=col;ctx.lineWidth=1.2;ctx.stroke();ctx.lineWidth=1}
+  if(view.ma20)drawMA(m20,'#2fd6e8');if(view.ma50)drawMA(m50,'#4f9cf9');
+  if(B&&B.gold){var ly=py(B.gold.price);ctx.setLineDash([5,4]);ctx.strokeStyle='rgba(255,179,0,.8)';ctx.beginPath();ctx.moveTo(padL,ly);ctx.lineTo(W-padR,ly);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=gold;ctx.fillRect(W-padR+1,ly-8,padR-4,16);ctx.fillStyle='#000';ctx.fillText(fmt(B.gold.price,1),W-padR+4,ly)}
+  if(mouse.in){var hi2=Math.max(0,Math.min(n-1,Math.floor((mouse.x-padL)/cw)));var cx=padL+cw*hi2+cw/2;ctx.setLineDash([4,4]);ctx.strokeStyle='#77828b';ctx.beginPath();ctx.moveTo(cx,padT);ctx.lineTo(cx,H-axB);ctx.stroke();ctx.setLineDash([]);var k=d[hi2],dl=(k.c/k.o-1)*100;$('#chRead').innerHTML='O <b>'+fmt(k.o,1)+'</b> H <b>'+fmt(k.h,1)+'</b> L <b>'+fmt(k.l,1)+'</b> C <b>'+fmt(k.c,1)+'</b> <b class="'+(dl>=0?'up':'dn')+'">'+sgn(dl)+fmt(dl,2)+'%</b>'}
+}
+reg('main',drawMain);
+
+function drawMini(cvId,data,color,dash){
+  var cv=document.getElementById(cvId);if(!cv)return;
+  var f=fit(cv),ctx=f[0],W=f[1],H=f[2];ctx.clearRect(0,0,W,H);
+  if(!data||data.length<2)return;
+  var lo=Math.min.apply(null,data),hi=Math.max.apply(null,data),rg=(hi-lo)||1;
+  ctx.setLineDash([3,3]);ctx.strokeStyle=getComputedStyle(document.body).getPropertyValue('--grid').trim();
+  for(var g=1;g<4;g++){var y=H*g/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  data.forEach(function(v,i){var x=4+(W-8)*i/(data.length-1);var y=6+(H-12)*(1-(v-lo)/rg);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+  ctx.strokeStyle=color;ctx.lineWidth=1.5;if(dash)ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);ctx.lineWidth=1;
+}
+function renderMinis(){
+  if(!B||!B.series)return;
+  var cs=getComputedStyle(document.body);
+  var gold=cs.getPropertyValue('--gold').trim();
+  drawMini('cvDxy',B.series.goldIdx,gold);
+  drawMini('cvRy',B.series.ryIdx||[],'#4f9cf9',true);
+  drawMini('cvRatio',B.series.ratio||[],gold);
+  if(B.corr&&B.corr.dxy!=null)$('#corrDxy').textContent=B.corr.dxy.toFixed(2);
+  if(B.corr&&B.corr.ry!=null)$('#corrRy').textContent=B.corr.ry.toFixed(2);
+  if(B.dxy)$('#stDxyV').textContent=fmt(B.dxy.price,2);
+  var ry=(B.macro&&B.macro.rows?B.macro.rows:[]).find(function(r){return r.key==='REAL10Y'});
+  if(ry)$('#stRyV').textContent=fmt(ry.value,3)+'%';
+  if(B.ratio)$('#ratioLast').textContent=fmt(B.ratio,1);
+}
+reg('minis',renderMinis);
+
+function renderAll(){renderTape();renderHero();renderWhy();renderMiners();renderML();renderNews();renderMinis();drawMain()}
+
+/* ---- WHY console ---- */
+var whyOut=$('#whyOut');
+var busy=false;
+ $('#runWhy').addEventListener('click',async function(){
+  if(busy||!B)return;busy=true;
+  var btn=$('#runWhy');btn.disabled=true;btn.textContent='ANALYZING...';
+  whyOut.innerHTML='';
+  try{
+    var r=await fetch('/api/ai/analyst',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({})});
+    var ai=await r.json();
+    whyOut.innerHTML='<div style="color:var(--dim);margin-bottom:6px">> '+esc(ai.engine)+'</div><div style="white-space:pre-wrap">'+esc(ai.text)+'</div>';
+  }catch(e){whyOut.textContent='> ERROR: '+e.message}
+  btn.disabled=false;btn.textContent='RUN ANALYST';busy=false;
+});
+
+/* ---- init ---- */
+(async function(){
+  try{
+    B=await getJSON('/api/bootstrap?tf=15M');
+    CH=B.candles||[];
+    renderAll();
+  }catch(e){
+    var s=$('#status .mid');if(s)s.textContent='ERROR: '+e.message;
+  }
+  try{
+    var r=await getJSON('/api/candles?tf=15M');
+    CH=r.candles||[];drawMain();
+  }catch(e){}
+})();
+
+setInterval(async function(){
+  if(document.hidden||!B)return;
+  try{B=await getJSON('/api/bootstrap?tf='+TF);CH=B.candles||[];renderAll()}catch(e){}
+},60000);
+
+setInterval(async function(){
+  if(document.hidden||!B)return;
+  try{
+    var q=await getJSON('/api/quote');
+    if(isFinite(q.gold)&&B.gold.prevClose){
+      B.gold.price=q.gold;B.gold.change=q.gold-B.gold.prevClose;B.gold.changePct=(q.gold/B.gold.prevClose-1)*100;
+    }
+    renderHero();renderTape();drawMain();
+  }catch(e){}
+},20000);
+
+/* ---- wiring ---- */
+ $('#chCv').addEventListener('mousemove',function(e){var r=e.currentTarget.getBoundingClientRect();mouse.x=e.clientX-r.left;mouse.y=e.clientY-r.top;mouse.in=true;if(!rafQ){rafQ=true;requestAnimationFrame(function(){rafQ=false;drawMain()})}});
+ $('#chCv').addEventListener('mouseleave',function(){mouse.in=false;drawMain()});
+ $('#tfGrp').addEventListener('click',async function(e){
+  var b=e.target.closest('button');if(!b)return;
+  document.querySelectorAll('#tfGrp button').forEach(function(x){x.classList.remove('on')});
+  b.classList.add('on');TF=b.dataset.tf;
+  try{var r=await getJSON('/api/candles?tf='+TF);CH=r.candles||[];drawMain()}catch(e){}
+});
+ $('#tCandle').addEventListener('click',function(){view.type='candle';$('#tCandle').classList.add('on');$('#tLine').classList.remove('on');drawMain()});
+ $('#tLine').addEventListener('click',function(){view.type='line';$('#tLine').classList.add('on');$('#tCandle').classList.remove('on');drawMain()});
+ $('#tMa20').addEventListener('click',function(){view.ma20=!view.ma20;$('#tMa20').classList.toggle('on');drawMain()});
+ $('#tMa50').addEventListener('click',function(){view.ma50=!view.ma50;$('#tMa50').classList.toggle('on');drawMain()});
+
+var rzT;window.addEventListener('resize',function(){clearTimeout(rzT);rzT=setTimeout(function(){registry.forEach(function(f){try{f()}catch(e){}})},150)});
+
+(function(){
+  var mode=localStorage.getItem('git-theme')||'auto';
+  var isDay=function(){return mode==='day'||(mode==='auto'&&matchMedia('(prefers-color-scheme: light)').matches)};
+  var apply=function(){document.body.classList.toggle('day',isDay());var b=document.getElementById('themeBtn');if(b)b.textContent=mode==='auto'?'AUTO':mode.toUpperCase();registry.forEach(function(f){try{f()}catch(e){}})};
+  var b=document.getElementById('themeBtn');
+  if(b)b.addEventListener('click',function(){mode=mode==='auto'?'day':(mode==='day'?'night':'auto');localStorage.setItem('git-theme',mode);apply()});
+  apply();
+})();
+})();
+</script>
 </body>
 </html>
