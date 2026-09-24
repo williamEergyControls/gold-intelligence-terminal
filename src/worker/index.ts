@@ -39,6 +39,7 @@ export default {
     if (!allow(ip)) return json({ error: 'RATE_LIMITED' }, 429);
     await ensureSecrets(env);
     try {
+      /* ============ PUBLIC (no auth) ============ */
       if (path === '/api/auth/register' && req.method === 'POST') {
         const b = await readBody(req);
         const r = await authRegister(env, String(b.name || ''), String(b.password || ''));
@@ -59,8 +60,11 @@ export default {
       if (path === '/api/health') {
         const b = await cachedBoot(env, '15M'); return json({ mode: b.v.mode, builtAt: b.v.builtAt, stale: b.stale });
       }
+
+      /* ============ AUTH REQUIRED (all operators) ============ */
       const auth = await requireAuth(req, env);
       if (!auth.valid) return json({ error: 'UNAUTHORIZED' }, 401);
+
       if (path === '/api/bootstrap') { const tf = parseTf(url.searchParams.get('tf')); const b = await cachedBoot(env, tf); return json(b.v); }
       if (path === '/api/quote') {
         const out: any = { ts: Date.now() };
@@ -71,11 +75,23 @@ export default {
       if (path === '/api/candles') {
         const tf = parseTf(url.searchParams.get('tf')); const sym = url.searchParams.get('sym') ?? 'XAU:USD';
         const c = new AppCache(env.CACHE);
-        const r = await c.wrap('c:' + sym + ':' + tf, tf === '1D' ? 3600 : 300, () => firstOk([{ name: 'yahoo', fn: () => yahoo.yahooCandles(env, sym, tf) }, { name: 'sim', fn: () => Promise.resolve(sim.simCandles(sym, tf)) }]).then(rr => ({ candles: rr.value, source: rr.provider === 'yahoo' ? 'yahoo' : 'sim', ts: Date.now() })));
+        const r = await c.wrap('cd:' + sym + ':' + tf, tf === '1D' ? 3600 : 300, () => firstOk([{ name: 'yahoo', fn: () => yahoo.yahooCandles(env, sym, tf) }, { name: 'sim', fn: () => Promise.resolve(sim.simCandles(sym, tf)) }]).then(rr => ({ candles: rr.value, source: rr.provider === 'yahoo' ? 'yahoo(unofficial)' : 'simulated', ts: Date.now() })));
         return json({ tf, sym, ...r.v, stale: r.stale, ageMs: r.ageMs });
       }
-      if (path === '/api/page/energy') { const c = new AppCache(env.CACHE); const r = await c.wrap('pe', 900, () => buildEnergyPage(env)); return json(r.v); }
-      if (path === '/api/page/agri') { const c = new AppCache(env.CACHE); const r = await c.wrap('pa', 900, () => buildAgriPage(env)); return json(r.v); }
+      if (path === '/api/page/energy') { const c = new AppCache(env.CACHE); const r = await c.wrap('pg:e', 900, () => buildEnergyPage(env)); return json(r.v); }
+      if (path === '/api/page/agri') { const c = new AppCache(env.CACHE); const r = await c.wrap('pg:a', 900, () => buildAgriPage(env)); return json(r.v); }
+      if (path === '/api/page/shipping') {
+        const c = new AppCache(env.CACHE);
+        const r = await c.wrap('pg:s', 900, async () => {
+          try {
+            const shp = await import('./providers/shipping');
+            return await shp.buildShippingPanel(env);
+          } catch (e: any) {
+            return { futures: [], indices: [{ label: 'SHIPPING DATA PENDING', value: 0, change: null, source: 'CONFIGURING', asOf: '' }], ports: [], sea: null, news: [], builtAt: Date.now() };
+          }
+        });
+        return json(r.v);
+      }
       if (path === '/api/watch') {
         const syms = (url.searchParams.get('syms') || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean).slice(0, 12);
         if (!syms.length) return json({ quotes: [] });
@@ -88,37 +104,74 @@ export default {
       if (path === '/api/why-gold') { const b = await cachedBoot(env, '15M'); return json({ ...b.v.why, movePct: b.v.gold.changePct }); }
       if (path === '/api/ai/analyst') {
         let profile: any = null; try { if (req.method === 'POST') profile = (await req.json())?.profile ?? null; } catch { }
-        const cached = profile ? null : (await env.CACHE.get('ai:cache', 'json')) as any;
+        const cached = profile ? null : (await env.CACHE.get('ai:c', 'json')) as any;
         if (cached && Date.now() - cached.ts < 600000) return json(cached);
         const b = await cachedBoot(env, parseTf(url.searchParams.get('tf')));
         const out = await aiAnalyst(env, b.v.analytics, b.v.why, { ml: (b.v as any).ml ?? null, profile, dxy: b.v.dxy.changePct, realYield: b.v.why.drivers[0]?.delta, newsSentiment: { bull: b.v.news.gold.filter((n: any) => n.sentiment === 'bull').length, bear: b.v.news.gold.filter((n: any) => n.sentiment === 'bear').length } });
-        if (!profile) await env.CACHE.put('ai:cache', JSON.stringify(out), { expirationTtl: 1200 }); return json(out);
+        if (!profile) await env.CACHE.put('ai:c', JSON.stringify(out), { expirationTtl: 1200 }); return json(out);
+      }
+      if (path === '/api/ai/ask') {
+        if (req.method !== 'POST') return json({ error: 'POST ONLY' }, 405);
+        const b = await readBody(req); const question = String(b.question || '').slice(0, 500);
+        if (!question) return json({ error: 'ENTER A QUESTION' }, 400);
+        const boot = await cachedBoot(env, '1D');
+        const mlSnap = await env.CACHE.get('ml:snap', 'json');
+        const context = { gold: { price: boot.v.gold.price, change: boot.v.gold.changePct }, silver: { price: boot.v.silver.price }, dxy: { price: boot.v.dxy.price, change: boot.v.dxy.changePct }, macro: boot.v.macro.rows.slice(0, 10), analytics: boot.v.analytics, why: boot.v.why, ml: mlSnap, newsSummary: { bull: (boot.v.news.gold || []).filter((n: any) => n.sentiment === 'bull').length, bear: (boot.v.news.gold || []).filter((n: any) => n.sentiment === 'bear').length, top: (boot.v.news.gold || []).slice(0, 5).map((n: any) => n.title) }, question };
+        const SYS = 'You are a senior gold market analyst. Use ONLY the numbers in the JSON. Be direct. Reference exact figures. Max 10 lines. End with: NOT FINANCIAL ADVICE.';
+        try {
+          const res: any = await env.AI!.run('@cf/meta/llama-3.1-8b-instruct', { messages: [{ role: 'system', content: SYS }, { role: 'user', content: JSON.stringify(context) }], max_tokens: 500, temperature: 0.3 });
+          return json({ ok: true, answer: String(res?.response || '').trim(), engine: 'llama-3.1-8b', ts: Date.now() });
+        } catch {
+          return json({ ok: true, answer: 'Gold ' + (boot.v.gold.changePct >= 0 ? 'up' : 'down') + ' ' + Math.abs(boot.v.gold.changePct || 0).toFixed(2) + '% at $' + boot.v.gold.price + '. Top driver: ' + (boot.v.why.drivers[0]?.name || 'N/A') + ' ' + (boot.v.why.drivers[0]?.delta || '') + '. ML: ' + (mlSnap ? mlSnap.direction + ' ' + (mlSnap.p * 100).toFixed(0) + '%' : 'warming') + '. NOT FINANCIAL ADVICE.', engine: 'fallback', ts: Date.now() });
+        }
       }
       if (path === '/api/search') {
         const q = (url.searchParams.get('q') || '').toLowerCase().slice(0, 100);
         if (!q || q.length < 2) return json({ results: [] });
         const results: any[] = [];
         const PAGES = [
-          { t: 'Gold Terminal', u: '/gold.html', k: 'gold xau price chart why moving miners heatmap' },
-          { t: 'Energy Terminal', u: '/energy.html', k: 'energy oil wti brent natural gas eia crude' },
-          { t: 'Agri Terminal', u: '/agri.html', k: 'agri corn wheat soybean cattle water weather usda' },
-          { t: 'FX Terminal', u: '/fx.html', k: 'fx forex dollar dxy euro yen currency' },
-          { t: 'Water Terminal', u: '/water.html', k: 'water nq h2o california drought river usgs' },
-          { t: 'Land Terminal', u: '/land.html', k: 'land farm farmland acre rent usda nass' },
-          { t: 'Stablecoin Terminal', u: '/stable.html', k: 'stablecoin tether usdt usdc dai peg crypto' },
-          { t: 'Shipping Terminal', u: '/shipping.html', k: 'shipping freight container port baltic suez' },
-          { t: 'AI Analysis', u: '/ai.html', k: 'ai analyst machine learning ml question ask' },
+          { t: 'Gold Terminal', u: '/gold.html', k: 'gold xau price chart why miners' },
+          { t: 'Energy Terminal', u: '/energy.html', k: 'energy oil wti brent gas eia' },
+          { t: 'Agri Terminal', u: '/agri.html', k: 'agri corn wheat cattle water usda' },
+          { t: 'FX Terminal', u: '/fx.html', k: 'fx forex dollar dxy euro currency' },
+          { t: 'Water Terminal', u: '/water.html', k: 'water drought river usgs nq' },
+          { t: 'Land Terminal', u: '/land.html', k: 'land farm acre rent usda nass' },
+          { t: 'Stablecoin Terminal', u: '/stable.html', k: 'stablecoin tether usdt crypto peg' },
+          { t: 'Shipping Terminal', u: '/shipping.html', k: 'shipping freight port baltic suez' },
+          { t: 'AI Analysis', u: '/ai.html', k: 'ai analyst ml question deep' },
         ];
         for (const p of PAGES) { if (p.t.toLowerCase().includes(q) || p.k.includes(q)) results.push({ type: 'PAGE', title: p.t, url: p.u, source: 'NAV' }); }
-        try { const b = await cachedBoot(env, '15M'); const all = [...(b.v.news.gold || []), ...(b.v.news.mining || []), ...(b.v.news.macro || [])]; for (const n of all) { if (n.title?.toLowerCase().includes(q)) results.push({ type: 'NEWS', title: n.title, url: n.url, source: n.source }); if (results.length > 15) break; } } catch { }
+        try {
+          const b = await cachedBoot(env, '15M');
+          const all = [...(b.v.news.gold || []), ...(b.v.news.mining || []), ...(b.v.news.macro || [])];
+          for (const n of all) { if (n.title?.toLowerCase().includes(q)) results.push({ type: 'NEWS', title: n.title, url: n.url, source: n.source }); if (results.length > 15) break; }
+        } catch { }
         return json({ results: results.slice(0, 15) });
       }
+
+      /* ============ ADMIN ONLY ============ */
       if (auth.role !== 'admin') return json({ error: 'FORBIDDEN' }, 403);
       if (path === '/api/env') { const mk = (n: string) => { const v = secret(env, n); return v ? 'SET' : 'MISSING'; }; return json({ METALS_API_KEY: mk('METALS_API_KEY'), FRED_API_KEY: mk('FRED_API_KEY'), ADMIN_TOKEN: mk('ADMIN_TOKEN') }); }
       if (path === '/api/ml/train') { const tr = await trainAndStore(env); await predictAndStore(env); return json(tr); }
-      return json({ error: 'UNKNOWN' }, 404);
-    } catch (e) { return json({ error: 'FAIL', detail: String((e as Error).message).slice(0, 200) }, 502); }
+      if (path === '/api/admin/diagnostics') {
+        const b = await cachedBoot(env, '15M');
+        const ml = await env.CACHE.get('ml:snap', 'json');
+        const models = await env.DB.prepare('SELECT id, name, trained_at, active FROM ml_models ORDER BY id DESC LIMIT 5').all();
+        const pc = await env.DB.prepare('SELECT COUNT(*) as n FROM predictions').first();
+        const oc = await env.DB.prepare('SELECT COUNT(*) as n, SUM(correct) as c FROM prediction_outcomes').first();
+        const uc = await env.DB.prepare('SELECT COUNT(*) as n FROM users').first();
+        const sc = await env.DB.prepare('SELECT COUNT(*) as n FROM sessions WHERE expires_at > ?').bind(Date.now()).first();
+        return json({
+          worker: { mode: b.v.mode, builtAt: b.v.builtAt, providers: b.v.health },
+          ml: { models: models.results, predictions: pc?.n ?? 0, graded: oc?.n ?? 0, accuracy: oc?.n > 0 ? ((oc?.c ?? 0) / oc.n * 100).toFixed(1) + '%' : 'PENDING', signal: ml ? { dir: ml.direction, p: ml.p, regime: ml.regime?.state } : null },
+          auth: { users: uc?.n ?? 0, sessions: sc?.n ?? 0 },
+          dataFlow: { gold: 'gold-api.com > Yahoo > metals.dev', news: 'GDELT + Llama hourly', macro: 'FRED (CPI/PCE/yields/SOFR)', energy: 'Yahoo + EIA', agri: 'Yahoo + USGS + Open-Meteo', shipping: 'Yahoo + indices + marine', stable: 'CoinGecko', ml: 'hourly cron, weekly train, 5d grade' },
+        });
+      }
+      return json({ error: 'UNKNOWN_ENDPOINT' }, 404);
+    } catch (e) { return json({ error: 'UPSTREAM_FAILURE', detail: String((e as Error).message).slice(0, 200) }, 502); }
   },
+
   async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
     await ensureSecrets(env);
     ctx.waitUntil((async () => {
@@ -130,7 +183,7 @@ export default {
     })());
     if (new Date(event.scheduledTime).getUTCMinutes() % 15 === 0) {
       ctx.waitUntil((async () => {
-        try { const c = new AppCache(env.CACHE); await c.write('pe', await buildEnergyPage(env), 900); await c.write('pa', await buildAgriPage(env), 900); } catch { }
+        try { const c = new AppCache(env.CACHE); await c.write('pg:e', await buildEnergyPage(env), 900); await c.write('pg:a', await buildAgriPage(env), 900); } catch { }
       })());
     }
     if (event.cron !== '0 * * * *') return;
