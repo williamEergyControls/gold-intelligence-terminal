@@ -2,15 +2,9 @@ import type { Candle, Env, Quote, Tf } from '../types';
 import { fetchJson } from './provider';
 
 const Y: Record<string, string> = {
-  'XAU:USD': 'GC=F',   // gold futures (spot proxy)
-  'XAG:USD': 'SI=F',
-  'DXY': 'DX-Y.NYB',
+  'XAU:USD': 'GC=F', 'XAG:USD': 'SI=F', 'DXY': 'DX-Y.NYB',
   'GDX': 'GDX', 'SPX': '^GSPC', 'WTI': 'CL=F',
-  'GOLD': 'B',    // Barrick = B on NYSE since May 2025
-  'AGI': 'AGI',   // Alamos Gold
-  // ENERGY
   'CL1': 'CL=F', 'CO1': 'BZ=F', 'NG1': 'NG=F', 'HO1': 'HO=F', 'XB1': 'RB=F',
-  // AGRI
   'C1': 'ZC=F', 'S1': 'ZS=F', 'W1': 'ZW=F', 'CT1': 'CT=F', 'SB1': 'SB=F',
   'LC1': 'LE=F', 'FC1': 'GF=F',
 };
@@ -26,7 +20,6 @@ const TF_MAP: Record<Tf, { interval: string; range: string }> = {
 
 async function chart(sym: string, tf: Tf): Promise<{ meta: any; candles: Candle[] }> {
   const { interval, range } = TF_MAP[tf] ?? TF_MAP['15M'];
-  // Unofficial endpoint: two hosts, retry once — 429/999s happen; failover chain covers the rest.
   let lastErr: unknown;
   for (const host of ['query1.finance.yahoo.com', 'query2.finance.yahoo.com']) {
     try {
@@ -51,6 +44,7 @@ async function chart(sym: string, tf: Tf): Promise<{ meta: any; candles: Candle[
 export async function yahooCandles(_env: Env, sym: string, tf: Tf): Promise<Candle[]> {
   return (await chart(sym, tf)).candles;
 }
+
 export async function yahooQuote(_env: Env, sym: string): Promise<Quote> {
   const { meta, candles } = await chart(sym, '5M');
   const price = typeof meta.regularMarketPrice === 'number' ? meta.regularMarketPrice : candles[candles.length - 1].c;
@@ -67,9 +61,10 @@ export async function yahooQuote(_env: Env, sym: string): Promise<Quote> {
   return q;
 }
 
-/* ---- batch quotes for the miners heatmap (cron-warmed, cached 1h) ---- */
 export async function yahooBatchQuotes(symbols: string[]): Promise<Quote[]> {
-  const settled = await Promise.allSettled(symbols.map(s => chart(s, '5M').then(r => ({ s, m: r.meta, cs: r.candles }))));
+  const settled = await Promise.allSettled(
+    symbols.map(s => chart(s, '5M').then(r => ({ s, m: r.meta, cs: r.candles })))
+  );
   const out: Quote[] = [];
   for (const r of settled) {
     if (r.status !== 'fulfilled' || !r.value || !r.value.cs || !r.value.cs.length) continue;
