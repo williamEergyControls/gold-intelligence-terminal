@@ -137,23 +137,7 @@ html,body{overflow-x:hidden}
 </footer>
 
 <script>window.PAGE_CONFIG = { type: 'agri', api: '/api/page/agri', sym: 'C1', heroUnit: 'CENTS/BU' };</script>
-<script>
-(function(){
-  var _fetch = window.fetch;
-  window.fetch = function(url, opts) {
-    opts = opts || {};
-    opts.headers = opts.headers || {};
-    var token = localStorage.getItem('git-token');
-    if (token) {
-      opts.headers['x-session'] = token;
-    }
-    return _fetch(url, opts);
-  };
-  if (!localStorage.getItem('git-token')) {
-    location.replace('/login.html');
-  }
-})();
-</script>
+<script>(function(){var _f=window.fetch;window.fetch=function(u,o){o=o||{};o.headers=o.headers||{};var t=localStorage.getItem('git-token');if(t){o.headers['x-session']=t}return _f(u,o)};if(!localStorage.getItem('git-token')){location.replace('/login.html')}})();</script>
 <script>window.PAGE_CONFIG = { type: 'argi', api: '/api/page/argi', sym: 'CL1', heroUnit: '$/BBL' };</script>
 <script src="/js/pages.js"></script>
 </body>
