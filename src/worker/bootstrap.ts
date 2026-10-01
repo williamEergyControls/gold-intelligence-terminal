@@ -57,6 +57,8 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
   const cache = new AppCache(env.CACHE);
 
     // ---- gold: gold-api.com (free, no key) → yahoo → metals.dev (quota backup) → sim ----
+  // Stagger upstream calls to avoid Yahoo rate limits
+  await new Promise(r => setTimeout(r, Math.random() * 500));
   const gold = (await firstOk<Quote>([
     { name: 'gold-api.com', fn: () => goldapicom.goldapiComQuote('XAU:USD') },
     { name: 'yahoo', fn: () => yahoo.yahooQuote(env, 'XAU:USD') },
