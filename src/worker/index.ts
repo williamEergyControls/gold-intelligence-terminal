@@ -36,7 +36,7 @@ function json(v: unknown, status: number): Response {
   return new Response(JSON.stringify(v), { status, headers: JH });
 }
 async function cachedBoot(env: Env, tf: Tf) {
-  return new AppCache(env.CACHE).wrap('boot:' + tf, 30, () => buildBootstrap(env, tf));
+  return new AppCache(env.CACHE).wrap('boot:' + tf, 60, () => buildBootstrap(env, tf));
 }
 function parseTf(s: string | null): Tf { return TFS.includes(s as Tf) ? (s as Tf) : '15M'; }
 
