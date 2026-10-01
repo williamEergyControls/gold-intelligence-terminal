@@ -82,8 +82,33 @@ export default {
       if (!auth.valid) return json({ error: 'UNAUTHORIZED', hint: 'sign in first' }, 401);
 
       if (path === '/api/bootstrap') {
-        const boot = await cachedBoot(env, parseTf(url.searchParams.get('tf')));
-        return json(boot.v, 200);
+        const tf = parseTf(url.searchParams.get('tf'));
+        const cache = new AppCache(env.CACHE);
+        const r = await cache.wrap('boot:' + tf, 60, async () => {
+          try {
+            return await buildBootstrap(env, tf);
+          } catch (e) {
+            // If bootstrap fails, return a minimal valid response instead of crashing
+            console.error('BOOTSTRAP_FAIL', String((e as Error).message).slice(0, 200));
+            return {
+              mode: 'live', builtAt: Date.now(), tf,
+              gold: { symbol: 'XAU:USD', price: 0, currency: 'USD', source: 'degraded', delay: 'near-live', ts: Date.now() },
+              silver: { symbol: 'XAG:USD', price: 0, currency: 'USD', source: 'degraded', delay: 'near-live', ts: Date.now() },
+              dxy: { symbol: 'DXY', price: 0, currency: 'USD', source: 'degraded', delay: 'near-live', ts: Date.now() },
+              ratio: null, tape: [], candles: [], miners: [], fx: [],
+              series: { goldIdx: [], dxyIdx: [], ryIdx: [], ratio: [], dailyCloses: [] },
+              corr: { dxy: null, ry: null },
+              macro: { rows: [], cpiBreakdown: [], components: { cpi: 3.1, housing: 4.2, food: 2.7, autoins: 11.8, energy: -1.9 } },
+              realeconomy: { periods: {} },
+              alerts: [], news: { gold: [], mining: [], macro: [] },
+              reference: { shipping: [], insurance: [], centralBanks: [], calendar: [] },
+              analytics: { symbol: 'XAU:USD', ts: Date.now(), last: 0, source: 'degraded', delay: 'near-live', indicators: { sma20: null, sma50: null, sma200: null, rsi14: 50, macdHist: 0, atr14: 0, annVolPct: 0, maxDrawdownPct: 0, currentDrawdownPct: 0, distTo52wHighPct: 0, volumeZ: null }, scores: { trend: 50, momentum: 50, volume: 50, volatilityRisk: 50, drawdownRisk: 50, relativeStrength: 50, composite: 50 }, label: 'NEUTRAL' },
+              why: { movePct: 0, drivers: [], evidence: [], counter: [], confidence: 0, method: 'DEGRADED', ts: Date.now() },
+              health: [], ml: null,
+            };
+          }
+        });
+        return json(r.v, 200);
       }
       if (path === '/api/candles') {
         const tf = parseTf(url.searchParams.get('tf'));
