@@ -74,12 +74,12 @@ export async function trainAndStore(env: Env): Promise<{ ok: boolean; metrics?: 
   } catch (e) { return { ok: false, error: String((e as Error).message).slice(0, 200) }; }
 }
 
-export async function predictAndStore(env: Env): Promise<void> {
+export async function predictAndStore(env: Env): Promise<{ ok: boolean; error?: string }> {
   try {
     const row = await env.DB.prepare('SELECT weights,metrics,trained_at FROM ml_models WHERE active=1 ORDER BY id DESC LIMIT 1').first<{ weights: string; metrics: string; trained_at: number }>();
     const d = await loadInputs(env);
     const i = d.gold.length - 1;
-    const f = featuresAt(d, d.t, i); if (!f) return;
+    const f = featuresAt(d, d.t, i); if (!f) return { ok: false, error: 'features unavailable for latest bar' };
     const fmap: Record<string, number> = {}; FEATURE_NAMES.forEach((n, k) => fmap[n] = f[k]);
     const obs: number[][] = [];
     const volMean = volAnn(d.gold, 60);
@@ -130,11 +130,17 @@ export async function predictAndStore(env: Env): Promise<void> {
       .bind(ts, HORIZON, snap.p, snap.direction, regime.state, JSON.stringify(agents.map(a => `${a.name}:${a.p.toFixed(2)}`))).run();
     await env.CACHE.put('ml:snap', JSON.stringify(snap), { expirationTtl: 86400 });
     await persistDailyBars(env, d);
-  } catch (e) { console.error('ML_PREDICT_FAIL', String((e as Error).message).slice(0, 300)); }
+    return { ok: true };
+  } catch (e) {
+    const error = String((e as Error).message).slice(0, 300);
+    console.error('ML_PREDICT_FAIL', error);
+    return { ok: false, error };
+  }
 }
 
 /** Grade predictions whose 5-day horizon has elapsed — real performance measurement. */
-export async function gradeOutcomes(env: Env): Promise<void> {
+export async function gradeOutcomes(env: Env): Promise<{ ok: boolean; graded: number; error?: string }> {
+  let graded = 0;
   try {
     const d = await loadInputs(env);
     const old = await env.DB.prepare(
@@ -143,8 +149,10 @@ export async function gradeOutcomes(env: Env): Promise<void> {
     for (const r of old.results ?? []) {
       const idx = d.t.findIndex(t => t >= r.ts);
       if (idx < 0) continue;
+      // need a full 5-bar horizon after the base bar — never grade on a truncated window
+      if (idx + HORIZON > d.gold.length - 1) continue;
       const base = d.gold[idx];
-      const fut = d.gold[Math.min(d.gold.length - 1, idx + HORIZON)];
+      const fut = d.gold[idx + HORIZON];
       if (fut == null) continue;
       const ret5 = (fut / base - 1) * 100;
       const pred = await env.DB.prepare('SELECT p_up FROM predictions WHERE ts=? AND horizon_days=?').bind(r.ts, HORIZON).first<{ p_up: number }>();
@@ -152,8 +160,14 @@ export async function gradeOutcomes(env: Env): Promise<void> {
       const correct = (pred.p_up > 0.5 ? 1 : 0) === (ret5 > 0 ? 1 : 0) ? 1 : 0;
       await env.DB.prepare('INSERT OR REPLACE INTO prediction_outcomes(ts,horizon_days,realized_ret,correct) VALUES(?,?,?,?)')
         .bind(r.ts, HORIZON, +ret5.toFixed(3), correct).run();
+      graded++;
     }
-  } catch (e) { console.error('ML_GRADE_FAIL', String((e as Error).message).slice(0, 300)); }
+    return { ok: true, graded };
+  } catch (e) {
+    const error = String((e as Error).message).slice(0, 300);
+    console.error('ML_GRADE_FAIL', error);
+    return { ok: false, graded, error };
+  }
 }
 
 /** One close/day per symbol into D1 — training-history insurance (idempotent upserts). */
