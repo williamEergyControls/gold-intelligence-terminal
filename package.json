@@ -4,14 +4,16 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "typecheck": "tsc --noEmit -p .",
+    "build": "tsc --noEmit -p . && wrangler deploy --dry-run --outdir .wrangler/dry-run",
     "deploy": "wrangler deploy",
     "tail": "wrangler tail",
     "db:migrate:local": "wrangler d1 migrations apply gold-terminal --local",
     "db:migrate:remote": "wrangler d1 migrations apply gold-terminal --remote"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250110.0",
-    "typescript": "^5.7.0",
-    "wrangler": "^4.0.0"
+    "@cloudflare/workers-types": "^5.20260930.0",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.145.0"
   }
 }

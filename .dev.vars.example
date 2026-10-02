@@ -1,4 +1,6 @@
-METALS_API_KEY=
-FRED_API_KEY=
-BLS_API_KEY=
-SEC_USER_AGENT=Jane Doe jane.doe@example.com
+# production keys live in Cloudflare Secrets Store (store b880f1ab4595433da0a4ce5f6a90d71f)
+# and are bound in wrangler.jsonc → secrets_store_secrets. they are NOT read from here.
+# in `wrangler dev --local` those bindings resolve against the LOCAL secrets store,
+# so the admin console shows them as "not found" until created locally — expected.
+# never commit a real .dev.vars (it is gitignored).
+AI_ENABLED=true
