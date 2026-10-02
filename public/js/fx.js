@@ -95,10 +95,11 @@ document.querySelectorAll('[data-tf]').forEach(b=>b.addEventListener('click',()=
 
 /* init */
 (async function(){
-  try{
-    B=await getJSON('/api/bootstrap?tf=1D',AH);
-    renderAll();
-  }catch(e){$('#status .mid').textContent='API ERROR - '+String(e&&e.message||e);}
+  for(let i=0,wait=4000;;i++,wait=Math.min(wait*2,30000)){
+    try{B=await getJSON('/api/bootstrap?tf=1D',AH);break;}
+    catch(e){$('#status .mid').textContent='DATA TEMPORARILY UNAVAILABLE - '+String(e&&e.message||e)+' - RETRYING IN '+Math.round(wait/1000)+'s';await new Promise(r=>setTimeout(r,wait));}
+  }
+  try{renderAll();}catch(e){$('#status .mid').textContent='RENDER ERROR - '+String(e&&e.message||e);}
   try{
     const r=await getJSON('/api/candles?sym=DXY&tf=1D',AH);
     CH=r.candles||[];drawChart();

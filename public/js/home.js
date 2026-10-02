@@ -24,9 +24,9 @@ fetch('/api/auth/me').then(function (r) { return r.json(); }).then(function (d) 
   localStorage.setItem('git-role', d.role || 'operator');
   if (d.role === 'admin') {
     var nav = document.querySelector('.gochips');
-    if (nav && !document.querySelector('a[href="/diagnostics.html"]')) {
+    if (nav && !document.querySelector('a[href="/admin.html"]')) {
       var a = document.createElement('a');
-      a.href = '/diagnostics.html'; a.className = 'gchip'; a.style.textDecoration = 'none'; a.textContent = 'DIAG';
+      a.href = '/admin.html'; a.className = 'gchip'; a.style.textDecoration = 'none'; a.style.color = 'var(--gold)'; a.textContent = 'ADMIN';
       nav.appendChild(a);
     }
   }
@@ -250,13 +250,20 @@ if (runA) runA.addEventListener('click', async function () {
 });
 
 (async function init() {
-  try {
-    B = await getJSON('/api/bootstrap?tf=1D');
-    renderAll();
-  } catch (e) {
-    var s = $('#status .mid');
-    if (s) s.textContent = 'ERROR: ' + String(e && e.message || e);
+  // retry with backoff — 503 DATA_TEMPORARILY_UNAVAILABLE is transient
+  for (var i = 0, wait = 4000; ; i++, wait = Math.min(wait * 2, 30000)) {
+    try {
+      B = await getJSON('/api/bootstrap?tf=1D');
+    } catch (e) {
+      var s = $('#status .mid');
+      if (s) s.textContent = 'DATA TEMPORARILY UNAVAILABLE - ' + String(e && e.message || e) + ' - RETRYING IN ' + Math.round(wait / 1000) + 's';
+      await new Promise(function (r) { setTimeout(r, wait); });
+      continue;
+    }
+    break;
   }
+  try { renderAll(); } catch (e) { var se = $('#status .mid'); if (se) se.textContent = 'RENDER ERROR: ' + String(e && e.message || e); }
+  var ok = $('#status .mid'); if (ok && B.stale) ok.textContent = 'SHOWING LAST GOOD DATA (STALE ' + Math.round((B.ageMs || 0) / 1000) + 's) - UPSTREAM RETRYING';
 })();
 
 setInterval(async function () {
