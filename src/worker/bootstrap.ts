@@ -56,41 +56,39 @@ const nowHM = () => new Date().toLocaleTimeString('en-GB', { hour: '2-digit', mi
 export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml: any }> {
   const cache = new AppCache(env.CACHE);
 
-    // ---- gold: gold-api.com (free, no key) → yahoo → metals.dev (quota backup) → sim ----
-  // Stagger upstream calls to avoid Yahoo rate limits
-  await new Promise(r => setTimeout(r, Math.random() * 500));
-  const gold = (await firstOk<Quote>([
+  // ---- gold: gold-api.com (free, no key) → yahoo → metals.dev (quota backup) → stooq → sim ----
+  const gold = ({ ...(await firstOk<Quote>([
     { name: 'gold-api.com', fn: () => goldapicom.goldapiComQuote('XAU:USD') },
     { name: 'yahoo', fn: () => yahoo.yahooQuote(env, 'XAU:USD') },
     { name: 'metals.dev', fn: () => metalsdev.metalsdevQuote(env, 'XAU:USD') },
     { name: 'stooq', fn: async () => (await stooq.stooqQuotes(env, ['XAU:USD']))[0] },
     { name: 'simulated', fn: () => Promise.resolve(sim.simQuote('XAU:USD')) },
-  ])).value;
+  ])).value }) as Quote; // copy: providers memoize quote objects, never mutate the memo
   if (gold.prevClose == null) {
     const pc = await env.CACHE.get('prevclose:XAU:USD', 'json') as { c: number } | null;
     if (pc) { gold.prevClose = pc.c; gold.change = gold.price - pc.c; gold.changePct = (gold.price / pc.c - 1) * 100; }
   }
-  const silver = (await firstOk<Quote>([
+  const silver = ({ ...(await firstOk<Quote>([
     { name: 'gold-api.com', fn: () => goldapicom.goldapiComQuote('XAG:USD') },
     { name: 'yahoo', fn: () => yahoo.yahooQuote(env, 'XAG:USD') },
     { name: 'metals.dev', fn: () => metalsdev.metalsdevQuote(env, 'XAG:USD') },
     { name: 'simulated', fn: () => Promise.resolve(sim.simQuote('XAG:USD')) },
-  ])).value;
-  // GoldAPI.io DAILY SEED (cron writes KV 'goldio:daily' once/day — ~60 calls/month):
-  // fills real prevClose / OHLC / bid / ask without touching the request chain.
+  ])).value }) as Quote;
+  // GoldAPI.io DAILY SEED (cron writes KV 'goldio:daily' ~1x/day, 2 calls).
+  // only prevClose is used, and only if the seed was taken after the most recent
+  // 17:00 ET session roll (22:00 UTC, conservative across DST). bid/ask/OHLC from a
+  // snapshot hours old must never sit next to a live price.
   try {
     const seed = (await env.CACHE.get('goldio:daily', 'json')) as any;
-    if (seed && Date.now() - seed.ts < 26 * 36e5) {
-      for (const [q, s] of [[gold, seed.gold], [silver, seed.silver]] as [Quote, any][]) {
-        if (q.prevClose == null && isFinite(Number(s?.prevClose))) {
-          q.prevClose = Number(s.prevClose);
-          q.change = q.price - q.prevClose; q.changePct = (q.price / q.prevClose - 1) * 100;
+    const now = new Date();
+    let roll = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 22);
+    if (roll > now.getTime()) roll -= 864e5;
+    if (seed && seed.ts >= roll) {
+      for (const [q, sd] of [[gold, seed.gold], [silver, seed.silver]] as [Quote, any][]) {
+        const pc = Number(sd?.prevClose);
+        if (q.prevClose == null && isFinite(pc) && pc > 0) {
+          q.prevClose = pc; q.change = q.price - pc; q.changePct = (q.price / pc - 1) * 100;
         }
-        if (isFinite(Number(s?.open))) q.open ??= Number(s.open);
-        if (isFinite(Number(s?.high))) q.high ??= Number(s.high);
-        if (isFinite(Number(s?.low))) q.low ??= Number(s.low);
-        if (isFinite(Number(s?.bid))) q.bid = Number(s.bid);
-        if (isFinite(Number(s?.ask))) q.ask = Number(s.ask);
       }
     }
   } catch { /* seed optional */ }
@@ -123,15 +121,17 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
       { name: 'simulated', fn: () => Promise.resolve(sim.simCandles('XAG:USD', '1D')) },
     ]).then(r => r.value)).map(c => c.c);
     let ry: number[] = [];
+    // no FRED → empty series (corr = null, chart empty). the old fallback fabricated a
+    // straight-line "real yield" and correlated gold against it.
     try { ry = (await fred.fredSeriesTail(env, 'DFII10', 80)).map(p => p.v); }
-    catch { ry = Array.from({ length: 60 }, (_, i) => 1.7 - i * 0.004); }
+    catch (e) { console.error('FRED_DFII10_FAIL', String((e as Error)?.message ?? e).slice(0, 120)); ry = []; }
     const n80 = Math.min(g.length, d.length, 80);
     const m = Math.min(g.length, s.length, 80);
     const ratio: number[] = [];
     for (let i = 0; i < m; i++) ratio.push(g[g.length - m + i] / s[s.length - m + i]);
     const rn = Math.min(g.length, ry.length, 80);
     return {
-      goldIdx: idxA(g.slice(-n80)), dxyIdx: idxA(d.slice(-n80)), ryIdx: idxA(ry.slice(-rn)), ratio,
+      goldIdx: idxA(g.slice(-n80)), dxyIdx: idxA(d.slice(-n80)), ryIdx: rn ? idxA(ry.slice(-rn)) : [], ratio,
       corrDxy: corr(g.slice(-n80), d.slice(-n80)), corrRy: corr(g.slice(-rn), ry.slice(-rn)),
       goldDaily: g, dxyDaily: d, ryDaily: ry,
     };
@@ -228,6 +228,7 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
   if (us10) tape.push({ symbol: 'US10Y', price: us10.value, prevClose: us10.prior, change: us10.value - us10.prior, changePct: us10.value - us10.prior, currency: '%', source: us10.source, delay: 'daily', ts: Date.parse(us10.asOf) });
 
   const health = healthSnapshot({
+    'gold-api.com': 'near-live' as const,
     'metals.dev': secret(env, 'METALS_API_KEY') ? ('near-live' as const) : null,
     'yahoo': 'near-live' as const,
     'stooq': 'eod' as const,

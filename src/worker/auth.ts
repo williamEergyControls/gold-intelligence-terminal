@@ -49,7 +49,7 @@ export async function authRegister(env: Env, name: string, password: string): Pr
 export async function authLogin(env: Env, name: string, password: string): Promise<AuthResult> {
   if (!validName(name)) return { ok: false, error: 'INVALID OPERATOR NAME' };
   const row = await env.DB.prepare('SELECT id, pass_hash, salt, role, login_attempts, locked_until FROM users WHERE name = ?')
-    .bind(name.trim()).first<{ id: number; pass_hash: string; salt: string; role: string; login_attempts: number; locked_until: number | null }>();
+    .bind(name.trim()).first<{ id: number; pass_hash: string; salt: string; role: string | null; login_attempts: number; locked_until: number | null }>();
   if (!row) return { ok: false, error: 'OPERATOR NOT FOUND - SIGN UP FIRST' };
   if (row.locked_until && Date.now() < row.locked_until) {
     return { ok: false, error: `LOCKED - TRY AGAIN IN ${Math.ceil((row.locked_until - Date.now()) / 60000)} MIN` };
@@ -66,16 +66,18 @@ export async function authLogin(env: Env, name: string, password: string): Promi
   const token = randHex(32);
   await env.DB.prepare('INSERT INTO sessions(token,user_id,created_at,expires_at) VALUES(?,?,?,?)')
     .bind(token, row.id, Date.now(), Date.now() + SESSION_DAYS * 86400000).run();
-  return { ok: true, token, name: name.trim(), role: row.role };
+  return { ok: true, token, name: name.trim(), role: row.role || 'operator' };
 }
 
-export async function authVerify(env: Env, token: string): Promise<{ valid: boolean; name?: string; role?: string }> {
+export interface AuthUser { valid: boolean; id?: number; name?: string; role?: string }
+
+export async function authVerify(env: Env, token: string): Promise<AuthUser> {
   if (!token || token.length !== 64) return { valid: false };
   const row = await env.DB.prepare(
-    'SELECT u.name, u.role FROM sessions s JOIN users u ON s.user_id=u.id WHERE s.token=? AND s.expires_at>?'
-  ).bind(token, Date.now()).first<{ name: string; role: string }>();
+    'SELECT u.id, u.name, u.role FROM sessions s JOIN users u ON s.user_id=u.id WHERE s.token=? AND s.expires_at>?'
+  ).bind(token, Date.now()).first<{ id: number; name: string; role: string | null }>();
   if (!row) return { valid: false };
-  return { valid: true, name: row.name, role: row.role };
+  return { valid: true, id: row.id, name: row.name, role: row.role || 'operator' };
 }
 
 export async function authLogout(env: Env, token: string): Promise<void> {
@@ -84,7 +86,7 @@ export async function authLogout(env: Env, token: string): Promise<void> {
 }
 
 /* ---- middleware: verify session from request ---- */
-export async function requireAuth(req: Request, env: Env): Promise<{ valid: boolean; name?: string; role?: string }> {
+export async function requireAuth(req: Request, env: Env): Promise<AuthUser> {
   const token = req.headers.get('x-session') || new URL(req.url).searchParams.get('token') || '';
   return authVerify(env, token);
 }

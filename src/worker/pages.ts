@@ -2,6 +2,7 @@ import type { Env, Quote } from './types';
 import { AppCache } from './cache';
 import * as yahoo from './providers/yahoo';
 import * as sim from './providers/simulated';
+import { eiaRows, type EiaRow } from './providers/eia';
 
 const ENERGY: { sym: string; name: string; unit: string }[] = [
   { sym: 'CL1', name: 'WTI Crude Front', unit: '$/bbl' },
@@ -53,6 +54,11 @@ export async function buildEnergyPage(env: Env): Promise<any> {
     spreads.push({ label: '3-2-1 Crack Spread', value: (prod - cl.price).toFixed(2) + ' $/bbl [CALC]', change: null });
   }
 
+  // EIA weekly — own 6h cache so the 15-min page rebuild never re-hits EIA
+  let eia: EiaRow[] = [];
+  try { eia = (await new AppCache(env.CACHE).wrap('eia:rows', 21600, () => eiaRows(env))).v; }
+  catch (e) { console.error('EIA_FAIL', String((e as Error)?.message ?? e).slice(0, 200)); }
+
   const mode = monitor[0]?.source === 'simulated' ? 'simulated' : 'live';
   return {
     mode, builtAt: Date.now(), tf: '1D',
@@ -64,7 +70,7 @@ export async function buildEnergyPage(env: Env): Promise<any> {
       .map(q => ({ symbol: q.symbol, name: q.name ?? q.symbol, price: q.price, changePct: q.changePct ?? 0, note: q.unit })),
     ratios: xau && cl ? [{ label: 'GOLD / OIL', value: +(xau.price / cl.price).toFixed(1), unit: 'barrels per ounce' }] : [],
     spreads,
-    eia: [],
+    eia,
     news: [],
     calendar: [
       { when: 'WED 09:30', event: 'EIA Petroleum Status', note: 'weekly stocks' },
