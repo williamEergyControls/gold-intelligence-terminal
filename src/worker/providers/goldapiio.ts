@@ -16,7 +16,8 @@ export async function goldapiIoSeed(env: Env): Promise<GoldIoSeed> {
   const key = secret(env, 'GOLDAPI_KEY');
   if (!key) throw new Error('GOLDAPI_KEY not configured');
   const get = async (metal: 'XAU' | 'XAG'): Promise<(Partial<Quote> & { price: number })> => {
-    const j: any = await fetchJson(`https://www.goldapi.io/api/price/${metal}/USD`, { 'x-access-token': key }, 9000);
+    // documented route is /api/{METAL}/{CCY} (the old /api/price/... path 404s)
+    const j: any = await fetchJson(`https://www.goldapi.io/api/${metal}/USD`, { 'x-access-token': key }, 9000);
     const price = Number(j?.price);
     if (!isFinite(price) || price <= 0) throw new Error('goldapi.io: bad price');
     return {
@@ -27,8 +28,8 @@ export async function goldapiIoSeed(env: Env): Promise<GoldIoSeed> {
       prevClose: isFinite(Number(j?.prev_close_price)) ? Number(j.prev_close_price) : undefined,
       bid: isFinite(Number(j?.bid)) ? Number(j.bid) : undefined,
       ask: isFinite(Number(j?.ask)) ? Number(j.ask) : undefined,
-      change: isFinite(Number(j?.change)) ? Number(j.change) : undefined,
-      changePct: isFinite(Number(j?.change_percent)) ? Number(j.change_percent) : undefined,
+      change: isFinite(Number(j?.ch ?? j?.change)) ? Number(j.ch ?? j.change) : undefined,
+      changePct: isFinite(Number(j?.chp ?? j?.change_percent)) ? Number(j.chp ?? j.change_percent) : undefined,
     };
   };
   const [gold, silver] = await Promise.all([get('XAU'), get('XAG')]);
