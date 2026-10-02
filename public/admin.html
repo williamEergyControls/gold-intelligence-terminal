@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GIT/4 - ADMIN CONSOLE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/terminal.css">
+<style>
+html,body{overflow-x:hidden}
+.awrap{max-width:2200px;margin:0 auto;padding:8px clamp(8px,.6vw,14px)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px;margin-bottom:8px}
+.kpi{border:1px solid var(--line);background:var(--panel);padding:7px 9px;min-width:0}
+.kpi label{display:block;font:600 8px var(--mono);letter-spacing:.16em;color:var(--dim);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi b{font:700 17px var(--mono);color:var(--txt);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi b.up{color:var(--up)}.kpi b.dn{color:var(--dn)}.kpi b.gold{color:var(--gold)}.kpi b.dim{color:var(--dim)}
+.kpi small{display:block;font:9px var(--mono);color:var(--mut);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tabs{display:flex;gap:0;border:1px solid var(--line);margin-bottom:8px;width:max-content;max-width:100%;overflow-x:auto}
+.tabs button{font:600 10px var(--mono);letter-spacing:.14em;color:var(--dim);padding:7px 16px;background:var(--panel3);white-space:nowrap}
+.tabs button+button{border-left:1px solid var(--line)}
+.tabs button.on{color:var(--gold);background:#141007}
+body.day .tabs button.on{background:#fbf3e2}
+.sec{display:none}
+.sec.on{display:block}
+.g12{display:grid;grid-template-columns:repeat(12,1fr);gap:clamp(5px,.45vw,8px)}
+.c12{grid-column:1/13}.c8{grid-column:span 8}.c6{grid-column:span 6}.c4{grid-column:span 4}.c3{grid-column:span 3}
+.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.abtn{font:600 9px var(--mono);letter-spacing:.12em;color:var(--gold);border:1px solid var(--goldDk);padding:5px 10px}
+.abtn:hover{background:var(--gold);color:#000}
+.abtn:disabled{opacity:.45;cursor:wait}
+.abtn.warn{color:var(--dn);border-color:#5a1f25}
+.abtn.warn:hover{background:var(--dn);color:#fff}
+.abtn.sm{padding:2px 7px;font-size:8.5px}
+.tmeta{font:9.5px var(--mono);color:var(--mut)}
+.tmeta b{color:var(--txt)}
+.st{font:700 9px var(--mono);letter-spacing:.1em;padding:1px 6px;border:1px solid;display:inline-block;min-width:62px;text-align:center}
+.st.ok{color:var(--up);border-color:#1d4d37}
+.st.bad{color:var(--dn);border-color:#5a1f25}
+.st.skip{color:var(--amber);border-color:#4d3c12}
+.st.na{color:var(--dim);border-color:var(--line)}
+body.day .st.ok{border-color:#9fd2b7} body.day .st.bad{border-color:#e8a9ae} body.day .st.skip{border-color:#e2cf9a}
+.tb td.wrap{white-space:normal;min-width:180px;max-width:360px;color:var(--mut);font-size:10px;line-height:1.45}
+.tb td.samp{color:var(--txt)}
+.spark{width:120px;height:22px;display:block}
+.chartbox{position:relative;height:200px;border:1px solid var(--line2);background:var(--panel3)}
+.chartbox.sm{height:150px}
+.chartbox canvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
+.tip{position:absolute;pointer-events:none;background:var(--panel2);border:1px solid var(--line);padding:5px 7px;font:10px/1.5 var(--mono);color:var(--txt);white-space:nowrap;z-index:5;display:none}
+.tip .k{color:var(--dim)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font:9px var(--mono);color:var(--mut);margin:6px 0 2px}
+.legend i{display:inline-block;width:10px;height:10px;margin-right:5px;vertical-align:-1px}
+.legend i.ln{height:2px;vertical-align:3px}
+.hbar{display:grid;grid-template-columns:110px 1fr 46px;gap:8px;align-items:center;padding:3px 0;font:10px var(--mono)}
+.hbar .n{color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hbar .t{height:9px;background:var(--grid);border:1px solid var(--line2);position:relative}
+.hbar .t i{position:absolute;top:0;bottom:0}
+.hbar .t s{position:absolute;top:-2px;bottom:-2px;width:1px;background:var(--mut);left:50%}
+.hbar .v{text-align:right;font-weight:600}
+.stack{display:flex;height:14px;border:1px solid var(--line2);margin:6px 0 4px;gap:2px;background:var(--panel)}
+.stack i{display:block;height:100%}
+.gauge{height:12px;background:var(--grid);border:1px solid var(--line2);position:relative;margin:6px 0}
+.gauge i{position:absolute;inset:0 auto 0 0;background:var(--gold)}
+.note{font:9px var(--mono);color:var(--dim);line-height:1.6;margin-top:6px;letter-spacing:.03em}
+.note code{color:var(--cyan);font:inherit}
+.err{color:var(--dn);font:10px var(--mono);padding:6px 0}
+.emptyst{font:10px var(--mono);color:var(--dim);padding:18px 6px;text-align:center;letter-spacing:.08em}
+.fbd{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;font:13px var(--mono);color:var(--dn);text-align:center;padding:20px;background:var(--bg);z-index:900}
+.fbd pre{font:11px var(--mono);color:var(--cyan);background:var(--panel3);border:1px solid var(--line);padding:10px;text-align:left;white-space:pre-wrap;max-width:680px}
+#liveDot.bad{color:var(--dn)}#liveDot.bad i{background:var(--dn)}
+@media (max-width:1200px){.c8,.c6,.c4,.c3{grid-column:1/13}}
+body.day .tb .hl td{background:#fbf3e2;border-color:#e8d5a8}
+.p-hd .ttl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+@media (max-width:700px){.kpi b{font-size:14px}.tabs button{padding:7px 10px}.p-hd .src{display:none}.p-hd .chip{display:none}}
+</style>
+</head>
+<body>
+<script>try{var m=localStorage.getItem('git-theme')||'auto';if(m==='day'||(m==='auto'&&matchMedia('(prefers-color-scheme: light)').matches))document.body.classList.add('day')}catch(e){}</script>
+<script>if(!localStorage.getItem('git-token'))location.replace('/login.html')</script>
+<div id="crt"></div>
+<header id="top">
+  <div class="logo"><span class="lx"></span><span class="lt">GOLD INTELLIGENCE TERMINAL</span><span class="lv">GIT/4.2.26 - ADMIN</span></div>
+  <nav class="gochips">
+    <a class="gchip" href="/" style="text-decoration:none">HOME</a>
+    <a class="gchip" href="/gold.html" style="text-decoration:none">GOLD</a>
+    <a class="gchip" href="/ai.html" style="text-decoration:none">AI</a>
+    <span class="gchip" style="color:var(--gold)">ADMIN</span>
+  </nav>
+  <div class="tsright">
+    <button id="themeBtn" style="font:600 9px var(--mono);color:var(--mut);border:1px solid var(--line);padding:3px 8px;background:none;cursor:pointer">AUTO</button>
+    <span class="opbadge" id="opbadge" style="font:600 9px var(--mono);color:var(--gold);border:1px solid var(--goldDk);padding:2px 7px;letter-spacing:.1em">ADMIN</span>
+    <span class="livedot" id="liveDot"><i></i><span id="liveTxt">PROBE --</span></span>
+    <span id="clock">--:--:--</span>
+  </div>
+</header>
+
+<div class="awrap">
+  <div class="kpis" id="kpis">
+    <div class="kpi"><label>APIS ONLINE</label><b id="kApis">--</b><small id="kApisS">last live probe --</small></div>
+    <div class="kpi"><label>SECRETS RESOLVED</label><b id="kSec">--</b><small id="kSecS">secrets store</small></div>
+    <div class="kpi"><label>ML SIGNAL</label><b id="kSig">--</b><small id="kSigS">--</small></div>
+    <div class="kpi"><label>LIVE ACCURACY</label><b id="kAcc">--</b><small id="kAccS">--</small></div>
+    <div class="kpi"><label>ACTIVE MODEL</label><b id="kMod">--</b><small id="kModS">--</small></div>
+    <div class="kpi"><label>D1 SIZE</label><b id="kDb">--</b><small id="kDbS">--</small></div>
+    <div class="kpi"><label>USERS / ADMINS</label><b id="kUsr">--</b><small id="kUsrS">--</small></div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button data-t="apis" class="on">API LIVE</button>
+    <button data-t="ml">ML ENGINE</button>
+    <button data-t="db">DATABASE + KV</button>
+    <button data-t="users">USERS</button>
+  </div>
+
+  <!-- ============ API LIVE ============ -->
+  <section class="sec on" id="s-apis">
+    <div class="toolbar">
+      <button class="abtn" id="bProbe">RUN LIVE PROBE</button>
+      <button class="abtn warn" id="bForce" title="spends 1 call each on metals.dev, goldapi.io, workers-ai">FORCE QUOTA PROBES</button>
+      <label class="tmeta"><input type="checkbox" id="autoProbe" checked> AUTO 120s</label>
+      <span class="tmeta" id="probeMeta">--</span>
+    </div>
+    <div class="g12">
+      <section class="panel sig c12">
+        <div class="p-hd"><span class="sq"></span><span class="ttl">Upstream APIs - live request per provider</span><span class="chip live">LIVE PROBE</span><span class="src">7s TIMEOUT EACH · PARALLEL · STORED TO D1 api_probes</span></div>
+        <div class="p-bd" style="overflow-x:auto">
+          <table class="tb" id="apiTbl"><tbody><tr><td class="emptyst">LOADING…</td></tr></tbody></table>
+          <div class="note">STATUS = real HTTP request from the Worker right now. SKIPPED = quota-limited (press FORCE) or key not resolved. UPTIME / LATENCY = last 24h of stored probes (hourly cron + every live run).</div>
+        </div>
+      </section>
+      <section class="panel c6">
+        <div class="p-hd"><span class="sq"></span><span class="ttl">Secrets Store bindings</span><span class="src">VALUES NEVER SENT TO BROWSER</span></div>
+        <div class="p-bd"><table class="tb" id="secTbl"></table>
+          <div class="note">binding = how the key reaches env. <b>secrets-store</b> needs <code>ensureSecrets()</code> to call <code>.get()</code> — that call was missing, so every key read as "not configured" before this fix.</div>
+        </div>
+      </section>
+      <section class="panel c6">
+        <div class="p-hd"><span class="sq"></span><span class="ttl">Failover chain - cron-persisted health</span><span class="src">D1 provider_health</span></div>
+        <div class="p-bd" style="overflow-x:auto"><table class="tb" id="phTbl"></table></div>
+      </section>
+    </div>
+  </section>
+
+  <!-- ============ ML ENGINE ============ -->
+  <section class="sec" id="s-ml">
+    <div class="toolbar">
+      <button class="abtn" id="bPredict">PREDICT NOW</button>
+      <button class="abtn" id="bGrade">GRADE OUTCOMES</button>
+      <button class="abtn warn" id="bTrain" title="CPU heavy — may exceed the Workers Free CPU limit">RETRAIN MODEL</button>
+      <span class="tmeta" id="mlMeta">--</span>
+    </div>
+    <div class="kpis" id="mlKpis"></div>
+    <div class="g12">
+      <section class="panel sig c8">
+        <div class="p-hd"><span class="sq"></span><span class="ttl">P(up) per prediction - graded against 5-day realized move</span><span class="chip ai">D1 predictions</span></div>
+        <div class="p-bd">
+          <div class="legend"><span><i style="background:var(--up)"></i>HIT</span><span><i style="background:var(--dn)"></i>MISS</span><span><i style="background:var(--dim)"></i>PENDING (&lt;7d old)</span><span><i class="ln" style="background:var(--mut)"></i>0.50 decision line</span></div>
+          <div class="chartbox"><canvas id="cvPred"></canvas><div class="tip" id="tipPred"></div></div>
+        </div>
+      </section>
+      <section class="panel c4">
+        <div class="p-hd"><span class="sq"></span><span class="ttl">Current agent votes</span><span class="src">ml:snap</span></div>
+        <div class="p-bd" id="agentBars"><div class="emptyst">LOADING…</div></div>
+      </section>
+      <section class="panel c6">
+        <div class="p-hd"><span class="sq"></span><span class="ttl">Rolling accuracy - last 20 graded</span><span class="chip month">GRADED</span></div>
+        <div class="p-bd">
+          <div class="legend"><span><i class="ln" style="background:var(--gold)"></i>MODEL ROLLING HIT RATE</span><span><i class="ln" style="background:var(--mut)"></i>50% COIN FLIP</span><span><i class="ln" style="background:var(--cyan)"></i>ALWAYS-UP BASELINE</span></div>
+          <div class="chartbox sm"><canvas id="cvRoll"></canvas><div class="tip" id="tipRoll"></div></div>
+        </div>
+      </section>
+      <section class="panel c6">
+        <div class="p-hd"><span class="sq"></span><span class="ttl">Gold snapshots - 7 days (cron every 5 min)</span><span class="chip near">D1 price_snapshots</span></div>
+        <div class="p-bd">
+          <div class="legend"><span><i class="ln" style="background:var(--gold)"></i>XAU/USD</span></div>
+          <div class="chartbox sm"><canvas id="cvGold"></canvas><div class="tip" id="tipGold"></div></div>
+        </div>
+      </section>
+      <section class="panel c4">
+        <div class="p-hd"><span class="sq"></span><span class="ttl">Regime (3-state HMM)</span></div>
+        <div class="p-bd" id="regimeBox"></div>
+      </section>
+      <section class="panel c4">
+        <div class="p-hd"><span class="sq"></span><span class="ttl">Bayesian rounds</span><span class="src">evidence LR → posterior</span></div>
+        <div class="p-bd">
+          <div class="chartbox sm"><canvas id="cvBayes"></canvas><div class="tip" id="tipBayes"></div></div>
+        </div>
+      </section>
+      <section class="panel c4">
+        <div class="p-hd"><span class="sq"></span><span class="ttl">Calibration</span><span class="src">predicted vs realized up-rate</span></div>
+        <div class="p-bd" id="calibBox"></div>
+      </section>
+      <section class="panel c6">
+        <div class="p-hd"><span class="sq"></span><span class="ttl">Model history</span><span class="src">D1 ml_models</span></div>
+        <div class="p-bd" style="overflow-x:auto"><table class="tb" id="modelTbl"></table></div>
+      </section>
+      <section class="panel c6">
+        <div class="p-hd"><span class="sq"></span><span class="ttl">Hit rate by regime / direction · daily_bars coverage</span></div>
+        <div class="p-bd" style="overflow-x:auto"><table class="tb" id="splitTbl"></table><div class="secH" style="margin-top:10px">DAILY_BARS (TRAINING WAREHOUSE)</div><table class="tb" id="barsTbl"></table></div>
+      </section>
+    </div>
+  </section>
+
+  <!-- ============ DATABASE + KV ============ -->
+  <section class="sec" id="s-db">
+    <div class="toolbar">
+      <button class="abtn" id="bDb">REFRESH</button>
+      <button class="abtn warn" id="bPrune">PRUNE NOW (RETENTION)</button>
+      <span class="tmeta" id="dbMeta">--</span>
+    </div>
+    <div class="g12">
+      <section class="panel sig c6">
+        <div class="p-hd"><span class="sq"></span><span class="ttl">D1 gold-terminal - size</span><span class="src">meta.size_after</span></div>
+        <div class="p-bd" id="dbSize"></div>
+      </section>
+      <section class="panel c6">
+        <div class="p-hd"><span class="sq"></span><span class="ttl">Growth + retention</span></div>
+        <div class="p-bd" id="dbGrowth"></div>
+      </section>
+      <section class="panel c12">
+        <div class="p-hd"><span class="sq"></span><span class="ttl">Tables</span><span class="src">ROWS = COUNT(*) · BYTES ≈ SUM(LENGTH(col)) payload, excludes index/page overhead</span></div>
+        <div class="p-bd" style="overflow-x:auto"><table class="tb" id="tblTbl"></table></div>
+      </section>
+      <section class="panel c12">
+        <div class="p-hd"><span class="sq"></span><span class="ttl">KV cache keys</span><span class="src">CACHE namespace</span></div>
+        <div class="p-bd" style="overflow-x:auto"><table class="tb" id="kvTbl"></table><div class="note" id="kvNote"></div></div>
+      </section>
+    </div>
+  </section>
+
+  <!-- ============ USERS ============ -->
+  <section class="sec" id="s-users">
+    <div class="toolbar"><button class="abtn" id="bUsers">REFRESH</button><span class="tmeta" id="usrMeta">--</span></div>
+    <section class="panel sig">
+      <div class="p-hd"><span class="sq"></span><span class="ttl">Operators</span><span class="src">D1 users + sessions</span></div>
+      <div class="p-bd" style="overflow-x:auto"><table class="tb" id="usrTbl"></table>
+        <div class="note">the earliest account is auto-promoted only when NO admin exists. last admin cannot be demoted.</div>
+      </div>
+    </section>
+  </section>
+</div>
+<footer id="status"><span>GIT-4.2.26 - ADMIN CONSOLE</span><span class="mid" id="statusMid">ADMIN ONLY · EVERY VALUE SHOWS ITS SOURCE + TIMESTAMP</span></footer>
+<script src="/js/admin.js"></script>
+</body>
+</html>

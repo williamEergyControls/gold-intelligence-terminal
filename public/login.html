@@ -127,6 +127,7 @@ function submit(){
     if(res.data && res.data.ok && res.data.token){
       localStorage.setItem('git-token', res.data.token);
       localStorage.setItem('git-name', res.data.name || n);
+      localStorage.setItem('git-role', res.data.role || 'operator');
       show('ACCESS GRANTED - REDIRECTING...', true);
       setTimeout(function(){ location.href = '/'; }, 600);
     } else {

@@ -410,13 +410,16 @@ var busy=false;
 
 /* ---- init ---- */
 (async function(){
-  try{
-    B=await getJSON('/api/bootstrap?tf=15M');
-    CH=B.candles||[];
-    renderAll();
-  }catch(e){
-    var s=$('#status .mid');if(s)s.textContent='ERROR: '+e.message;
+  // retry with backoff: 503 DATA_TEMPORARILY_UNAVAILABLE is transient, the pollers need B set
+  for(var i=0,wait=4000;;i++,wait=Math.min(wait*2,30000)){
+    try{B=await getJSON('/api/bootstrap?tf=15M');break;}
+    catch(e){
+      var s=$('#status .mid');if(s)s.textContent='DATA TEMPORARILY UNAVAILABLE - '+e.message+' - RETRYING IN '+Math.round(wait/1000)+'s';
+      await new Promise(function(r){setTimeout(r,wait)});
+    }
   }
+  CH=B.candles||[];
+  try{renderAll();}catch(e){var s2=$('#status .mid');if(s2)s2.textContent='RENDER ERROR: '+e.message;}
   try{
     var r=await getJSON('/api/candles?tf=15M');
     CH=r.candles||[];drawMain();
@@ -465,5 +468,6 @@ var rzT;window.addEventListener('resize',function(){clearTimeout(rzT);rzT=setTim
 })();
 })();
 </script>
+<script src="/js/nav-admin.js" defer></script>
 </body>
 </html>
