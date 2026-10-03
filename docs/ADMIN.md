@@ -6,10 +6,13 @@
    the broken copy has a stray `case` label). Commit `bun.lock` too.
 2. Push to GitHub. Workers Builds runs `bun install` then `npx wrangler deploy`.
    Optional: set the build command to `bun run build` so type errors block a deploy.
-3. Apply the new migration once:
+3. Apply the new migrations once (0004 admin, 0005 warehouse):
    `npx wrangler d1 migrations apply gold-terminal --remote`
    (the Worker also creates the same tables at runtime, so this is belt and braces).
 4. Sign in, open `/admin.html` (ADMIN chip in the nav when your role is admin).
+5. First hour after deploy: the warehouse backfills (≈ 5 ingest cycles, 50 min). Speed it up from
+   Admin → DATABASE + KV → **RUN INGEST NOW** (click 4–5 times), then **REBUILD VOL SNAPSHOTS**.
+   `/vol.html` shows WAREHOUSE WARMING until the first snapshots exist; nothing is simulated there.
 
 ## Make yourself admin
 
@@ -56,3 +59,6 @@ binding is missing from `wrangler.jsonc`.
 | GET | /api/admin/users | operators |
 | POST | /api/admin/users/role, /unlock, /revoke | `{ id, role? }` |
 | GET | /api/env | secret binding states (never values) |
+| GET | /api/admin/storage | warehouse units, series coverage, errors, snapshot ages |
+| POST | /api/admin/storage/ingest | one ingest cycle now (`{ keys?: [unitKey] }` to target units) |
+| POST | /api/admin/storage/rebuild | `{ cls }` rebuild one vol class from stored data |

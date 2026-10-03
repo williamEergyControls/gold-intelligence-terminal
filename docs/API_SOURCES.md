@@ -14,8 +14,15 @@
 | USGS WaterServices | none | river gage height | NEAR-LIVE | 15 min | legacy, being retired |
 | USGS Water Data OGC | none | migration target | NEAR-LIVE | probe only | api.waterdata.usgs.gov/ogcapi/v0 |
 | Open-Meteo | none | plains weather, marine | HOURLY | 15 min | |
-| CoinGecko | none | stablecoins | NEAR-LIVE | none (browser-side) | move server-side (prompt v2 phase 2) |
+| CoinGecko | none | stablecoins (price + mcap) | DAILY + LATEST | D1 warehouse, hourly | server-side since v2; no browser calls |
+| FRED (warehouse) | FRED_API_KEY | DGS3MO/2/5/10/30, DFII10, T10YIE, DFEDTARL/U, ECBDFR, CUSR0000SETE, CUUR0000SEHD, CUUR0000SEME, PCU524126524126, CPIAUCSL, CUSR0000SAH1, CPIUFDSL, CPIENGSL | DAILY / MONTHLY | D1 warehouse | vol desk, bootstrap macro, policy rates |
+| Yahoo (warehouse) | none | ^GSPC ^NDX ^RUT ^VIX ^VXN ^VVIX ^MOVE ^GVZ ^OVX DX-Y.NYB GC=F SI=F CL=F KIE XLK XLF XLE XLV XLU XLI | DAILY + LATEST | D1 warehouse, 30–60 min | unofficial; exchange-tz date keying |
+| Frankfurter (warehouse) | none | 8 USD pairs, 1 call | DAILY | D1 warehouse, 6 h | ECB reference rates |
 | Workers AI | binding | analyst, ask, chat, sentiment | EVENT | none | Llama 3.1 8B |
+
+Fixed in v2: `AUTOINS` pointed at `CUSR0000SETB` (CPI **motor fuel**) while labeled auto insurance; now
+`CUSR0000SETE`. Home-page shelter/food/energy, the insurance table and the Fed/ECB rows now come from the
+warehouse with source + month on every value.
 
 Reference values that are **not** fetched (frozen in code, label as reference with an as-of
 date or replace): `bootstrap.ts` RE shipping/insurance/central banks/calendar, `RE_PERIODS`,
