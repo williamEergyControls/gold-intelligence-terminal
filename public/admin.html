@@ -206,9 +206,16 @@ body.day .tb .hl td{background:#fbf3e2;border-color:#e8d5a8}
     <div class="toolbar">
       <button class="abtn" id="bDb">REFRESH</button>
       <button class="abtn warn" id="bPrune">PRUNE NOW (RETENTION)</button>
+      <button class="abtn" id="bIngest" title="one poll cycle: up to INGEST_BUDGET upstream calls, then rebuild 2 vol snapshots">RUN INGEST NOW</button>
+      <button class="abtn" id="bRebuild" title="recompute every vol snapshot from stored data (no upstream calls)">REBUILD VOL SNAPSHOTS</button>
       <span class="tmeta" id="dbMeta">--</span>
     </div>
     <div class="g12">
+      <section class="panel sig c12">
+        <div class="p-hd"><span class="sq"></span><span class="ttl">Time-series warehouse · poll units</span><span class="chip near">D1 series_points</span><span class="src" id="whSrc">--</span></div>
+        <div class="p-bd" style="overflow-x:auto"><div class="kpis" id="whKpis" style="margin-bottom:6px"></div><table class="tb" id="whTbl"></table>
+          <div class="note">each UNIT = one upstream request (scan class = cadence). backfill pulls full history once, then only a recent window is re-fetched and overwritten in place. points are keyed by observation date, so revisions and today's moving bar never duplicate.</div></div>
+      </section>
       <section class="panel sig c6">
         <div class="p-hd"><span class="sq"></span><span class="ttl">D1 gold-terminal - size</span><span class="src">meta.size_after</span></div>
         <div class="p-bd" id="dbSize"></div>
@@ -241,5 +248,6 @@ body.day .tb .hl td{background:#fbf3e2;border-color:#e8d5a8}
 </div>
 <footer id="status"><span>GIT-4.2.26 - ADMIN CONSOLE</span><span class="mid" id="statusMid">ADMIN ONLY · EVERY VALUE SHOWS ITS SOURCE + TIMESTAMP</span></footer>
 <script src="/js/admin.js"></script>
+<script src="/js/nav-extra.js" defer></script>
 </body>
 </html>

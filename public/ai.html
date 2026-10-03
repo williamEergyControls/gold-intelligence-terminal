@@ -102,6 +102,7 @@ html,body{overflow-x:hidden}
 (function(){var _f=window.fetch;window.fetch=function(u,o){o=o||{};o.headers=o.headers||{};var t=localStorage.getItem('git-token');if(t){o.headers['x-session']=t}return _f(u,o)};if(!localStorage.getItem('git-token')){location.replace('/login.html')}})();
 </script>
 <script src="/js/ai.js"></script>
-<script src="/js/nav-admin.js" defer></script>
+<script src="/js/ml-strip.js" defer></script>
+<script src="/js/nav-extra.js" defer></script>
 </body>
 </html>
