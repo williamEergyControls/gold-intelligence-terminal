@@ -125,7 +125,7 @@ export async function adminDB(env: Env) {
     growth24h: { price_snapshots: g(0), api_probes: g(1), predictions: g(2), sessions: g(3) },
     expiredSessions: g(4),
     oldestSnapshot: ((growth[5]?.results ?? [])[0] as any)?.t ?? null,
-    retention: { price_snapshots: '90 days', api_probes: '14 days', sessions: 'deleted when expired' },
+    retention: { price_snapshots: '90 days', api_probes: '14 days', sessions: 'deleted when expired', series_points: 'kept (≈90 rows/day across all series — decades fit in the Free 500 MB)' },
   };
 }
 
@@ -145,7 +145,7 @@ export async function pruneDB(env: Env): Promise<Record<string, number>> {
 }
 
 /* ---------------- KV ---------------- */
-const KV_KEYS = ['boot:15M', 'boot:1D', 'series:daily', 'macro', 'news', 'miners', 'fx', 'page:energy', 'page:agri', 'eia:rows', 'ml:snap', 'ml:last', 'goldio:daily', 'news:sentiment', 'cron:daily'];
+const KV_KEYS = ['boot:15M', 'boot:1D', 'series:daily', 'macro:v2', 'news', 'miners', 'fx', 'page:energy', 'page:agri', 'eia:rows', 'ml:snap', 'ml:last', 'goldio:daily', 'news:sentiment', 'cron:daily'];
 export async function adminKV(env: Env) {
   const rows = await Promise.all(KV_KEYS.map(async (k) => {
     try {
