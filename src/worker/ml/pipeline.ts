@@ -7,6 +7,7 @@ import type { DailyInput } from './engine';
 import { featuresAt, labelAt, trainLogistic, predictLogistic, trainGBS, predictGBS, regimeHMM, volAnn, FEATURE_NAMES } from './engine';
 import { runAgents, consensus, bayesianRounds, evidenceLRs, finalScore } from './agents';
 import { fetchJson, secret } from '../providers/provider';
+import { readSeries } from '../store/ingest';
 
 const HORIZON = 5;
 
@@ -27,7 +28,33 @@ async function fredTail(env: Env, id: string, n = 300): Promise<{ t: number; v: 
   return (j?.observations ?? []).filter((o: any) => o.value !== '.').map((o: any) => ({ t: Date.parse(o.date + 'T12:00:00Z'), v: parseFloat(o.value) })).reverse();
 }
 
+/* warehouse first: 1 D1 query instead of 4 Yahoo + 1 FRED calls per step (train,
+   predict and grade each called this, = 15 upstream calls per hourly run).
+   falls back to live Yahoo/FRED while the warehouse is still backfilling. */
+async function loadInputsFromStore(env: Env): Promise<(DailyInput & { t: number[]; src: string }) | null> {
+  const d = await readSeries(env, ['GOLD', 'DXY', 'VIX', 'OIL', 'TIPS10Y'], Date.now() - 760 * 864e5);
+  const g = d.GOLD ?? [];
+  if (g.length < 300 || (d.DXY?.length ?? 0) < 200 || (d.VIX?.length ?? 0) < 200 || (d.OIL?.length ?? 0) < 200) return null;
+  if (Date.now() - g[g.length - 1].t > 5 * 864e5) return null; // stale store → use live
+  // forward-fill each input onto the gold calendar (never looks ahead)
+  const ffill = (src: { t: number; v: number }[]) => {
+    const out: number[] = []; let j = 0, last = src[0].v;
+    for (const p of g) { while (j < src.length && src[j].t <= p.t) last = src[j++].v; out.push(last); }
+    return out;
+  };
+  return {
+    t: g.map(p => p.t), gold: g.map(p => p.v), dxy: ffill(d.DXY), vix: ffill(d.VIX), oil: ffill(d.OIL),
+    // +12h keeps the old semantics: a FRED print for date D is not visible to the bar of date D
+    ry: (d.TIPS10Y ?? []).map(p => ({ t: p.t + 12 * 36e5, v: p.v })),
+    src: 'd1-warehouse',
+  };
+}
+
 async function loadInputs(env: Env): Promise<DailyInput & { t: number[] }> {
+  try { const s = await loadInputsFromStore(env); if (s) return s; } catch (e) { console.error('ML_STORE_READ_FAIL', String((e as Error)?.message ?? e).slice(0, 120)); }
+  return loadInputsLive(env);
+}
+async function loadInputsLive(env: Env): Promise<DailyInput & { t: number[] }> {
   const g = await yahooCloses('GC=F');
   const dx = await yahooCloses('DX-Y.NYB');
   const vx = await yahooCloses('^VIX');
@@ -63,7 +90,7 @@ export async function trainAndStore(env: Env): Promise<{ ok: boolean; metrics?: 
       if ((predictGBS(gb70, X[i]) > 0.5 ? 1 : 0) === y[i]) c2++;
     }
     const wfN = X.length - cut;
-    const metrics = { samples: X.length, walkForwardN: wfN, lrAcc: +(c1 / wfN).toFixed(3), gbsAcc: +(c2 / wfN).toFixed(3), trainedAt: Date.now(), features: FEATURE_NAMES };
+    const metrics = { samples: X.length, walkForwardN: wfN, lrAcc: +(c1 / wfN).toFixed(3), gbsAcc: +(c2 / wfN).toFixed(3), trainedAt: Date.now(), features: FEATURE_NAMES, inputs: (d as { src?: string }).src ?? 'yahoo+fred live' };
     const lrFull = trainLogistic(X, y);
     const gbFull = trainGBS(X, y);
     const lrs = evidenceLRs(X, y);
@@ -123,7 +150,7 @@ export async function predictAndStore(env: Env): Promise<{ ok: boolean; error?: 
     const ts = Date.now();
     const snap = {
       ts, p: +bayes.p.toFixed(3), p0: +p0.toFixed(3), direction: bayes.p >= 0.5 ? 'BULLISH' : 'BEARISH',
-      regime, agents, rounds: bayes.rounds, final: fs,
+      regime, agents, rounds: bayes.rounds, final: fs, inputs: (d as { src?: string }).src ?? 'yahoo+fred live',
       model: row ? { trainedAt: row.trained_at, metrics: JSON.parse(row.metrics) } : null,
     };
     await env.DB.prepare('INSERT OR REPLACE INTO predictions(ts,horizon_days,p_up,direction,regime,agents) VALUES(?,?,?,?,?,?)')
