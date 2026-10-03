@@ -444,13 +444,49 @@ function renderDB(d, kv) {
   setText('#kDbS', (fr == null ? '--' : pct(fr, 2)) + ' of 500 MB free tier');
   setText('#dbMeta', 'read ' + new Date(d.ts).toLocaleTimeString('en-GB'));
 }
+function renderWarehouse(w) {
+  if (!w) return;
+  var total = w.units.reduce(function (s, u) { return s + u.series.length; }, 0);
+  var okU = w.units.filter(function (u) { return u.okAt; }).length, errU = w.units.filter(function (u) { return u.error; }).length;
+  $('#whKpis').innerHTML = kpi('POINTS STORED', Number(w.totalPoints).toLocaleString('en-US'), w.seriesWithData + ' / ' + total + ' series have data') +
+    kpi('UNITS OK', okU + ' / ' + w.units.length, errU + ' with last error', errU ? 'gold' : 'up') +
+    kpi('DUE NOW', String(w.units.filter(function (u) { return u.due; }).length), 'budget ' + w.budget + ' calls / cycle') +
+    kpi('BACKFILL PENDING', String(w.units.filter(function (u) { return u.backfill; }).length), 'never fetched OK yet') +
+    kpi('VOL SNAPSHOTS', String(Object.keys(w.snapshots).length) + ' / 7', Object.keys(w.snapshots).map(function (k) { return k + ' ' + age(w.snapshots[k].ageMs); }).join(' · '));
+  setText('#whSrc', 'read ' + new Date(w.ts).toLocaleTimeString('en-GB'));
+  $('#whTbl').innerHTML = '<thead><tr><th>STATUS</th><th>UNIT</th><th>SOURCE</th><th class="r">EVERY</th><th>SERIES · POINTS · RANGE</th><th>LAST OK</th><th class="r">FAILS</th><th>LAST ERROR</th></tr></thead><tbody>' + w.units.map(function (u) {
+    var st = u.backfill && !u.fetchedAt ? '<span class="st na">QUEUED</span>' : u.error ? '<span class="st bad">ERROR</span>' : u.due ? '<span class="st skip">DUE</span>' : '<span class="st ok">OK</span>';
+    var ser = u.series.map(function (s) { return '<b>' + esc(s.id) + '</b> <span class="dim">' + s.points + (s.firstTs ? ' · ' + esc(dt(s.firstTs).slice(0, 10)) + '→' + esc(dt(s.lastTs).slice(0, 10)) : '') + '</span>'; }).join('<br>');
+    return '<tr><td>' + st + '</td><td><b>' + esc(u.key) + '</b></td><td class="mut">' + esc(u.source) + '</td><td class="r mut">' + u.cadenceMin + 'm</td><td style="white-space:normal">' + ser + '</td><td class="mut">' + ago(u.okAt) + '</td><td class="r ' + (u.fails ? 'dn' : 'dim') + '">' + u.fails + '</td><td class="wrap">' + esc(u.error || '') + '</td></tr>';
+  }).join('') + '</tbody>';
+}
 function loadDB() {
   setText('#dbMeta', 'loading…');
-  return Promise.all([api('/api/admin/db'), api('/api/admin/kv').catch(function () { return null; })])
-    .then(function (r) { DB = r[0]; renderDB(r[0], r[1]); })
+  return Promise.all([api('/api/admin/db'), api('/api/admin/kv').catch(function () { return null; }), api('/api/admin/storage').catch(function () { return null; })])
+    .then(function (r) { DB = r[0]; renderDB(r[0], r[1]); renderWarehouse(r[2]); })
     .catch(function (e) { if (e.message !== 'FORBIDDEN') setText('#dbMeta', 'DB ERROR: ' + e.message); });
 }
 $('#bDb').addEventListener('click', loadDB);
+$('#bIngest').addEventListener('click', function () {
+  var b = $('#bIngest'); b.disabled = true; b.textContent = 'INGESTING…';
+  post('/api/admin/storage/ingest').then(function (r) {
+    var bad = r.ran.filter(function (x) { return !x.ok; });
+    setText('#statusMid', 'INGEST: ' + r.ran.length + ' units · ' + r.rows + ' rows · ' + bad.length + ' failed · vol built ' + (r.volBuilt || []).join(',') + ' · ' + r.due + ' were due');
+    return loadDB();
+  }).catch(function (e) { setText('#statusMid', 'INGEST FAILED: ' + e.message); })
+    .then(function () { b.disabled = false; b.textContent = 'RUN INGEST NOW'; });
+});
+$('#bRebuild').addEventListener('click', function () {
+  // one class per request keeps each call inside the Workers CPU limit
+  var b = $('#bRebuild'); b.disabled = true;
+  var CL = ['rates', 'fx', 'stable', 'insurance', 'equity', 'commod'], done = [], failed = [];
+  CL.reduce(function (p, c) {
+    return p.then(function () { b.textContent = 'REBUILDING ' + c.toUpperCase() + '…'; return post('/api/admin/storage/rebuild', { cls: c }).then(function () { done.push(c); }).catch(function (e) { failed.push(c + ': ' + e.message); }); });
+  }, Promise.resolve()).then(function () {
+    setText('#statusMid', 'VOL REBUILT: ' + done.join(', ') + (failed.length ? ' · FAILED ' + failed.join(' | ') : ''));
+    b.disabled = false; b.textContent = 'REBUILD VOL SNAPSHOTS'; return loadDB();
+  });
+});
 $('#bPrune').addEventListener('click', function () {
   if (!confirm('Delete price_snapshots > 90d, api_probes > 14d and expired sessions?')) return;
   post('/api/admin/db/prune').then(function (r) { setText('#statusMid', 'PRUNED: ' + JSON.stringify(r.deleted)); return loadDB(); })
