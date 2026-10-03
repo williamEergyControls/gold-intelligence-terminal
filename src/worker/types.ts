@@ -107,4 +107,5 @@ export interface Env {
   AI_ENABLED?: string;
   METALS_TTL?: string;
   ADMIN_TOKEN?: string;
+  INGEST_BUDGET?: string;
 }

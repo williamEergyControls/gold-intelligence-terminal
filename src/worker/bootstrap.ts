@@ -10,6 +10,28 @@ import * as gdelt from './providers/gdelt';
 import * as sim from './providers/simulated';
 import { score, attribution, corr } from './analytics/engine';
 import * as goldapicom from './providers/goldapicom';
+import { readSeries } from './store/ingest';
+import { monthlyYoY } from './analytics/vol';
+
+/* live macro pieces from the D1 warehouse (one query). anything missing falls back to the
+   old reference value AND says so in its source label. */
+async function liveMacro(env: Env) {
+  const ids = ['CPI_ALL', 'CPI_SHELTER', 'CPI_FOOD', 'CPI_ENERGY', 'INS_AUTO', 'INS_HOME', 'INS_HEALTH', 'INS_PC_PPI', 'FEDLO', 'FEDHI', 'ECBDFR'];
+  // 600 days: CPI lands ~6 weeks after month end, so 13 monthly points need well over 14 months
+  const d = await readSeries(env, ids, Date.now() - 600 * 864e5).catch(() => ({} as Record<string, { t: number; v: number }[]>));
+  const yoy = (id: string) => {
+    // exact calendar month t vs t−12 — a skipped release must not stretch it to 13 months
+    const y = monthlyYoY(d[id] ?? []).at(-1);
+    const lastT = (d[id] ?? []).at(-1)?.t;
+    return y && y.t === lastT ? { v: +y.v.toFixed(2), asOf: new Date(y.t).toISOString().slice(0, 7) } : null;
+  };
+  const last = (id: string) => { const p = d[id] ?? []; return p.length ? { v: p[p.length - 1].v, asOf: new Date(p[p.length - 1].t).toISOString().slice(0, 10) } : null; };
+  return {
+    cpi: yoy('CPI_ALL'), shelter: yoy('CPI_SHELTER'), food: yoy('CPI_FOOD'), energy: yoy('CPI_ENERGY'),
+    insAuto: yoy('INS_AUTO'), insHome: yoy('INS_HOME'), insHealth: yoy('INS_HEALTH'), insPc: yoy('INS_PC_PPI'),
+    fedLo: last('FEDLO'), fedHi: last('FEDHI'), ecb: last('ECBDFR'),
+  };
+}
 
 // ---------- REFERENCE DATA: curated, low-frequency, honestly labeled ----------
 const RE = {
@@ -172,17 +194,39 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
   const fx = (await cache.wrap('fx', 3600, () => frankfurter.frankfurterFx(env).catch(() => sim.simFx()))).v;
 
   // ---- macro: FRED (key) → simulated — cached 6h ----
-  const macro = (await cache.wrap('macro', 21600, () => fred.fredRows(env).catch(() => sim.simMacro()))).v;
+  // key bumped to macro:v2 — the old cached rows carried AUTOINS = CPI motor fuel
+  const macro = (await cache.wrap('macro:v2', 21600, () => fred.fredRows(env).catch(() => sim.simMacro()))).v;
   const row = (k: string) => macro.find((m: MacroRow) => m.key === k);
   const cpi = row('CPI'); const autoins = row('AUTOINS');
+  const lm = await liveMacro(env);
+  const L = (x: { v: number; asOf: string } | null, ref: number, src: string) => x ? { yoy: x.v, source: `${src} · ${x.asOf}` } : { yoy: ref, source: 'STATIC REFERENCE (warehouse warming)' };
+  const autoLive = lm.insAuto ? { v: lm.insAuto.v, asOf: lm.insAuto.asOf } : (autoins && autoins.source !== 'simulated' ? { v: autoins.value, asOf: autoins.asOf.slice(0, 7) } : null);
   const cpiBreakdown = [
-    { label: 'SHELTER', yoy: 4.2, source: 'reference' },
-    { label: 'FOOD', yoy: 2.7, source: 'reference' },
-    { label: 'ENERGY', yoy: -1.9, source: 'reference' },
-    { label: 'AUTO INS.', yoy: autoins ? autoins.value : 11.8, source: autoins?.source ?? 'reference' },
-    { label: 'TRANSPORT', yoy: 1.2, source: 'reference' },
-    { label: 'MEDICAL', yoy: 3.1, source: 'reference' },
+    { label: 'SHELTER', ...L(lm.shelter, 4.2, 'FRED CUSR0000SAH1') },
+    { label: 'FOOD', ...L(lm.food, 2.7, 'FRED CPIUFDSL') },
+    { label: 'ENERGY', ...L(lm.energy, -1.9, 'FRED CPIENGSL') },
+    { label: 'AUTO INS.', ...L(autoLive, 11.8, 'FRED CUSR0000SETE') },
+    { label: 'TRANSPORT', yoy: 1.2, source: 'STATIC REFERENCE' },
+    { label: 'MEDICAL', yoy: 3.1, source: 'STATIC REFERENCE' },
   ];
+  const pressure = (y: number) => (y > 6 ? 3 : y > 3 ? 2 : 1);
+  const insRow = (line: string, x: { v: number; asOf: string } | null, ref: number, src: string) =>
+    x ? { line, yoy: x.v, pressure: pressure(x.v), tag: `${src} · ${x.asOf}` } : { line, yoy: ref, pressure: pressure(ref), tag: 'STATIC REFERENCE' };
+  const reference = {
+    ...RE,
+    insurance: [
+      insRow('Auto Insurance CPI', autoLive, 11.8, 'BLS CPI SETE'),
+      insRow('Home / Property', lm.insHome, 7.4, 'BLS CPI SEHD'),
+      insRow('Health Insurance', lm.insHealth, 3.9, 'BLS CPI SEME'),
+      insRow('P&C insurer PPI', lm.insPc, 2.1, 'BLS PPI 524126'),
+    ],
+    centralBanks: RE.centralBanks.map(cb => {
+      if (cb.bank === 'FED' && lm.fedLo && lm.fedHi) return { ...cb, rate: `${lm.fedLo.v.toFixed(2)}–${lm.fedHi.v.toFixed(2)}%`, gold: `FRED ${lm.fedHi.asOf}` };
+      if (cb.bank === 'ECB' && lm.ecb) return { ...cb, rate: `${lm.ecb.v.toFixed(2)}%`, gold: `FRED ${lm.ecb.asOf}` };
+      return { ...cb, gold: cb.gold === '—' ? 'STATIC REF' : cb.gold };
+    }),
+    shipping: RE.shipping.map(x => ({ ...x, note: x.note.startsWith('news') ? x.note : 'STATIC REFERENCE · not a live quote' })),
+  };
 
   // ---- news: GDELT → simulated — cached 1 HOUR ----
   const news = (await cache.wrap('news', 3600, () => gdelt.gdeltNews(env, ['gold', 'mining', 'macro']).catch(() => sim.simNews()))).v;
@@ -245,14 +289,20 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
     candles, miners, fx,
     series: { goldIdx: daily.v.goldIdx, dxyIdx: daily.v.dxyIdx, ryIdx: daily.v.ryIdx, ratio: daily.v.ratio, dailyCloses: daily.v.goldDaily },
     corr: { dxy: daily.v.corrDxy, ry: daily.v.corrRy },
-    macro: { rows: macro, cpiBreakdown, components: { cpi: cpi?.value ?? 3.1, housing: 4.2, food: 2.7, autoins: autoins?.value ?? 11.8, energy: -1.9 } },
+    macro: {
+      rows: macro, cpiBreakdown,
+      components: {
+        cpi: lm.cpi?.v ?? cpi?.value ?? 3.1,
+        housing: cpiBreakdown[0].yoy, food: cpiBreakdown[1].yoy, energy: cpiBreakdown[2].yoy, autoins: cpiBreakdown[3].yoy,
+      },
+    },
     realeconomy: { periods: RE_PERIODS },
     alerts, news: {
       gold: news.filter(n => n.topic === 'gold').slice(0, 6),
       mining: news.filter(n => n.topic === 'mining').slice(0, 6),
       macro: news.filter(n => n.topic === 'macro').slice(0, 6),
     },
-    reference: RE,
+    reference,
     analytics, why, health,
     ml: ((await env.CACHE.get('ml:snap', 'json')) as any) ?? null,
   };

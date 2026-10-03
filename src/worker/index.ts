@@ -24,12 +24,20 @@ import { adminML, adminDB, adminKV, adminUsers, setUserRole, unlockUser, revokeS
 import * as yahoo from './providers/yahoo';
 import { goldapiComQuote } from './providers/goldapicom';
 import * as sim from './providers/simulated';
+import { runIngest, unitStates, dueUnits, readSeries, readMeta } from './store/ingest';
+import { SERIES, UNITS, SOURCE_LABEL } from './store/registry';
+import { refreshVol, readSnapshots, VOL_CLASSES } from './vol/snapshot';
+import { changes, rollingRv, garchFit, monthlyYoY } from './analytics/vol';
+import { mlStrip } from './ml/strip';
 
 const JH = { 'content-type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store' };
 const TFS: Tf[] = ['5M', '15M', '1H', '1D', '1W'];
 const hits = new Map<string, { n: number; w: number }>();
 const qMemo = new Map<string, { v: any; ts: number }>();
 let probeMemo: { ts: number; forced: boolean; rs: ProbeResult[] } | null = null;
+let volMemo: { ts: number; v: unknown } | null = null;
+const SERIES_IDS = new Set(Object.keys(SERIES));
+function ingestBudget(env: Env): number { const n = parseInt(env.INGEST_BUDGET ?? '10', 10); return isFinite(n) && n > 0 ? Math.min(n, 40) : 10; }
 
 function allow(key: string, max: number, windowMs: number): boolean {
   const now = Date.now();
@@ -188,6 +196,55 @@ export default {
         const b = await cachedBoot(env, '15M');
         return json({ ...b.v.why, movePct: b.v.gold.changePct }, 200);
       }
+      /* ---- volatility desk + warehouse reads (all precomputed, no upstream calls) ---- */
+      if (path === '/api/vol') {
+        if (!volMemo || Date.now() - volMemo.ts > 30000) {
+          const snaps = await readSnapshots(env);
+          const classes: Record<string, unknown> = {};
+          for (const c of VOL_CLASSES) classes[c] = snaps[c]?.v ?? null;
+          const ages = Object.fromEntries(Object.entries(snaps).map(([k, v]) => [k, Date.now() - v.ts]));
+          volMemo = { ts: Date.now(), v: { ts: Date.now(), classes, cross: snaps.x?.v ?? null, ages, warming: !Object.keys(snaps).length } };
+        }
+        return json(volMemo.v, 200);
+      }
+      if (path === '/api/series') {
+        const id = (url.searchParams.get('id') || '').toUpperCase();
+        if (!SERIES_IDS.has(id)) return json({ error: 'UNKNOWN_SERIES', known: [...SERIES_IDS] }, 400);
+        const def = SERIES[id];
+        const days = Math.min(5600, Math.max(30, parseInt(url.searchParams.get('days') || (def.freq === 'monthly' ? '3650' : '400'), 10) || 400));
+        const pts = (await readSeries(env, [id], Date.now() - days * 864e5))[id] ?? [];
+        const ann = def.freq === 'monthly' ? 12 : def.tradingDays;
+        const ch = changes(def.kind, pts);
+        const rv20 = rollingRv(ch, def.freq === 'monthly' ? 12 : 20, ann);
+        const g = def.kind === 'peg' || def.kind === 'cpi' || def.kind === 'mcap' ? null : garchFit(ch.map(c => c.v));
+        const condAnn = g ? ch.slice(-g.cond.length).map((c, i) => ({ t: c.t, v: +(g.cond[i] * Math.sqrt(ann)).toFixed(3) })) : [];
+        const yoy = def.kind === 'cpi' ? monthlyYoY(pts).map(p => ({ t: p.t, v: +p.v.toFixed(3) })) : [];
+        return json({
+          id, label: def.label, kind: def.kind, unit: def.unit, freq: def.freq,
+          source: SOURCE_LABEL[def.source] + ' · ' + def.srcId, retrievedAt: new Date().toISOString(),
+          dataTimestamp: pts.length ? new Date(pts[pts.length - 1].t).toISOString().slice(0, 10) : null,
+          points: pts, rv20, garchAnn: condAnn, yoy,
+          devBp: def.kind === 'peg' ? pts.map(p => ({ t: p.t, v: +((p.v - 1) * 1e4).toFixed(2) })) : [],
+          volUnit: def.kind === 'yield' || def.kind === 'peg' || def.kind === 'rate' ? 'bp/yr' : def.kind === 'cpi' ? '% m/m σ (12m, ×√12)' : '%/yr',
+        }, 200);
+      }
+      if (path === '/api/ml/strip') {
+        const page = (url.searchParams.get('page') || 'home').toLowerCase().replace(/[^a-z]/g, '').slice(0, 12);
+        return json(await mlStrip(env, page), 200);
+      }
+      if (path === '/api/markets/stablecoins') {
+        const snaps = await readSnapshots(env);
+        const st = snaps.stable?.v;
+        if (!st) return json({ error: 'DATA_TEMPORARILY_UNAVAILABLE', source: 'CoinGecko via D1 warehouse', retrying: true, detail: 'warehouse warming — first ingest runs within 10 min' }, 503, { 'Retry-After': '60' });
+        const mc = new Map(((st.extras?.mcap ?? []) as any[]).map(m => [m.id, m]));
+        const coins = (st.rows as any[]).filter(r => r.kind === 'peg').map(r => ({
+          id: r.id, label: r.label, price: r.last, devBp: r.extra?.devBp ?? null, chg1dBp: r.chg,
+          max30Bp: r.extra?.max30Bp ?? null, max90Bp: r.extra?.max90Bp ?? null, daysOver10bp90: r.extra?.daysOver10bp90 ?? null,
+          volBpDay: r.rv20 ?? null, regime: r.regime, mcap: mc.get(r.id)?.mcap ?? null, share: mc.get(r.id)?.share ?? null,
+          mcapChg30d: mc.get(r.id)?.chg30d ?? null, lastTs: r.lastTs, stale: r.stale, spark: r.spark,
+        }));
+        return json({ source: 'CoinGecko (public API) · stored in D1, refreshed hourly', retrievedAt: new Date(snaps.stable.ts).toISOString(), frequency: 'daily close + latest print', unit: 'USD', totalMcap: st.extras?.totalMcap ?? null, coins }, 200);
+      }
       if (path === '/api/ml') {
         const raw = await env.CACHE.get('ml:snap', 'json');
         return raw ? json(raw, 200) : json({ status: 'WARMING' }, 200);
@@ -263,6 +320,7 @@ export default {
           { t: 'Stablecoin Terminal', u: '/stable.html', k: 'stablecoin tether usdt crypto peg' },
           { t: 'Shipping Terminal', u: '/shipping.html', k: 'shipping freight port baltic suez' },
           { t: 'AI Analysis', u: '/ai.html', k: 'ai analyst ml question deep' },
+          { t: 'Volatility Desk', u: '/vol.html', k: 'vol volatility vix move garch treasury yields fx stablecoin depeg insurance stocks stress' },
         ];
         if (auth.role === 'admin') PAGES.push({ t: 'Admin Console', u: '/admin.html', k: 'admin api probe health ml db database users diagnostics' });
         for (const p of PAGES) {
@@ -341,6 +399,45 @@ export default {
       if (path === '/api/admin/db/prune' && req.method === 'POST') return json({ ok: true, deleted: await pruneDB(env) }, 200);
       if (path === '/api/admin/kv') return json(await adminKV(env), 200);
 
+      /* ---- warehouse (series store) ---- */
+      if (path === '/api/admin/storage') {
+        const [states, meta, cnt] = await Promise.all([
+          unitStates(env), readMeta(env),
+          env.DB.prepare('SELECT COUNT(*) n, COUNT(DISTINCT id) s FROM series_points').first<{ n: number; s: number }>(),
+        ]);
+        const due = new Map(dueUnits(states).map(d => [d.u.key, d]));
+        const snaps = await readSnapshots(env);
+        return json({
+          ts: Date.now(), budget: ingestBudget(env), totalPoints: cnt?.n ?? 0, seriesWithData: cnt?.s ?? 0,
+          units: UNITS.map(u => {
+            const st = states[u.key];
+            return {
+              key: u.key, source: u.source, cadenceMin: u.cadenceMin, series: u.series.map(s => ({ id: s.id, label: s.label, cls: s.cls, points: meta[s.id]?.points ?? 0, firstTs: meta[s.id]?.first_ts ?? null, lastTs: meta[s.id]?.last_ts ?? null, last: meta[s.id]?.last_v ?? null })),
+              fetchedAt: st?.fetched_at ?? null, okAt: st?.ok_at ?? null, error: st?.error ?? null, fails: st?.fails ?? 0,
+              due: due.has(u.key), backfill: !st?.ok_at,
+            };
+          }),
+          snapshots: Object.fromEntries(Object.entries(snaps).map(([k, v]) => [k, { ageMs: Date.now() - v.ts }])),
+        }, 200);
+      }
+      if (path === '/api/admin/storage/ingest' && req.method === 'POST') {
+        const b = await readBody(req);
+        const keys = Array.isArray(b.keys) ? b.keys.map(String).filter((k: string) => UNITS.some(u => u.key === k)).slice(0, 40) : undefined;
+        const r = await runIngest(env, ingestBudget(env), keys);
+        const v = await refreshVol(env);
+        volMemo = null;
+        return json({ ok: true, ...r, volBuilt: v.built }, 200);
+      }
+      if (path === '/api/admin/storage/rebuild' && req.method === 'POST') {
+        // one class per request (the admin page loops) — keeps each call inside the CPU limit
+        const b = await readBody(req);
+        const cls = VOL_CLASSES.find(c => c === String(b.cls || ''));
+        if (!cls) return json({ error: 'cls must be one of ' + VOL_CLASSES.join(', ') }, 400);
+        const v = await refreshVol(env, { cls });
+        volMemo = null;
+        return json({ ok: true, built: v.built }, 200);
+      }
+
       /* ---- users ---- */
       if (path === '/api/admin/users') return json({ ...(await adminUsers(env)), me: { id: auth.id, name: auth.name } }, 200);
       if (path === '/api/admin/users/role' && req.method === 'POST') {
@@ -399,6 +496,9 @@ export default {
       await ensureSecrets(env);
       await ensureSchema(env).catch(e => console.error('SCHEMA_FAIL', errMsg(e)));
       if (controller.cron === '0 * * * *') { await hourly(env); return; }
+      // */5 trigger alternates: :00 :10 :20… warm the UI cache, :05 :15 :25… ingest + vol.
+      // separate invocations keep each one under the Free plan's 50-subrequest cap.
+      if (new Date(controller.scheduledTime).getUTCMinutes() % 10 === 5) { await ingestCycle(env, controller.scheduledTime); return; }
       await warm(env);
     })());
   },
@@ -408,9 +508,9 @@ export default {
 async function warm(env: Env): Promise<void> {
   try {
     const boot = await buildBootstrap(env, '15M');
-    // ttl 300 = cron cadence: requests read the cron copy instead of rebuilding against
-    // yahoo every minute. KV keeps it 30 min as the stale fallback.
-    await new AppCache(env.CACHE).write('boot:15M', boot, 300);
+    // ttl 600 = warm cadence (every 10 min): requests read the cron copy instead of
+    // rebuilding against yahoo. KV keeps it 60 min as the stale fallback.
+    await new AppCache(env.CACHE).write('boot:15M', boot, 600);
     const stmts: D1PreparedStatement[] = persistHealthRows().map(h => env.DB.prepare(
       `INSERT INTO provider_health(provider,last_success,last_failure,latency_ms,status) VALUES(?,?,?,?,?)
        ON CONFLICT(provider) DO UPDATE SET
@@ -440,6 +540,17 @@ async function warm(env: Env): Promise<void> {
       await c.write(key, await build(env), 900);
     } catch (e) { console.error('CRON_PAGES_FAIL', key, errMsg(e)); }
   }
+}
+
+/* ===== 10-min ingest cycle: warehouse poll → vol snapshots ===== */
+async function ingestCycle(env: Env, scheduledTime: number): Promise<void> {
+  try {
+    const r = await runIngest(env, ingestBudget(env));
+    const bad = r.ran.filter(x => !x.ok);
+    console.log('INGEST', JSON.stringify({ ran: r.ran.length, rows: r.rows, due: r.due, failed: bad.map(b => b.key + ': ' + b.error) }));
+  } catch (e) { console.error('INGEST_FAIL', errMsg(e)); }
+  try { await refreshVol(env, { slot: Math.floor(scheduledTime / 600000) }); }
+  catch (e) { console.error('VOL_REFRESH_FAIL', errMsg(e)); }
 }
 
 /* ===== hourly cycle: each step isolated so one failure never skips the rest ===== */

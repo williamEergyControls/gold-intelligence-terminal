@@ -18,6 +18,12 @@ const DDL = [
   `CREATE TABLE IF NOT EXISTS api_probes (ts INTEGER NOT NULL, provider TEXT NOT NULL, ok INTEGER NOT NULL, http INTEGER, latency_ms INTEGER, sample TEXT, detail TEXT, PRIMARY KEY (ts, provider))`,
   `CREATE INDEX IF NOT EXISTS idx_probe_provider ON api_probes(provider, ts DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id, expires_at)`,
+  // ---- time-series warehouse (store/ingest.ts) ----
+  `CREATE TABLE IF NOT EXISTS series_points (id TEXT NOT NULL, ts INTEGER NOT NULL, v REAL NOT NULL, PRIMARY KEY (id, ts)) WITHOUT ROWID`,
+  `CREATE TABLE IF NOT EXISTS series_meta (id TEXT PRIMARY KEY, label TEXT, cls TEXT, kind TEXT, unit TEXT, freq TEXT, source TEXT, src_id TEXT, points INTEGER, first_ts INTEGER, last_ts INTEGER, last_v REAL, prev_v REAL, updated_at INTEGER)`,
+  `CREATE TABLE IF NOT EXISTS ingest_units (key TEXT PRIMARY KEY, fetched_at INTEGER, ok_at INTEGER, error TEXT, last_rows INTEGER, last_ms INTEGER, last_ts INTEGER, fails INTEGER DEFAULT 0)`,
+  // computed analytics (vol snapshots, strip) — D1 instead of KV: no 1,000 writes/day cap
+  `CREATE TABLE IF NOT EXISTS snapshots (key TEXT PRIMARY KEY, ts INTEGER NOT NULL, json TEXT NOT NULL)`,
 ];
 
 let done = false;
