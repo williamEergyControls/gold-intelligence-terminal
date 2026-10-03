@@ -443,3 +443,12 @@ body.day ::-webkit-scrollbar-thumb{background:#c3cad1}
 }
 
 /* ===== END terminal.css ===== */
+
+/* ============ ML · VOL STRIP (js/ml-strip.js, every page) ============ */
+#mlstrip{display:flex;align-items:stretch;gap:0;overflow-x:auto;white-space:nowrap;background:var(--panel2);border-bottom:1px solid var(--line);min-height:30px;scrollbar-width:thin}
+#mlstrip .ms-c{display:flex;align-items:baseline;gap:7px;padding:6px 14px;border-right:1px solid var(--line2);text-decoration:none;color:var(--txt);font:10px var(--mono)}
+#mlstrip a.ms-c:hover{background:var(--panel3)}
+#mlstrip .ms-k{font:600 8.5px var(--mono);letter-spacing:.14em;color:var(--dim)}
+#mlstrip b{font:700 11px var(--mono)}
+#mlstrip .ms-d{color:var(--mut);font-size:9.5px}
+#mlstrip > .ms-k,#mlstrip > .ms-d{padding:7px 10px}
