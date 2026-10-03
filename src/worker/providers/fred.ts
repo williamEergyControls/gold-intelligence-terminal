@@ -13,7 +13,8 @@ export const FRED_MAP: Record<string, { id: string; label: string; kind: 'yoy' |
   BREAKEV: { id: 'T10YIE',     label: '10Y Breakeven',   kind: 'bp', freq: 'Daily' },
   SOFR:    { id: 'SOFR',       label: 'SOFR · Repo',     kind: 'bp', freq: 'Daily' },
   EFFR:    { id: 'EFFR',       label: 'Fed Funds (EFFR)', kind: 'bp', freq: 'Daily' },
-  AUTOINS: { id: 'CUSR0000SETB', label: 'Auto Insurance CPI', kind: 'yoy', freq: 'Monthly' },
+  // was CUSR0000SETB = CPI *motor fuel* (gasoline), mislabeled as auto insurance. SETE = motor vehicle insurance.
+  AUTOINS: { id: 'CUSR0000SETE', label: 'Auto Insurance CPI', kind: 'yoy', freq: 'Monthly' },
 };
 
 export async function fredRows(env: Env): Promise<MacroRow[]> {
