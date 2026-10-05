@@ -1,11 +1,9 @@
 (function(){
 'use strict';
 var $=function(s){return document.querySelector(s)};
-var fmt=function(n,d){if(n==null||isNaN(n))return'--';d=d==null?0:d;return Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d})};
+var fmt=function(n,d){if(n==null||isNaN(n))return'–';d=d==null?0:d;return Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d})};
 var sgn=function(n){return n>0?'+':''};
 var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
-setInterval(function(){$('#clock').textContent=new Date().toLocaleTimeString('en-GB')},1000);
- $('#clock').textContent=new Date().toLocaleTimeString('en-GB');
 
 /* reference data - USDA NASS publishes annually */
 var REGIONS=[
@@ -30,7 +28,7 @@ c.textContent='UP +'+fmt(avgChg,1)+'% YoY (ESTIMATE)';
 
 var fh='';
 REGIONS.forEach(function(r){
-  fh+='<div class="lrow"><span class="name">'+r.name+'</span><span class="val">$'+fmt(r.value,0)+'</span><span class="'+(r.chg>=0?'up':'dn')+'" style="justify-self:end;font-size:10px">'+sgn(r.chg)+fmt(r.chg,1)+'%</span></div>';
+  fh+='<div class="lrow"><span class="name">'+r.name+'</span><span class="val">$'+fmt(r.value,0)+'</span><span class="'+(r.chg>=0?'up':'dn')+'" style="justify-self:end">'+sgn(r.chg)+fmt(r.chg,1)+'%</span></div>';
 });
 fh+='<div class="footnote">USDA NASS FARM REAL ESTATE VALUES - $/ACRE - ANNUAL<br>LAST PUBLISHED: AUGUST 2025</div>';
  $('#farmBody').innerHTML=fh;

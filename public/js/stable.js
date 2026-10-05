@@ -1,11 +1,9 @@
 (function(){
 'use strict';
 var $=function(s){return document.querySelector(s)};
-var fmt=function(n,d){if(n==null||isNaN(n))return'--';d=d==null?4:d;return Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d})};
+var fmt=function(n,d){if(n==null||isNaN(n))return'–';d=d==null?4:d;return Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d})};
 var sgn=function(n){return n>0?'+':''};
 var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
-setInterval(function(){$('#clock').textContent=new Date().toLocaleTimeString('en-GB')},1000);
- $('#clock').textContent=new Date().toLocaleTimeString('en-GB');
 
 /* server-side now: /api/markets/stablecoins reads the D1 warehouse (CoinGecko ingested hourly,
    no browser → CoinGecko calls, no per-viewer rate limits). chart: /api/series deviation in bp. */
@@ -25,7 +23,7 @@ function load(){
       if(c.id==='USDT'){
         $('#usdtPx').textContent='$'+fmt(c.price,4);
         var ch=$('#usdtChg');ch.className='bigchg '+(Math.abs(bp||0)<10?'up':'dn');
-        ch.textContent=(c.chg1dBp>=0?'UP +':'DN ')+fmt(Math.abs(c.chg1dBp||0),1)+' BP 1D · '+day(c.lastTs);
+        ch.textContent=(c.chg1dBp>=0?'+':'−')+fmt(Math.abs(c.chg1dBp||0),1)+' bp today · '+day(c.lastTs);
         $('#pegHealth').innerHTML='PEG DEVIATION: <b class="'+PEGCLS(bp)+'">'+sgn(bp)+fmt(bp,1)+' bp</b><br>STATUS: <b class="'+PEGCLS(bp)+'">'+PEGTXT(bp)+'</b> · REGIME '+esc(c.regime)+'<br>30D MAX |DEV|: '+fmt(c.max30Bp,1)+' bp · 90D MAX: '+fmt(c.max90Bp,1)+' bp<br>PEG VOL: '+fmt(c.volBpDay,2)+' bp/day · DAYS &gt;10bp (90D): '+(c.daysOver10bp90==null?'--':c.daysOver10bp90)+'<br><br>1 BP = $0.0001 · &gt;50 BP IS NOTABLE · &gt;100 BP IS SEVERE';
         $('#marketCap').textContent=money(c.mcap)+(c.mcapChg30d!=null?' ('+sgn(c.mcapChg30d)+fmt(c.mcapChg30d,1)+'% 30D)':'');
       }
@@ -40,7 +38,7 @@ function day(ts){return ts?new Date(ts).toISOString().slice(0,10):'--'}
 function drawChart(){
   if(!window.GK)return;
   var wrap=document.querySelector('#s-charts .ch-wrap');
-  if(wrap&&!document.getElementById('chTip')){var t=document.createElement('div');t.id='chTip';t.className='tip';t.style.cssText='position:absolute;pointer-events:none;background:var(--panel2);border:1px solid var(--line);padding:5px 7px;font:10px/1.55 var(--mono);white-space:nowrap;z-index:5;display:none';wrap.appendChild(t);}
+  if(wrap&&!document.getElementById('chTip')){var t=document.createElement('div');t.id='chTip';t.className='tip';t.style.cssText='position:absolute;pointer-events:none;background:var(--panel2);border:1px solid var(--line);padding:5px 7px;font:400 12.5px/1.5 var(--sans);white-space:nowrap;z-index:5;display:none';wrap.appendChild(t);}
   Promise.all(['USDT','USDC'].map(function(id){return fetch('/api/series?id='+id+'&days=90').then(function(r){return r.ok?r.json():null}).catch(function(){return null})})).then(function(ds){
     var cols=[GK.css('--gold'),GK.css('--cyan')],series=[];
     ds.forEach(function(d,i){if(d&&d.devBp)series.push({name:d.id+' DEV (BP)',pts:d.devBp.map(function(p){return{x:p.t,y:p.v}}),color:cols[i],width:i?1.5:2});});

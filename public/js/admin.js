@@ -9,10 +9,10 @@
 var $ = function (s) { return document.querySelector(s); };
 var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
 var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
-var fmt = function (n, d) { if (n == null || !isFinite(n)) return '--'; d = d == null ? 2 : d; return Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }); };
+var fmt = function (n, d) { if (n == null || !isFinite(n)) return '–'; d = d == null ? 2 : d; return Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }); };
 var pct = function (v, d) { return v == null || !isFinite(v) ? '--' : (v * 100).toFixed(d == null ? 1 : d) + '%'; };
 function age(ms) {
-  if (ms == null || !isFinite(ms)) return '--';
+  if (ms == null || !isFinite(ms)) return '–';
   var s = Math.max(0, Math.round(ms / 1000));
   if (s < 60) return s + 's';
   if (s < 3600) return Math.round(s / 60) + 'm';
@@ -21,13 +21,13 @@ function age(ms) {
 }
 function ago(ts) { return ts ? age(Date.now() - ts) + ' ago' : '--'; }
 function bytes(b) {
-  if (b == null || !isFinite(b)) return '--';
+  if (b == null || !isFinite(b)) return '–';
   if (b < 1024) return b + ' B';
   if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
   if (b < 1073741824) return (b / 1048576).toFixed(2) + ' MB';
   return (b / 1073741824).toFixed(2) + ' GB';
 }
-function dt(ts) { if (!ts) return '--'; var d = new Date(ts); return d.toISOString().slice(0, 10) + ' ' + d.toTimeString().slice(0, 5); }
+function dt(ts) { if (!ts) return '–'; var d = new Date(ts); return d.toISOString().slice(0, 10) + ' ' + d.toTimeString().slice(0, 5); }
 function css(n) { return getComputedStyle(document.body).getPropertyValue(n).trim(); }
 var CHARTS = {}; // declared before the theme block — apply() redraws charts on load
 function setText(sel, t) { var e = $(sel); if (e) e.textContent = t; }
@@ -65,8 +65,6 @@ function forbidden(d) {
 }
 
 /* ---------- clock + theme ---------- */
-setInterval(function () { setText('#clock', new Date().toLocaleTimeString('en-GB')); }, 1000);
-setText('#clock', new Date().toLocaleTimeString('en-GB'));
 (function () {
   var mode = 'auto';
   try { mode = localStorage.getItem('git-theme') || 'auto'; } catch (e) { }
@@ -117,7 +115,7 @@ function drawChart(id) {
   var grid = css('--grid'), mut = css('--mut'), dim = css('--dim');
   var all = []; spec.series.forEach(function (s) { all = all.concat(s.pts); });
   if (!all.length) {
-    ctx.fillStyle = dim; ctx.font = '10px "IBM Plex Mono", Consolas, monospace'; ctx.textAlign = 'center';
+    ctx.fillStyle = dim; ctx.font = '12px "Roboto Flex", Roboto, system-ui, sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(spec.empty || 'NO DATA YET', W / 2, H / 2); c.geo = null; return;
   }
   var xs = all.map(function (p) { return p.x; }), ys = all.map(function (p) { return p.y; });
@@ -129,7 +127,7 @@ function drawChart(id) {
   var L = 52, R = 10, T = 8, B = 20, pw = W - L - R, ph = H - T - B;
   var X = function (x) { return L + (x - x0) / (x1 - x0) * pw; };
   var Y = function (y) { return T + (1 - (y - y0) / (y1 - y0)) * ph; };
-  ctx.font = '8.5px "IBM Plex Mono", Consolas, monospace'; ctx.lineWidth = 1;
+  ctx.font = '11px "Roboto Flex", Roboto, system-ui, sans-serif'; ctx.lineWidth = 1;
   for (var g = 0; g <= 4; g++) {
     var yy = T + ph * g / 4, val = y1 - (y1 - y0) * g / 4;
     ctx.strokeStyle = grid; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(L, yy); ctx.lineTo(W - R, yy); ctx.stroke(); ctx.setLineDash([]);
@@ -221,7 +219,7 @@ function renderApis() {
     var upt = h.length ? h.filter(function (x) { return x.ok; }).length / h.length : null;
         return '<tr>' +
       '<td>' + stCell(p) + '</td>' +
-      '<td><b>' + esc(p.provider.toUpperCase()) + '</b><div class="dim" style="font-size:9px">' + esc(p.label) + '</div></td>' +
+      '<td><b>' + esc(p.provider.toUpperCase()) + '</b><div class="dim" style="">' + esc(p.label) + '</div></td>' +
       '<td>' + keyCell(p) + '</td>' +
       '<td class="r">' + (p.http != null ? esc(p.http) : '--') + '</td>' +
       '<td class="r">' + (p.latencyMs != null ? p.latencyMs + 'ms' : '--') + '</td>' +
@@ -537,7 +535,7 @@ $('#usrTbl').addEventListener('click', function (ev) {
 api('/api/auth/me').then(function (me) {
   if (!me.valid) { location.replace('/login.html'); return; }
   try { localStorage.setItem('git-role', me.role || 'operator'); localStorage.setItem('git-name', me.name || ''); } catch (e) { }
-  setText('#opbadge', String(me.name || 'ADMIN').toUpperCase() + ' · ' + String(me.role || '').toUpperCase());
+  // avatar comes from the shell header
   if (me.role !== 'admin') { forbidden(me); return; }
   showTab(TAB);
   loadApis(false, false).then(function () { return loadApis(true, false); });

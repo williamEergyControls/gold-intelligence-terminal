@@ -1,56 +1,72 @@
-(function(){
-'use strict';
-var $=function(s){return document.querySelector(s)};
-var fmt=function(n,d){if(n==null||isNaN(n))return'--';d=d==null?2:d;return Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d})};
-var sgn=function(n){return n>0?'+':''};
-var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
-setInterval(function(){$('#clock').textContent=new Date().toLocaleTimeString('en-GB')},1000);
- $('#clock').textContent=new Date().toLocaleTimeString('en-GB');
+/* WATER DESK
+   INIT   /api/page/agri (NQH2O + USGS gauges) and /api/drought (weekly USDM by state)
+   POLL   page every 5 min (gauges are 15 min upstream), drought on load
+   PUBLISH hero, drought choropleth with gauges plotted, gauge table, worst states */
+(function () {
+  'use strict';
+  var G = window.GT, $ = function (s) { return document.querySelector(s); };
+  var fmt = G.fmt, esc = G.esc, sgn = G.sgn;
+  var P = null, DR = null;
 
-var D=null;
-fetch('/api/page/agri').then(function(r){return r.json()}).then(function(d){D=d;render();}).catch(function(e){console.error(e)});
-
-function render(){
-  if(!D)return;
-  if(D.water){
-    if(D.water.nqH2o){
-      $('#nqh2oPx').textContent=fmt(D.water.nqH2o.value,0)+' $/AF';
-      var chg=D.water.nqH2o.value-D.water.nqH2o.prior;
-      var c=$('#nqh2oChg');c.className='bigchg '+(chg>=0?'up':'dn');
-      c.textContent=(chg>=0?'UP ':'DN ')+sgn(chg)+fmt(Math.abs(chg),0)+' $/AF';
-      $('#waterSummary').innerHTML='CALIFORNIA WATER INDEX: '+fmt(D.water.nqH2o.value,0)+' $/ACRE-FOOT<br>PRIOR: '+fmt(D.water.nqH2o.prior,0)+' $/AF<br>AS OF: '+esc(D.water.nqH2o.asOf)+'<br><br>SOURCE: FRED / NASDAQ VELES';
-    } else {
-      $('#waterSummary').textContent='NQH2O DATA PENDING - VERIFY SERIES ID AT fred.stlouisfed.org';
+  function hero() {
+    var w = P && P.water ? P.water.nqH2o : null;
+    if (w) {
+      $('#wPx').textContent = '$' + fmt(w.value, 0);
+      var ch = w.value - w.prior, el = $('#wChg');
+      el.className = 'bigchg ' + G.cls(ch);
+      el.textContent = sgn(ch) + fmt(ch, 0) + ' (' + sgn(ch) + fmt(w.prior ? ch / w.prior * 100 : 0, 1) + '%) vs prior print';
+    } else { $('#wPx').textContent = '–'; $('#wChg').textContent = 'Index pending the first FRED pull'; }
+    var kv = '<div><label>Prior print</label>' + (w ? '$' + fmt(w.prior, 0) : '–') + '</div><div><label>As of</label>' + (w ? esc(w.asOf) : '–') + '</div>';
+    if (DR && DR.conus) {
+      var dd = DR.conus.prevDrought != null ? DR.conus.drought - DR.conus.prevDrought : null;
+      kv += '<div><label>Lower 48 in drought</label>' + fmt(DR.conus.drought, 1) + '%' + (dd != null ? ' <span class="' + (dd > 0 ? 'dn' : 'up') + '" style="font-size:13px">' + sgn(dd) + fmt(dd, 1) + '</span>' : '') + '</div>';
+      kv += '<div><label>Extreme or exceptional</label>' + fmt(DR.conus.d3d4, 1) + '%</div>';
     }
-    var gh='';
-    (D.water.levels||[]).forEach(function(l){
-      gh+='<div class="wrow"><span class="name">'+esc(l.name)+'</span><span class="val">'+fmt(l.gageFt,2)+' ft</span><div class="gauge-bar"><i style="width:'+Math.min(100,l.gageFt*10)+'%"></i></div></div>';
-    });
-    gh+='<div class="footnote">USGS NWIS INSTANTANEOUS VALUES - RIVER STAGE IN FEET<br>GAUGE HEIGHT IS AN INDICATOR, NOT LAKE CAPACITY</div>';
-    $('#gaugeList').innerHTML=gh;
+    $('#wKv').innerHTML = kv;
   }
-  var ph='';
-  ph+='<div class="lrow"><span class="name">CO RIVER WATER RIGHTS</span><span class="val">REF</span><span class="dim">SENIOR/JUNIOR PRIORITY SYSTEM</span></div>';
-  ph+='<div class="lrow"><span class="name">CA SWP ALLOCATION</span><span class="val">REF</span><span class="dim">STATE WATER PROJECT</span></div>';
-  ph+='<div class="lrow"><span class="name">CENTRAL AZ PROJECT</span><span class="val">REF</span><span class="dim">CAP ALLOCATION</span></div>';
-  ph+='<div class="footnote">WATER RIGHTS ARE LOCATION AND PRIORITY SPECIFIC<br>NO LIVE TRADING MARKET EXISTS FOR MOST RIGHTS<br>NQH2O IS THE ONLY TRADEABLE INDEX</div>';
-  $('#pricingList').innerHTML=ph;
-  var dh='Drought conditions update weekly (USDM).<br><br>For real-time drought data, see:<br>droughtmonitor.unl.edu<br><br>This panel will show automated drought data in a future update.';
-  $('#droughtBody').innerHTML=dh;
-  if(D.news){
-    $('#nwList').innerHTML=D.news.filter(function(n){return n.topic==='macro'||n.title.toLowerCase().includes('water')||n.title.toLowerCase().includes('drought')}).slice(0,8).map(function(n){
-      return '<li><time>'+new Date(n.publishedTs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</time><span class="tag">'+esc(n.source)+'</span><p>'+esc(n.title)+'</p><span class="sent '+(n.sentiment==='bull'?'b':n.sentiment==='bear'?'s':'n')+'">'+(n.sentiment==='bull'?'BULL':n.sentiment==='bear'?'BEAR':'NEUT')+'</span></li>';
-    }).join('')||'<li><span class="dim">NO WATER NEWS TODAY</span></li>';
-  }
-}
 
-/* theme */
-(function(){
-  var mode=localStorage.getItem('git-theme')||'auto';
-  var isDay=function(){return mode==='day'||(mode==='auto'&&matchMedia('(prefers-color-scheme: light)').matches)};
-  var apply=function(){document.body.classList.toggle('day',isDay());var b=document.getElementById('themeBtn');if(b)b.textContent=mode==='auto'?'AUTO':mode.toUpperCase();};
-  var b=document.getElementById('themeBtn');
-  if(b)b.addEventListener('click',function(){mode=mode==='auto'?'day':(mode==='day'?'night':'auto');localStorage.setItem('git-theme',mode);apply();});
-  apply();
-})();
+  function gauges() {
+    var L = (P && P.water && P.water.levels) || [];
+    $('#gBody').innerHTML = L.map(function (l) {
+      var c = l.chg24;
+      return '<tr><td>' + esc(l.name) + '<div class="dim" style="font-size:12px">' + (l.kind === 'reservoir' ? 'Reservoir' : 'River') + ' · USGS ' + esc(l.site) + '</div></td>' +
+        '<td class="r">' + (l.gageFt != null ? fmt(l.gageFt, 2) + ' ft' : l.elevFt != null ? fmt(l.elevFt, 1) + ' ft elev' : '–') + '</td>' +
+        '<td class="r">' + (l.flowCfs != null ? fmt(l.flowCfs, 0) + ' cfs' : '–') + '</td>' +
+        '<td class="r ' + (c == null ? 'dim' : G.cls(c)) + '">' + (c == null ? '–' : sgn(c) + fmt(c, 2)) + '</td>' +
+        '<td class="r dim">' + (l.ts ? G.ago(l.ts) : '–') + '</td></tr>';
+    }).join('') || '<tr><td colspan="5" class="dim">Gauges load with the first 15-minute pull.</td></tr>';
+  }
+
+  function map() {
+    if (!window.USMap) return;
+    var el = $('#mapBody');
+    if (!DR) { el.innerHTML = '<div class="empty">The drought map loads after the first weekly pull.</div>'; return; }
+    var r = MapKit.ramp(MapKit.DROUGHT), vals = {};
+    Object.keys(DR.states).forEach(function (k) { vals[k] = DR.states[k].drought; });
+    $('#mapSrc').textContent = 'U.S. Drought Monitor, map of ' + DR.mapDate + ' · USGS gauges';
+    var pts = ((P && P.water && P.water.levels) || []).filter(function (l) { return l.lat != null && l.lon != null; }).map(function (l) {
+      var c = l.chg24;
+      return { lat: l.lat, lon: l.lon, r: 6, fill: c == null ? 'var(--blue)' : c >= 0 ? 'var(--blue)' : 'var(--amber)',
+        html: '<b>' + esc(l.name) + '</b><div class="m">' + (l.gageFt != null ? fmt(l.gageFt, 2) + ' ft stage' : '') + (l.flowCfs != null ? ' · ' + fmt(l.flowCfs, 0) + ' cfs' : '') + (c != null ? '<br>' + sgn(c) + fmt(c, 2) + ' ft in 24 h' : '') + '</div>' };
+    });
+    USMap.draw(el, {
+      title: 'Share of each state in drought, with river gauges', values: vals, points: pts,
+      color: function (v) { return v < 0.5 ? 'var(--panel2)' : r(v / 100); },
+      tip: function (a, n, v) { var s = DR.states[a]; return '<b>' + esc(n) + '</b><div class="m">' + (s ? fmt(s.drought, 1) + '% in drought<br>' + fmt(s.d3 + s.d4, 1) + '% extreme or exceptional' + (s.prevDrought != null ? '<br>' + sgn(s.drought - s.prevDrought) + fmt(s.drought - s.prevDrought, 1) + ' pts vs last week' : '') : 'No data') + '</div>'; },
+      legend: '<span>0%</span><span class="ramp" style="background:' + MapKit.rampCss(MapKit.DROUGHT) + '"></span><span>100% of state in drought</span><span class="sw"><i style="background:var(--blue);border-radius:50%"></i>Gauge rising</span><span class="sw"><i style="background:var(--amber);border-radius:50%"></i>Gauge falling</span>'
+    });
+    var worst = Object.keys(DR.states).map(function (k) { return [k, DR.states[k]]; }).sort(function (a, b) { return b[1].drought - a[1].drought; }).slice(0, 8);
+    $('#worst').innerHTML = worst.map(function (w) {
+      var d = w[1].prevDrought != null ? w[1].drought - w[1].prevDrought : null;
+      return '<div><span class="n">' + esc(w[0]) + '<small>' + fmt(w[1].d3 + w[1].d4, 1) + '% extreme or exceptional</small></span><span class="v">' + fmt(w[1].drought, 1) + '%</span><span class="c ' + (d == null ? 'dim' : d > 0 ? 'dn' : 'up') + '">' + (d == null ? '–' : sgn(d) + fmt(d, 1) + ' pts') + '</span></div>';
+    }).join('');
+  }
+
+  function render() { hero(); gauges(); map(); $('#asof').textContent = P && P.builtAt ? 'Updated ' + G.ago(P.builtAt) : ''; }
+  function loadPage() { return G.getJSON('/api/page/agri').then(function (d) { P = d; }).catch(function () { }); }
+  function loadDrought() { return G.getJSON('/api/drought').then(function (d) { DR = d && d.states ? d : null; }).catch(function () { DR = null; }); }
+  Promise.all([loadPage(), loadDrought()]).then(render);
+  setInterval(function () { if (!document.hidden) loadPage().then(function () { hero(); gauges(); }); }, 300000);
+  NewsFeed.mount($('#nfBody'), { topic: 'water', limit: 8, filters: false });
+  Cal.mount($('#calBody'), { scope: 'water', compact: true });
 })();

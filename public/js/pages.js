@@ -21,15 +21,13 @@ const AH = { 'x-session': TOKEN };
 
 async function getJSON(u, h) { const r = await fetch(u, h ? { headers: h } : undefined); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }
 
-/* ---------- clock ---------- */
-function tick() { const el = $('#clock'); if (el) el.textContent = new Date().toLocaleTimeString('en-GB'); }
-setInterval(tick, 1000); tick();
+/* clock lives in the shared header (shell.js) */
 
 /* ---------------- renderers ---------------- */
 function renderTape() {
   const h = (D && D.tape ? D.tape : []).map(t => {
     const ch = t.changePct ?? 0, dg = t.price > 500 ? 1 : (t.price > 20 ? 2 : 3);
-    return '<span class="tg"><span class="k">' + esc(t.symbol) + '</span><span class="v">' + fmt(t.price, dg) + '</span><span class="c ' + cls(ch) + '">' + (ch >= 0 ? 'UP ' : 'DN ') + sgn(ch) + fmt(Math.abs(ch), 2) + '%</span></span>';
+    return '<span class="tg"><span class="k">' + esc(t.symbol) + '</span><span class="v">' + fmt(t.price, dg) + '</span><span class="c ' + cls(ch) + '">' + sgn(ch) + fmt(ch, 2) + '%</span></span>';
   }).join('');
   const a = $('#tapeA'), b = $('#tapeB'); if (a) a.innerHTML = h; if (b) b.innerHTML = h;
 }
@@ -39,9 +37,9 @@ function renderHero() {
   $('#px').textContent = fmt(g.price);
   const bc = $('#pxc'); bc.className = 'bigchg ' + cls(p);
   bc.innerHTML = (c >= 0 ? '+ ' : '- ') + fmt(Math.abs(c)) + '  (' + sgn(p) + fmt(p) + '%)';
-  $('#meta').textContent = (g.name || g.symbol).toUpperCase() + ' - ' + (g.unit || C.heroUnit || '');
-  $('#prov').textContent = String(g.source).toUpperCase() + ' - ' + (g.delay === 'simulated' ? 'SIM' : 'NEAR LIVE');
-  const chip = $('#chip'); if (chip) { chip.textContent = g.delay === 'simulated' ? 'SIM' : 'NEAR LIVE'; chip.className = 'chip ' + (g.delay === 'simulated' ? 'ai' : 'near'); }
+  $('#meta').textContent = (g.name || g.symbol) + ', ' + (g.unit || C.heroUnit || '');
+  $('#prov').textContent = String(g.source) + (g.delay === 'simulated' ? ', simulated' : ', near live');
+  const chip = $('#chip'); if (chip) { chip.textContent = g.delay === 'simulated' ? 'Simulated' : 'Near live'; chip.className = 'chip ' + (g.delay === 'simulated' ? 'ai' : 'near'); }
   $('#oo').textContent = fmt(g.open); $('#oh').textContent = fmt(g.high); $('#ol').textContent = fmt(g.low); $('#op').textContent = fmt(g.prevClose);
   $('#obid').textContent = fmt(g.bid); $('#oask').textContent = fmt(g.ask);
   if (g.high && g.low && g.high > g.low) $('#rmark').style.left = Math.round((g.price - g.low) / (g.high - g.low) * 100) + '%';
@@ -58,7 +56,7 @@ function renderSpot() {
   $('#ratios').innerHTML = (D && D.ratios ? D.ratios : []).map(r =>
     '<div class="hc"><div class="t">' + esc(r.label) + '</div><div class="c gold">' + fmt(r.value, 1) + '</div><div class="p">' + esc(r.unit) + '</div></div>').join('');
   $('#spreads').innerHTML = (D && D.spreads && D.spreads.length ? D.spreads : []).map(s =>
-    '<div class="bi"><span class="n">' + esc(s.label) + '</span><span class="gold">' + esc(s.value) + '</span><span class="dim" style="justify-self:end;font-size:9px">' + (s.change ? esc(s.change) : '') + '</span></div>').join('') || '<div class="bi"><span class="dim">--</span></div>';
+    '<div class="bi"><span class="n">' + esc(s.label) + '</span><span class="gold">' + esc(s.value) + '</span><span class="dim" style="justify-self:end">' + (s.change ? esc(s.change) : '') + '</span></div>').join('') || '<div class="bi"><span class="dim">--</span></div>';
 }
 function renderExtra() {
   const eb = $('#extraBody'); if (!eb || !D) return;
@@ -77,14 +75,14 @@ function renderExtra() {
         h += '<div class="bi"><span class="n">CA WATER IDX</span><span class="' + cls(chg) + '">' + sgn(chg) + fmt(chg, 0) + ' $/AF</span><span class="gold" style="justify-self:end">' + fmt(D.water.nqH2o.value, 0) + '</span></div>';
       }
       for (const l of (D.water.levels || [])) {
-        h += '<div class="bi"><span class="n">' + esc(l.name) + '</span><span class="cyan">' + fmt(l.gageFt, 2) + ' ft</span><span class="dim" style="justify-self:end;font-size:8px">GAUGE - INDICATOR</span></div>';
+        h += '<div class="bi"><span class="n">' + esc(l.name) + '</span><span class="cyan">' + fmt(l.gageFt, 2) + ' ft</span><span class="dim" style="justify-self:end">GAUGE - INDICATOR</span></div>';
       }
       h += '<div class="footnote">NQH2O VIA FRED - USGS NWIS GAUGES = RIVER INDICATORS, NOT LAKE % CAPACITY</div>';
     }
     if (D.weather) {
       const w = D.weather;
       h += '<h6 class="secH" style="margin-top:10px">WEATHER - S. PLAINS (OPEN-METEO)</h6>';
-      h += '<div class="bi"><span class="n">NOW</span><span class="cyan">' + fmt(w.tempC, 0) + 'C / ' + fmt(w.windKph, 0) + ' km/h</span><span class="dim" style="justify-self:end;font-size:8px">LIVE - NO KEY</span></div>';
+      h += '<div class="bi"><span class="n">NOW</span><span class="cyan">' + fmt(w.tempC, 0) + 'C / ' + fmt(w.windKph, 0) + ' km/h</span><span class="dim" style="justify-self:end">LIVE - NO KEY</span></div>';
       h += (w.daily || []).slice(0, 5).map(d =>
         '<div class="bi"><span class="n">' + esc(d.date.slice(5)) + '</span><span class="mut">' + fmt(d.tmin, 0) + '-' + fmt(d.tmax, 0) + 'C</span><span class="' + (d.precip > 1 ? 'cyan' : 'dim') + '" style="justify-self:end">' + fmt(d.precip, 1) + 'mm</span></div>').join('');
     }
@@ -122,17 +120,17 @@ function drawChart() {
   const py = v => padT + (hi - v) / (hi - lo) * plotH, cw = (W - padL - padR) / n, bw = Math.max(1.5, cw * .62);
   const ma = a => a.map((_, i) => i < 19 ? null : a.slice(i - 19, i + 1).reduce((s, v) => s + v, 0) / 20);
   const m20 = ma(d.map(k => k.c));
-  ctx.font = '9px IBM Plex Mono'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  ctx.font = '11px "Roboto Flex", Roboto, system-ui, sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
   ctx.setLineDash([3, 3]); ctx.strokeStyle = grid; ctx.fillStyle = mut;
   for (let g = 0; g <= 4; g++) { const v = hi - (hi - lo) * g / 4, y = py(v); ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke(); ctx.fillText(fmt(v, 1), W - padR + 5, y); }
   ctx.setLineDash([]);
   let vmax = 1; d.forEach(k => vmax = Math.max(vmax, k.v || 0));
   d.forEach((k, i) => { const h = (k.v || 0) / vmax * (volH - 8), x = padL + cw * i + (cw - bw) / 2; ctx.fillStyle = k.c >= k.o ? 'rgba(19,217,126,.3)' : 'rgba(255,79,94,.3)'; ctx.fillRect(x, H - axB - h, bw, h); });
   d.forEach((k, i) => { const x = padL + cw * i + cw / 2, u = k.c >= k.o; ctx.strokeStyle = ctx.fillStyle = u ? up : dn; ctx.beginPath(); ctx.moveTo(x, py(k.h)); ctx.lineTo(x, py(k.l)); ctx.stroke(); ctx.fillRect(x - bw / 2, py(Math.max(k.o, k.c)), bw, Math.max(1, py(Math.min(k.o, k.c)) - py(Math.max(k.o, k.c)))); });
-  ctx.beginPath(); let st = false; m20.forEach((v, i) => { if (v == null) return; const x = padL + cw * i + cw / 2; st ? ctx.lineTo(x, py(v)) : ctx.moveTo(x, py(v)); st = true; }); ctx.strokeStyle = '#2fd6e8'; ctx.lineWidth = 1.1; ctx.stroke(); ctx.lineWidth = 1;
+  ctx.beginPath(); let st = false; m20.forEach((v, i) => { if (v == null) return; const x = padL + cw * i + cw / 2; st ? ctx.lineTo(x, py(v)) : ctx.moveTo(x, py(v)); st = true; }); ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--cyan').trim() || '#2fd6e8'; ctx.lineWidth = 1.1; ctx.stroke(); ctx.lineWidth = 1;
   const last = d[n - 1].c, ly = py(last);
   ctx.setLineDash([5, 4]); ctx.strokeStyle = 'rgba(255,179,0,.8)'; ctx.beginPath(); ctx.moveTo(padL, ly); ctx.lineTo(W - padR, ly); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle = gold; ctx.fillRect(W - padR + 1, ly - 8, padR - 4, 16); ctx.fillStyle = '#000'; ctx.fillText(fmt(last, 1), W - padR + 5, ly);
+  ctx.fillStyle = gold; ctx.fillRect(W - padR + 1, ly - 8, padR - 4, 16); ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--panel').trim() || '#000'; ctx.fillText(fmt(last, 1), W - padR + 5, ly);
   if (hoverX >= 0) {
     const i = Math.max(0, Math.min(n - 1, Math.floor((hoverX - padL) / cw))); const x = padL + cw * i + cw / 2;
     ctx.setLineDash([2, 3]); ctx.strokeStyle = mut; ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, H - axB); ctx.stroke(); ctx.setLineDash([]);

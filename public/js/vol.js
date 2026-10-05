@@ -23,16 +23,13 @@ var CLASS_INFO = {
   commod: { t: 'Gold · silver · oil + implied vol', chip: 'DAILY', note: 'Front-month futures (GC, SI, CL) + CBOE GVZ / OVX via Yahoo (unofficial). Futures ≠ spot; the gold desk hero uses spot.' },
 };
 
-setInterval(function () { $('#clock').textContent = new Date().toLocaleTimeString('en-GB'); }, 1000);
-$('#clock').textContent = new Date().toLocaleTimeString('en-GB');
-
 function getJSON(u) {
   return fetch(u, { headers: { 'x-session': TOKEN } }).then(function (r) {
     if (r.status === 401) { location.replace('/login.html'); throw new Error('UNAUTHORIZED'); }
     return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status)); return d; });
   });
 }
-function age(ms) { if (ms == null) return '--'; var s = Math.round(ms / 1000); return s < 60 ? s + 's' : s < 3600 ? Math.round(s / 60) + 'm' : s < 172800 ? (s / 3600).toFixed(1) + 'h' : Math.round(s / 86400) + 'd'; }
+function age(ms) { if (ms == null) return '–'; var s = Math.round(ms / 1000); return s < 60 ? s + 's' : s < 3600 ? Math.round(s / 60) + 'm' : s < 172800 ? (s / 3600).toFixed(1) + 'h' : Math.round(s / 86400) + 'd'; }
 function day(ts) { return ts ? new Date(ts).toISOString().slice(0, 10) : '--'; }
 function sg(v) { return v > 0 ? '+' : ''; }
 function cls(v) { return v == null ? 'dim' : v >= 0 ? 'up' : 'dn'; }
@@ -182,7 +179,7 @@ function renderCross() {
   var x = V.cross;
   if (!x) { $('#stressBox').innerHTML = '<div class="emptyst">WARMING</div>'; $('#alertBox').innerHTML = ''; return; }
   var st = x.stress, col = function (r) { return r === 'STRESS' ? css('--dn') : r === 'ELEVATED' ? css('--amber') : r === 'LOW' ? css('--up') : css('--mut'); };
-  var h = '<div style="display:flex;align-items:baseline;gap:10px"><b style="font:700 34px var(--mono)">' + (st.score != null ? st.score : '--') + '</b><span class="mut">/ 100</span>' + reg(st.regime) + '</div>';
+  var h = '<div style="display:flex;align-items:baseline;gap:10px"><b style="font:400 36px var(--sans)">' + (st.score != null ? st.score : '--') + '</b><span class="mut">/ 100</span>' + reg(st.regime) + '</div>';
   h += '<div class="gauge"><i style="width:' + (st.score || 0) + '%;background:' + col(st.regime) + '"></i></div>';
   Object.keys(st.components).forEach(function (k) { var c = st.components[k], p = c.pct;
     h += '<div class="comp" title="' + esc(c.basis) + '"><span class="mut">' + esc(k.toUpperCase()) + '</span><span class="t"><i style="width:' + (p || 0) + '%;background:' + col(p == null ? '' : p < 20 ? 'LOW' : p < 60 ? 'NORMAL' : p < 85 ? 'ELEVATED' : 'STRESS') + '"></i></span><b>' + (p == null ? '--' : p) + '</b></div>'; });

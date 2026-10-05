@@ -1,7 +1,7 @@
 (function () {
 'use strict';
 var $ = function (s) { return document.querySelector(s); };
-var fmt = function (n, d) { if (n == null || isNaN(n)) return '--'; d = d == null ? 1 : d; return Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }); };
+var fmt = function (n, d) { if (n == null || isNaN(n)) return '–'; d = d == null ? 1 : d; return Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }); };
 var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
 
 var TOKEN = localStorage.getItem('git-token') || '';
@@ -9,8 +9,6 @@ if (!TOKEN) { location.replace('/login.html'); return; }
 var _f = window.fetch;
 window.fetch = function (u, o) { o = o || {}; o.headers = o.headers || {}; o.headers['x-session'] = TOKEN; return _f(u, o); };
 
-setInterval(function () { var c = $('#clock'); if (c) c.textContent = new Date().toLocaleTimeString('en-GB'); }, 1000);
-var clk = $('#clock'); if (clk) clk.textContent = new Date().toLocaleTimeString('en-GB');
 
 var ML = null;
 var HISTORY = [];
@@ -75,9 +73,9 @@ function drawGauge() {
   ctx.beginPath(); ctx.arc(cx, cy, rad, Math.PI, Math.PI + Math.PI * conf);
   ctx.strokeStyle = conf >= 0.6 ? up : conf >= 0.4 ? gold : dn;
   ctx.lineWidth = 12; ctx.stroke();
-  ctx.fillStyle = gold; ctx.font = '700 22px IBM Plex Mono'; ctx.textAlign = 'center';
+  ctx.fillStyle = gold; ctx.font = '500 24px "Roboto Flex", Roboto, sans-serif'; ctx.textAlign = 'center';
   ctx.fillText((conf * 100).toFixed(0) + '%', cx, cy - 15);
-  ctx.fillStyle = dim; ctx.font = '600 8px IBM Plex Mono';
+  ctx.fillStyle = dim; ctx.font = '500 11px "Roboto Flex", Roboto, sans-serif';
   ctx.fillText('CONFIDENCE', cx, cy + 5);
 }
 
@@ -94,7 +92,7 @@ function drawAgentChart() {
   var padL = 35, padB = 30, padT = 10;
   var pw = W - padL - 10, ph = H - padB - padT;
   var gap = pw / agents.length, bw = gap * 0.6;
-  ctx.font = '8px IBM Plex Mono';
+  ctx.font = '11px "Roboto Flex", Roboto, sans-serif';
   for (var g = 0; g <= 4; g++) {
     var y = padT + ph * g / 4;
     ctx.strokeStyle = grid; ctx.setLineDash([3, 3]);
@@ -128,7 +126,7 @@ function drawHistory() {
   var gold = getCSS('--gold'), mut = getCSS('--mut'), grid = getCSS('--grid'), up = getCSS('--up'), dn = getCSS('--dn');
   var rounds = ML.rounds || [];
   if (!rounds.length) {
-    ctx.fillStyle = mut; ctx.font = '10px IBM Plex Mono'; ctx.textAlign = 'center';
+    ctx.fillStyle = mut; ctx.font = '12px "Roboto Flex", Roboto, sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('NO ROUND DATA', r.width / 2, r.height / 2);
     return;
   }
@@ -139,7 +137,7 @@ function drawHistory() {
   var lo = Math.min.apply(null, vals) - 0.05;
   var hi = Math.max.apply(null, vals) + 0.05;
   var rg = hi - lo || 1;
-  ctx.font = '8px IBM Plex Mono';
+  ctx.font = '11px "Roboto Flex", Roboto, sans-serif';
   for (var g = 0; g <= 3; g++) {
     var y = padT + ph * g / 3;
     ctx.strokeStyle = grid; ctx.setLineDash([3, 3]);
