@@ -106,6 +106,20 @@ export const UNITS: UnitDef[] = [
   Y('CL=F', d('OIL', 'WTI crude futures (CL)', 'commod', 'price', 'USD/bbl')),
   Y('^GVZ', d('GVZ', 'GVZ (gold implied vol)', 'commod', 'index', 'vol pts'), 60),
   Y('^OVX', d('OVX', 'OVX (oil implied vol)', 'commod', 'index', 'vol pts'), 60),
+  // v3: desk banners (energy, agri, shipping, water, land) — hourly scan class keeps ingest under budget
+  Y('BZ=F', d('BRENT', 'Brent crude futures (BZ)', 'commod', 'price', 'USD/bbl'), 60),
+  Y('NG=F', d('NATGAS', 'Natural gas futures (NG)', 'commod', 'price', 'USD/MMBtu'), 60),
+  Y('HG=F', d('COPPER', 'Copper futures (HG)', 'commod', 'price', 'USD/lb'), 60),
+  Y('ZC=F', d('CORN', 'Corn futures (ZC)', 'commod', 'price', 'USc/bu'), 60),
+  Y('ZW=F', d('WHEAT', 'Wheat futures (ZW)', 'commod', 'price', 'USc/bu'), 60),
+  Y('ZS=F', d('SOY', 'Soybean futures (ZS)', 'commod', 'price', 'USc/bu'), 60),
+  Y('BDRY', d('BDRY', 'Dry bulk freight ETF (BDRY)', 'equity', 'price', 'USD'), 60),
+  Y('BWET', d('BWET', 'Tanker freight ETF (BWET)', 'equity', 'price', 'USD'), 60),
+  Y('PHO', d('PHO', 'Water infrastructure ETF (PHO)', 'equity', 'price', 'USD'), 60),
+  Y('LAND', d('LAND', 'Gladstone Land (farmland REIT)', 'equity', 'price', 'USD'), 60),
+  Y('FPI', d('FPI', 'Farmland Partners (farmland REIT)', 'equity', 'price', 'USD'), 60),
+  // Nasdaq Veles California Water Index on FRED (weekly, $/acre-foot). id was wrong (NQH2O) before v3
+  F('NASDAQNQH2O', d('NQH2O', 'California water index (NQH2O)', 'aux', 'price', 'USD/acre-ft'), 720, 1825),
 ];
 
 export const SERIES: Record<string, SeriesDef & { unitKey: string; source: Source; srcId: string }> = {};
