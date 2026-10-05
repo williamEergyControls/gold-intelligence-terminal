@@ -3,179 +3,147 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GIT/4 - HOME - GOLD INTELLIGENCE TERMINAL</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%23d99a16%22/%3E%3C/svg%3E">
+<title>Home · Gold Intelligence Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,300..700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/terminal.css">
 <style>
-html,body{overflow-x:hidden}
-.hgrid{display:grid;grid-template-columns:repeat(12,1fr);
-  gap:clamp(5px,.45vw,8px);width:100%;max-width:2560px;margin:0 auto;
-  padding:8px clamp(8px,.6vw,14px)}
-#h-profile{grid-column:1/5;grid-row:1/3;min-height:340px}
-#h-gold{grid-column:5/10;grid-row:1;min-height:280px}
-#h-rates{grid-column:10/13;grid-row:1/3;min-height:340px}
-#h-desks{grid-column:5/13;grid-row:2;min-height:170px;display:flex}
-#h-watch{grid-column:1/7;grid-row:3;min-height:220px}
-#h-alerts{grid-column:7/10;grid-row:3;min-height:220px}
-#h-health{grid-column:10/13;grid-row:3;min-height:220px}
-#h-news{grid-column:1/13;grid-row:4;min-height:210px}
-.bigpx{font:600 clamp(34px,2.6vw,52px)/1 var(--mono);color:#f4ecd8}
-.bigchg{font:600 13px var(--mono);margin-top:5px}
-.deskcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:7px;flex:1;min-height:0}
-a.deskcard{border:1px solid var(--line);background:var(--panel);padding:clamp(8px,.8vw,14px);text-decoration:none;display:block;min-width:0;overflow:hidden}
-a.deskcard:hover{border-color:var(--gold)}
-.deskcard .dt{font:700 clamp(11px,.9vw,14px) var(--disp);letter-spacing:.18em;color:var(--gold)}
-.deskcard .dd{font:9.5px var(--mono);color:var(--mut);margin-top:5px;line-height:1.5}
-.ri{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:baseline;padding:3px 0;font:10.5px var(--mono)}
-.ri .n{color:var(--mut)}
-.wrow{display:grid;grid-template-columns:clamp(84px,7vw,110px) 1fr 36px 30px;align-items:center;gap:8px;font:9.5px var(--mono);color:var(--mut);padding:2px 0}
-input[type=range]{-webkit-appearance:none;appearance:none;height:3px;background:#2a333c;outline:none;width:100%}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;background:var(--gold);cursor:ew-resize}
-input[type=range]::-moz-range-thumb{width:10px;height:10px;background:var(--gold);border:none;border-radius:0;cursor:ew-resize}
-#opname{background:var(--panel3);border:1px solid var(--line);color:var(--txt);font:11px var(--mono);padding:5px 8px;width:100%}
-.callout{border:1px solid var(--goldDk);background:#141007;padding:9px 11px;margin-top:9px}
-.callout .cv{font:700 clamp(22px,1.8vw,30px) var(--mono);color:var(--gold)}
-.mlline{font:10px var(--mono);color:var(--mut);border-top:1px dashed var(--line2);padding-top:7px;margin-top:7px;line-height:1.6}
-.console{margin-top:8px;flex:1;min-height:90px;background:var(--panel3);border:1px solid var(--line2);padding:7px 9px;font:10px/1.65 var(--mono);color:#b6c1c9;overflow:auto}
-.console .ln{white-space:pre-wrap}
-#h-gold .p-bd{display:flex;flex-direction:column}
-.watchrow{display:grid;grid-template-columns:56px 1fr 62px 56px 22px;gap:6px;align-items:center;padding:3px 0;border-top:1px dashed var(--line2);font:10.5px var(--mono)}
-.watchrow:first-child{border-top:none}
-.watchrow .del{color:var(--dim);cursor:pointer;font-weight:700}
-.watchrow .del:hover{color:var(--dn)}
-#addsym{background:var(--panel3);border:1px solid var(--line);color:var(--txt);font:10px var(--mono);padding:3px 6px;width:84px}
-#addgo{font:600 8.5px var(--mono);color:var(--gold);border:1px solid var(--goldDk);padding:3px 9px;cursor:pointer}
-#addgo:hover{background:var(--gold);color:#000}
-.opbadge{font:600 9px var(--mono);color:var(--gold);border:1px solid var(--goldDk);padding:2px 7px;letter-spacing:.1em}
-#logout{font:600 8.5px var(--mono);color:var(--dim);border:1px solid var(--line);padding:2px 8px;cursor:pointer;letter-spacing:.1em}
-#logout:hover{color:var(--dn);border-color:var(--dn)}
-@media (max-width:1100px){
-  .hgrid{grid-template-columns:1fr 1fr}
-  .hgrid>*{grid-column:auto!important;grid-row:auto!important;min-height:230px}
-  #h-profile,#h-gold,#h-desks,#h-news{grid-column:1/-1!important}
-  #tape{display:none}
-}
-@media (max-width:700px){
-  .hgrid{grid-template-columns:1fr}
-  .bigpx{font-size:32px}
-}
+#h-gold .bigpx{color:var(--gold)}
+.gold-top{display:flex;justify-content:space-between;gap:16px;align-items:flex-end;flex-wrap:wrap}
+.spark90{position:relative;height:110px;margin:6px 0 2px}
+.spark90 canvas{position:absolute;inset:0;width:100%;height:100%}
+.mlline{font-size:14px;color:var(--mut);line-height:1.5}
+.mlline b{font-weight:500}
+.basket summary{cursor:pointer;color:var(--blue);font-size:13.5px;margin-top:12px;list-style:none}
+.basket summary::-webkit-details-marker{display:none}
+.basket .wrow{display:grid;grid-template-columns:120px 1fr 44px;gap:10px;align-items:center;font-size:13px;color:var(--mut);padding:5px 0}
+.basket .wrow b{text-align:right;color:var(--txt);font-weight:500}
+.watchrow{display:grid;grid-template-columns:64px minmax(0,1fr) auto 64px 28px;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line2);font-size:13.5px}
+.watchrow:first-child{border-top:0}
+.watchrow .del{color:var(--dim);border-radius:50%;width:28px;height:28px;display:grid;place-items:center}
+.watchrow .del:hover{background:var(--dnBg);color:var(--dn)}
+.addrow{display:flex;gap:8px;margin-bottom:8px}
+.addrow .inp{flex:1}
+.health{display:flex;flex-wrap:wrap;gap:6px}
+.health span{font-size:12.5px;padding:4px 10px;border-radius:999px;background:var(--panel2);color:var(--mut);display:inline-flex;align-items:center;gap:6px}
+.health span i{width:7px;height:7px;border-radius:50%;background:var(--dim)}
+.health span.on i{background:var(--up)} .health span.deg i{background:var(--amber)}
 </style>
 </head>
-<body>
-<script>if(!localStorage.getItem('git-token'))location.replace('/login.html')</script>
-<div id="crt"></div>
-
-<header id="top">
-  <div class="logo"><span class="lx"></span><span class="lt">GOLD INTELLIGENCE TERMINAL</span><span class="lv">GIT/4.2.26</span></div>
-  <nav class="gochips">
-    <span class="gchip" style="color:var(--gold)">HOME</span>
-    <a class="gchip" href="/gold.html" style="text-decoration:none">GOLD</a>
-    <a class="gchip" href="/energy.html" style="text-decoration:none">ENERGY</a>
-    <a class="gchip" href="/agri.html" style="text-decoration:none">AGRI</a>
-    <a class="gchip" href="/fx.html" style="text-decoration:none">FX</a>
-  </nav>
-  <div class="tsright">
-    <button id="themeBtn" title="CYCLE AUTO / DAY / NIGHT" style="font:600 9px var(--mono);letter-spacing:.12em;color:var(--mut);border:1px solid var(--line);padding:3px 8px;background:none;cursor:pointer">AUTO/SYS</button>
-    <span class="opbadge" id="opbadge">OPERATOR</span>
-    <button id="logout">SIGN OUT</button>
-    <span class="livedot" id="feedDot"><i></i><span id="feedTxt">FEED --</span></span>
-    <span id="clock">--:--:--</span>
-  </div>
-</header>
-
+<body data-page="home">
+<script src="/js/shell.js"></script>
 <div id="tape"><div class="tape-in"><span id="tapeA"></span><span id="tapeB"></span></div></div>
 
-<main class="hgrid">
-
-  <section id="h-profile" class="panel sig">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Operator Profile - Real Inflation</span>
-      <span class="chip ai">USER-CONFIGURED</span></div>
-    <div class="p-bd">
-      <div class="secH">OPERATOR</div>
-      <input id="opname" placeholder="YOUR NAME / DESK" maxlength="24">
-      <div class="secH" style="margin-top:10px">YOUR COST BASKET - WEIGHTS %</div>
-      <div class="wrow"><span>FOOD</span><input type="range" min="0" max="50" id="wf"><b>15%</b></div>
-      <div class="wrow"><span>ENERGY / OIL</span><input type="range" min="0" max="50" id="we"><b>10%</b></div>
-      <div class="wrow"><span>INSURANCE</span><input type="range" min="0" max="50" id="wi"><b>10%</b></div>
-      <div class="wrow"><span>HOUSING / RENT</span><input type="range" min="0" max="50" id="wh"><b>30%</b></div>
-      <div class="wrow"><span>GOLD</span><input type="range" min="0" max="50" id="wg"><b>10%</b></div>
-      <div class="callout">
-        <div class="secH">YOUR REAL INFLATION</div>
-        <div class="cv" id="riVal">--</div>
-        <div id="riFed" class="mut" style="font:10px var(--mono);margin-top:4px">FED VIEW (CPI): --</div>
-        <div id="riGap" style="font:600 11px var(--mono);margin-top:2px">GAP --</div>
-        <div class="dim" style="font:8px var(--mono);letter-spacing:.08em;margin-top:5px">USER-CONFIGURED ANALYTICAL INDEX - NOT OFFICIAL CPI - <span id="riRest">REST --</span> @ CPI WEIGHT - FOOD/ENERGY/INSURANCE/HOUSING = FRED - GOLD = LIVE ~1Y</div>
-      </div>
-    </div>
-  </section>
-
-  <section id="h-gold" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Gold - AI Signal</span>
-      <span class="chip near" id="gchip">--</span><span class="src" id="gsrc">AWAITING FEED...</span></div>
-    <div class="p-bd">
-      <div class="bigpx" id="px">--</div>
-      <div class="bigchg" id="pxc">--</div>
-      <div class="mlline" id="mlLine">ML WARMING - first prediction within the hour</div>
-      <button class="runbtn" id="runA">RUN ANALYST - WITH YOUR PROFILE</button>
-      <div class="console" id="aOut"><span class="hint">// OUTPUT - AWAITING OPERATOR COMMAND</span></div>
-    </div>
-  </section>
-
-  <section id="h-rates" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Rates &amp; Dollar</span>
-      <span class="chip month">DAILY</span><span class="src">FRED</span></div>
-    <div class="p-bd" id="ratesBody"></div>
-  </section>
-
-  <div id="h-desks">
-    <div class="deskcards">
-      <a class="deskcard" href="/gold.html"><div class="dt">GOLD TERMINAL</div><div class="dd">Live gold, candles, miners heatmap, WHY engine, ML agents, inflation and real economy - the full desk.</div></a>
-      <a class="deskcard" href="/energy.html"><div class="dt">ENERGY DESK</div><div class="dd">WTI - Brent - NatGas - Heating - RBOB. Spreads, crack, EIA stocks, gold/oil ratio, energy news.</div></a>
-      <a class="deskcard" href="/agri.html"><div class="dt">AGRI DESK</div><div class="dd">Corn - Soy - Wheat - Cattle. Water and USGS rivers, Plains weather, gold/corn ratio, USDA calendar.</div></a>
-    </div>
+<main>
+  <div class="pagehead">
+    <div><h1 id="hello">Welcome back</h1><p>Your markets at a glance: gold, rates, what your sources are saying and what is coming up.</p></div>
+    <div class="ph-r" id="asof"></div>
   </div>
 
-  <section id="h-watch" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Watchlist</span>
-      <span class="chip near" id="wcount">0</span><span class="src">YAHOO - NEAR LIVE - SAVED ON THIS DEVICE</span></div>
-    <div class="p-bd">
-      <div style="display:flex;gap:6px;margin-bottom:7px">
-        <input id="addsym" placeholder="TICKER e.g. NEM" maxlength="8">
-        <button id="addgo">+ ADD</button>
+  <div class="grid">
+    <section id="h-gold" class="panel c5">
+      <div class="p-hd"><span class="ttl">Gold</span><span class="chip near" id="gchip">–</span><a class="src" href="/gold.html">Open gold desk</a></div>
+      <div class="p-bd">
+        <div class="gold-top">
+          <div><div class="bigpx" id="px">–</div><div class="bigchg" id="pxc">–</div></div>
+          <div class="mlline" id="mlLine">Model warming up</div>
+        </div>
+        <div class="spark90"><canvas id="cvGold" aria-label="Gold, last 90 days"></canvas></div>
+        <button class="runbtn" id="runA" type="button">Ask the analyst about today</button>
+        <div class="console hide" id="aOut" style="margin-top:10px"></div>
       </div>
-      <div id="watchList"></div>
-      <div class="footnote">TRY: NEM - GLD - SLV - SPY - UUP - GSG - XLE - DBA</div>
+    </section>
+
+    <section id="h-rates" class="panel c3">
+      <div class="p-hd"><span class="ttl">Rates and dollar</span><span class="src">FRED daily</span></div>
+      <div class="p-bd"><div class="lst" id="ratesBody"></div></div>
+    </section>
+
+    <section id="h-cal" class="panel c4">
+      <div class="p-hd"><span class="ttl">Coming up</span><a class="src" href="/gold.html#g-cal">Full calendar</a></div>
+      <div class="p-bd" id="calBody"></div>
+    </section>
+
+    <section id="h-ideas" class="panel c8">
+      <div class="p-hd"><span class="ttl">Trade ideas from your news</span><span class="chip ai plain">AI digest</span><a class="src" href="/news.html">All news</a></div>
+      <div class="p-bd" id="ideasBody"></div>
+    </section>
+
+    <section id="h-alerts" class="panel c4">
+      <div class="p-hd"><span class="ttl">Market alerts</span><span class="chip live" id="alCount">–</span></div>
+      <div class="p-bd" id="alList"></div>
+    </section>
+
+    <section id="h-news" class="panel c8">
+      <div class="p-hd"><span class="ttl">From your sources</span><span class="src" id="srcCount"></span></div>
+      <div class="p-bd" id="newsBody"></div>
+    </section>
+
+    <div class="stack c4">
+      <section id="h-watch" class="panel">
+        <div class="p-hd"><span class="ttl">Watchlist</span><span class="src">Saved on this device</span></div>
+        <div class="p-bd">
+          <div class="addrow"><input class="inp" id="addsym" placeholder="Add a ticker, e.g. NEM" maxlength="10" aria-label="Ticker"><button class="btn auto sm" id="addgo" type="button">Add</button></div>
+          <div id="watchList"></div>
+        </div>
+      </section>
+
+      <section id="h-profile" class="panel">
+        <div class="p-hd"><span class="ttl">Your inflation rate</span><span class="chip ai plain">Your basket</span></div>
+        <div class="p-bd">
+          <div class="row" style="align-items:baseline;gap:14px">
+            <div class="kpi"><label>Your rate</label><b id="riVal" class="gold">–</b></div>
+            <div class="kpi"><label>Official CPI</label><b id="riFed" style="font-size:20px">–</b></div>
+            <div class="kpi"><label>Gap</label><b id="riGap" style="font-size:20px">–</b></div>
+          </div>
+          <details class="basket">
+            <summary>Adjust your basket</summary>
+            <input id="opname" class="inp" placeholder="Your name" maxlength="24" style="width:100%;margin:10px 0 6px" aria-label="Your name">
+            <div class="wrow"><span>Food</span><input type="range" min="0" max="50" id="wf"><b>15%</b></div>
+            <div class="wrow"><span>Energy</span><input type="range" min="0" max="50" id="we"><b>10%</b></div>
+            <div class="wrow"><span>Insurance</span><input type="range" min="0" max="50" id="wi"><b>10%</b></div>
+            <div class="wrow"><span>Housing</span><input type="range" min="0" max="50" id="wh"><b>30%</b></div>
+            <div class="wrow"><span>Gold</span><input type="range" min="0" max="50" id="wg"><b>10%</b></div>
+          </details>
+          <p class="footnote" id="riNote">Your own weights over FRED CPI components; the rest uses the CPI weight. Not an official index.</p>
+        </div>
+      </section>
     </div>
-  </section>
 
-  <section id="h-alerts" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Market Alerts</span>
-      <span class="chip live" id="alCount">--</span></div>
-    <div class="p-bd" id="alList"></div>
-  </section>
+    <section id="h-map" class="panel c7">
+      <div class="p-hd"><span class="ttl">US drought</span><span class="src" id="mapSrc">U.S. Drought Monitor</span><a class="src" href="/water.html">Water desk</a></div>
+      <div class="p-bd" id="mapBody"><div class="empty">Loading map…</div></div>
+    </section>
 
-  <section id="h-health" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Data Health</span>
-      <span class="chip live" id="hChip">--</span></div>
-    <div class="p-bd" id="hBody" style="font:10px var(--mono);color:var(--mut);line-height:1.8"></div>
-  </section>
-
-  <section id="h-news" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Top Headlines</span>
-      <span class="chip near">GDELT</span></div>
-    <div class="p-bd"><ul class="nwl" id="nwList"></ul></div>
-  </section>
-
+    <section id="h-desks" class="panel c5">
+      <div class="p-hd"><span class="ttl">Desks</span></div>
+      <div class="p-bd">
+        <div class="deskcards">
+          <a class="deskcard" href="/gold.html"><div class="dt">Gold</div><div class="dd">Price, drivers, model signal, miners, calendar</div></a>
+          <a class="deskcard" href="/energy.html"><div class="dt">Energy</div><div class="dd">Crude, gas, spreads, EIA stocks</div></a>
+          <a class="deskcard" href="/agri.html"><div class="dt">Agriculture</div><div class="dd">Grains, cattle, weather, USDA</div></a>
+          <a class="deskcard" href="/fx.html"><div class="dt">FX</div><div class="dd">Dollar index and majors</div></a>
+          <a class="deskcard" href="/shipping.html"><div class="dt">Shipping</div><div class="dd">Live chokepoints, ports, freight rates</div></a>
+          <a class="deskcard" href="/vol.html"><div class="dt">Volatility</div><div class="dd">Rates, FX, stablecoins, stocks</div></a>
+        </div>
+        <div class="secH" style="margin-top:16px">Data sources</div>
+        <div class="health" id="hBody"></div>
+      </div>
+    </section>
+  </div>
 </main>
 
 <footer id="status">
-  <span>GIT-4.2.26 - HOME</span>
-  <span class="mid">ANALYSIS, NOT FINANCIAL ADVICE - EVERY VALUE SHOWS ITS SOURCE</span>
+  <span>Home</span>
+  <span class="mid">Analysis, not financial advice. Every value shows its source.</span>
 </footer>
 
+<script src="/js/chartkit.js"></script>
+<script src="/js/maps.js"></script>
+<script src="/js/newsfeed.js"></script>
+<script src="/js/calendar.js"></script>
 <script src="/js/home.js"></script>
 <script src="/js/ml-strip.js" defer></script>
-<script src="/js/nav-extra.js" defer></script>
 </body>
 </html>

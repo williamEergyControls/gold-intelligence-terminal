@@ -3,102 +3,75 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GIT/4 - STABLECOIN TERMINAL</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%23d99a16%22/%3E%3C/svg%3E">
+<title>Stablecoins · Gold Intelligence Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,300..700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/terminal.css">
 <style>
-html,body{overflow-x:hidden}
-.sgrid{display:grid;grid-template-columns:repeat(12,1fr);gap:clamp(5px,.45vw,8px);width:100%;max-width:2560px;margin:0 auto;padding:8px clamp(8px,.6vw,14px)}
-#s-hero{grid-column:1/5;grid-row:1/3;min-height:340px}
-#s-charts{grid-column:5/13;grid-row:1;min-height:280px}
-#s-majors{grid-column:5/9;grid-row:2;min-height:240px}
-#s-peg{grid-column:9/13;grid-row:2;min-height:240px}
-#s-news{grid-column:1/8;grid-row:3;min-height:240px}
-#s-gold{grid-column:8/13;grid-row:3;min-height:240px}
-.bigpx{font:600 clamp(30px,2.4vw,44px)/1 var(--mono);color:#f2e9d4}
-.bigchg{font:600 13px var(--mono);margin-top:6px}
-.srow{display:grid;grid-template-columns:60px 1fr 90px 70px 60px;gap:8px;align-items:center;padding:4px 0;border-top:1px dashed var(--line2);font:11px var(--mono)}
-.srow:first-child{border-top:none}
-.srow .sym{font-weight:600}
-.srow .name{color:var(--mut)}
-.srow .price{text-align:right;font-weight:600}
-.srow .peg{text-align:right;color:var(--dim)}
-.peg-bar{height:5px;background:var(--grid);border:1px solid var(--line2);position:relative}
-.peg-bar i{position:absolute;top:-3px;width:2px;height:11px;background:var(--gold)}
-.lrow{display:grid;grid-template-columns:70px 110px 1fr;align-items:center;gap:8px;padding:4px 0;border-top:1px dashed var(--line2);font:11px var(--mono)}
-.lrow:first-child{border-top:none}
-.lrow .name{color:var(--mut)}
-.lrow .val{font-weight:600}
-@media (max-width:1100px){
-  .sgrid{grid-template-columns:1fr 1fr}
-  .sgrid>*{grid-column:auto!important;grid-row:auto!important;min-height:230px}
-  #s-hero,#s-charts,#s-news{grid-column:1/-1!important}
-  #tape{display:none}
-}
-@media (max-width:700px){.sgrid{grid-template-columns:1fr}}
+#s-hero{grid-column:span 4} #s-charts{grid-column:span 8}
+#s-majors{grid-column:span 7} #s-peg{grid-column:span 5}
+#s-news{grid-column:span 7} #s-gold{grid-column:span 5}
+#s-charts .ch-wrap{height:clamp(260px,24vw,380px)}
+#s-hero .bigpx{color:var(--txt)}
+#pegHealth{font-size:14px;line-height:1.7;color:var(--mut)}
+#marketCap{font:400 26px var(--sans);color:var(--txt)}
+@media (max-width:1280px){.grid>*{grid-column:1/-1!important}}
+
+.srow,.lrow,.irow{display:grid;grid-template-columns:72px minmax(0,1fr) 100px 80px 72px;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line2);font-size:13.5px}
+.lrow{grid-template-columns:minmax(0,1fr) 110px minmax(0,1.2fr)}
+.srow:first-child,.lrow:first-child{border-top:none}
+.srow .sym{font-weight:600} .srow .name,.lrow .name{color:var(--mut)}
+.srow .price{text-align:right;font-weight:500} .srow .peg{text-align:right;color:var(--dim)}
+.lrow .val{font-weight:500}
+.peg-bar{height:4px;border-radius:4px;background:var(--grid);position:relative}
+.peg-bar i{position:absolute;top:-3px;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:var(--gold)}
+.tip{border-radius:10px!important;box-shadow:var(--shadow)}
+@media (max-width:600px){.srow{grid-template-columns:56px minmax(0,1fr) 84px 64px}.srow>:nth-child(5){display:none}.lrow{grid-template-columns:minmax(0,1fr) 90px}.lrow>:nth-child(3){grid-column:1/-1}}
 </style>
 </head>
-<body>
-<script>try{var m=localStorage.getItem('git-theme')||'auto';if(m==='day'||(m==='auto'&&matchMedia('(prefers-color-scheme: light)').matches))document.body.classList.add('day')}catch(e){}</script>
-<div id="crt"></div>
-<header id="top">
-  <div class="logo"><span class="lx"></span><span class="lt">GOLD INTELLIGENCE TERMINAL</span><span class="lv">GIT/4.2.26 - STABLE</span></div>
-  <nav class="gochips">
-    <a class="gchip" href="/" style="text-decoration:none">HOME</a>
-    <a class="gchip" href="/gold.html" style="text-decoration:none">GOLD</a>
-    <a class="gchip" href="/energy.html" style="text-decoration:none">ENERGY</a>
-    <a class="gchip" href="/agri.html" style="text-decoration:none">AGRI</a>
-    <a class="gchip" href="/fx.html" style="text-decoration:none">FX</a>
-    <a class="gchip" href="/water.html" style="text-decoration:none">WATER</a>
-    <a class="gchip" href="/land.html" style="text-decoration:none">LAND</a>
-    <a class="gchip" href="/stable.html" style="text-decoration:none">STABLE</a>
-    <a class="gchip" href="/shipping.html" style="text-decoration:none">SHIPPING</a>
-    <a class="gchip" href="/ai.html" style="text-decoration:none">AI</a>
-    <a class="gchip" href="/search.html" style="text-decoration:none" title="SEARCH">🔍</a>
-  </nav>
-  <div class="tsright">
-    <button id="themeBtn" style="font:600 9px var(--mono);color:var(--mut);border:1px solid var(--line);padding:3px 8px;background:none;cursor:pointer">AUTO</button>
-    <span id="clock">--:--:--</span>
-  </div>
-</header>
+<body data-page="stable">
+<script src="/js/shell.js"></script>
 <div id="tape"><div class="tape-in"><span id="tapeA"></span><span id="tapeB"></span></div></div>
-<main class="sgrid">
-  <section id="s-hero" class="panel sig">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">USDT - Tether</span>
+<main>
+  <div class="pagehead"><div><h1>Stablecoins</h1><p>Peg health, supply and the gold to USDT ratio, from the hourly CoinGecko pull stored in D1.</p></div></div>
+  <div class="grid sgrid">
+  <section id="s-hero" class="panel">
+    <div class="p-hd"><span class="ttl">USDT - Tether</span>
       <span class="chip near">DAILY + LATEST</span><span class="src">COINGECKO VIA D1</span></div>
     <div class="p-bd">
       <div class="bigpx" id="usdtPx">--</div>
       <div class="bigchg" id="usdtChg">--</div>
       <div class="secH" style="margin-top:12px">PEG HEALTH</div>
-      <div id="pegHealth" style="font:10px var(--mono);color:var(--mut);line-height:1.8">Loading...</div>
+      <div id="pegHealth" style="color:var(--mut);line-height:1.8">Loading...</div>
       <div class="secH" style="margin-top:10px">MARKET CAP</div>
-      <div id="marketCap" style="font:600 18px var(--mono);color:var(--gold)">--</div>
+      <div id="marketCap" style="color:var(--gold)">--</div>
     </div>
   </section>
   <section id="s-charts" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">USDT / USDC Peg Deviation (90D, bp)</span><span class="src">COINGECKO VIA D1 WAREHOUSE</span></div>
-    <div class="ch-wrap" style="flex:1;position:relative;min-height:0"><canvas id="chCv" style="position:absolute;inset:0;width:100%;height:100%;cursor:crosshair"></canvas></div>
+    <div class="p-hd"><span class="ttl">USDT and USDC peg deviation, 90 days (bp)</span><span class="src">COINGECKO VIA D1 WAREHOUSE</span></div>
+    <div class="ch-wrap"><canvas id="chCv"></canvas></div>
     <div class="ch-read" id="chRead">HOVER CHART</div>
   </section>
   <section id="s-majors" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Stablecoin Monitor</span><span class="chip near">HOURLY INGEST</span><span class="src">COINGECKO VIA D1</span></div>
+    <div class="p-hd"><span class="ttl">Stablecoin monitor</span><span class="chip near">HOURLY INGEST</span><span class="src">COINGECKO VIA D1</span></div>
     <div class="p-bd" id="stableList"></div>
   </section>
   <section id="s-peg" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Peg Deviation Map</span></div>
+    <div class="p-hd"><span class="ttl">Peg deviation</span></div>
     <div class="p-bd" id="pegMap"></div>
   </section>
   <section id="s-news" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Crypto & Stablecoin News</span><span class="chip near">GDELT</span></div>
-    <div class="p-bd"><ul class="nwl" id="nwList"></ul></div>
+    <div class="p-hd"><span class="ttl">Crypto and stablecoin news</span><a class="src" href="/news.html">All news</a></div>
+    <div class="p-bd"><div id="nfBody"></div><ul class="nwl hide" id="nwList"></ul></div>
   </section>
   <section id="s-gold" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Gold / USDT Ratio</span><span class="chip evt">CALC</span></div>
+    <div class="p-hd"><span class="ttl">Gold to USDT</span><span class="chip evt">CALC</span></div>
     <div class="p-bd" id="goldRatio"></div>
   </section>
+  </div>
 </main>
-<footer id="status"><span>GIT-4.2.26 - STABLECOIN DESK</span><span class="mid">NOT FINANCIAL ADVICE - EVERY VALUE SHOWS ITS SOURCE</span></footer>
+<footer id="status"><span>Stablecoin desk</span><span class="mid">Not financial advice. Every value shows its source.</span></footer>
 <script>
 (function(){
 var _fetch=window.fetch;
@@ -108,7 +81,8 @@ if(!localStorage.getItem('git-token')){location.replace('/login.html');}
 </script>
 <script src="/js/chartkit.js"></script>
 <script src="/js/stable.js"></script>
+<script src="/js/newsfeed.js"></script>
+<script>NewsFeed.mount(document.getElementById('nfBody'), { topic: 'crypto', limit: 8, filters: false });</script>
 <script src="/js/ml-strip.js" defer></script>
-<script src="/js/nav-extra.js" defer></script>
 </body>
 </html>

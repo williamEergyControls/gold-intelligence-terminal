@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%23d99a16%22/%3E%3C/svg%3E">
+<title>News · Gold Intelligence Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,300..700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/terminal.css">
+<style>
+#n-ideas{grid-column:1/-1}
+#n-feed{grid-column:span 8}
+#n-side{grid-column:span 4}
+.srcl>div{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line2);font-size:13.5px}
+.srcl>div:first-child{border-top:0}
+.srcl .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srcl .k{font:500 11.5px var(--sans);padding:2px 8px;border-radius:999px;background:var(--panel2);color:var(--mut)}
+.srcl .k.yt{background:var(--dnBg);color:var(--dn)}
+.how{font-size:13.5px;line-height:1.6;color:var(--mut)}
+.how li{margin:0 0 6px 18px}
+@media (max-width:1280px){#n-feed,#n-side{grid-column:1/-1}}
+</style>
+</head>
+<body data-page="news">
+<script src="/js/shell.js"></script>
+<main>
+  <div class="pagehead"><div><h1>News and trade ideas</h1><p>Every story from your YouTube channels and feeds, summarized by AI, with the trade angle when there is one.</p></div><div class="ph-r" id="asof"></div></div>
+  <div class="grid">
+    <section id="n-ideas" class="panel">
+      <div class="p-hd"><span class="ttl">Trade ideas</span><span class="chip ai plain">AI digest</span><span class="src">From the last 3 days of your sources</span></div>
+      <div class="p-bd" id="ideasBody"></div>
+    </section>
+    <section id="n-feed" class="panel">
+      <div class="p-hd"><span class="ttl">Latest</span><span class="src" id="feedMeta"></span></div>
+      <div class="p-bd" id="feedBody"></div>
+    </section>
+    <div id="n-side" class="stack">
+      <section class="panel">
+        <div class="p-hd"><span class="ttl">Your sources</span><a class="src hide" id="manage" href="/admin.html">Manage</a></div>
+        <div class="p-bd"><div class="srcl" id="srcList"><div class="empty">Loading…</div></div></div>
+      </section>
+      <section class="panel">
+        <div class="p-hd"><span class="ttl">How this feed works</span></div>
+        <div class="p-bd how"><ul>
+          <li>Your YouTube channels and RSS feeds are checked every 10 minutes from the server. No browser calls, no API keys.</li>
+          <li>New items get a two-sentence AI summary, a sentiment dot and, when the story has a clear angle, a trade idea with what would prove it wrong.</li>
+          <li>When a desk has few stories from your sources, GDELT headlines fill in.</li>
+          <li>Admins add channels in Admin, News sources. Paste a channel link or @handle.</li>
+        </ul></div>
+      </section>
+      <section class="panel">
+        <div class="p-hd"><span class="ttl">Coming up</span><a class="src" href="/gold.html#g-cal">Full calendar</a></div>
+        <div class="p-bd" id="calBody"></div>
+      </section>
+    </div>
+  </div>
+</main>
+<footer id="status"><span>News</span><span class="mid">AI summaries can be wrong. Open the source before acting on anything here.</span></footer>
+<script src="/js/newsfeed.js"></script>
+<script src="/js/calendar.js"></script>
+<script>
+(function () {
+  var G = window.GT, esc = G.esc;
+  Ideas.mount(document.getElementById('ideasBody'), { limit: 6 });
+  NewsFeed.mount(document.getElementById('feedBody'), { topic: 'all', limit: 15, filters: true, more: true, thumbs: true,
+    onLoad: function (d) { document.getElementById('feedMeta').textContent = (d.sources ? d.sources + ' sources active' : '') + (d.updatedAt ? ' · last crawl ' + G.ago(d.updatedAt) : ''); } });
+  Cal.mount(document.getElementById('calBody'), { scope: 'all', compact: true });
+  var role = ''; try { role = localStorage.getItem('git-role') || ''; } catch (e) { }
+  var box = document.getElementById('srcList');
+  if (role === 'admin') {
+    document.getElementById('manage').classList.remove('hide');
+    G.getJSON('/api/admin/news/sources').then(function (d) {
+      var S = (d.sources || []).filter(function (s) { return s.enabled; });
+      box.innerHTML = S.slice(0, 20).map(function (s) {
+        return '<div><span class="k' + (s.kind === 'youtube' ? ' yt' : '') + '">' + (s.kind === 'youtube' ? 'YouTube' : 'RSS') + '</span><span class="n">' + (s.favorite ? '★ ' : '') + esc(s.name) + '</span><span class="dim">' + (s.stored || 0) + '</span></div>';
+      }).join('') + (S.length > 20 ? '<div class="dim">and ' + (S.length - 20) + ' more</div>' : '');
+    }).catch(function () { box.innerHTML = '<div class="empty">Could not load sources.</div>'; });
+  } else box.innerHTML = '<div class="how">Sources are managed by your admin. Stories marked “Your source” come from the channels they picked.</div>';
+})();
+</script>
+<script src="/js/ml-strip.js" defer></script>
+</body>
+</html>

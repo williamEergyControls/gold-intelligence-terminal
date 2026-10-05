@@ -3,55 +3,55 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GIT/4 - OPERATOR ACCESS</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%23d99a16%22/%3E%3C/svg%3E">
+<title>Sign in · Gold Intelligence Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,300..700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/terminal.css">
 <style>
-body{display:flex;align-items:center;justify-content:center;min-height:100dvh}
-.lbox{width:400px;max-width:94vw}
-.lhead{text-align:center;margin-bottom:16px}
-.lhead .lx{width:18px;height:18px;background:var(--gold);display:inline-block;margin-bottom:12px}
-.lhead h1{font:700 16px var(--disp);letter-spacing:.26em;color:#f0f5f8}
-.lhead p{font:9px var(--mono);color:var(--dim);letter-spacing:.2em;margin-top:6px}
-.lfield{margin-bottom:12px}
-.lfield label{display:block;font:600 8.5px var(--mono);letter-spacing:.16em;color:var(--dim);margin-bottom:5px}
-.lfield input{width:100%;background:var(--panel3);border:1px solid var(--line);color:var(--txt);font:13px var(--mono);padding:10px 12px;outline:none;transition:border-color .2s}
-.lfield input:focus{border-color:var(--gold)}
-.lfield input::placeholder{color:var(--dim);font-size:11px}
-.lbtn{width:100%;margin-top:4px;font-size:12px}
-.lswitch{text-align:center;margin-top:14px;font:10px var(--mono);color:var(--dim)}
-.lswitch a{color:var(--cyan);cursor:pointer;text-decoration:underline}
-.lerr{font:10px var(--mono);color:var(--dn);margin-top:10px;text-align:center;min-height:16px;letter-spacing:.04em}
-.lok{font:10px var(--mono);color:var(--up);margin-top:10px;text-align:center;min-height:16px}
-.lnote{font:8px var(--mono);color:var(--dim);letter-spacing:.06em;line-height:1.8;margin-top:16px;text-align:center;border-top:1px dashed var(--line2);padding-top:12px}
-.lmode{display:flex;gap:0;margin-bottom:14px;border:1px solid var(--line)}
-.lmode button{flex:1;font:600 10px var(--mono);letter-spacing:.14em;padding:8px 0;color:var(--dim);background:var(--panel3)}
-.lmode button.on{color:var(--gold);background:#141007}
+body{display:flex;align-items:center;justify-content:center;min-height:100dvh;padding:24px 16px}
+.lbox{width:420px;max-width:100%}
+.lhead{text-align:center;margin-bottom:24px}
+.lhead .lx{width:40px;height:40px;border-radius:12px;display:inline-block;margin-bottom:14px;background:linear-gradient(135deg,#f6d36b 0%,#d99a16 55%,#a86a05 100%)}
+.lhead h1{font:500 24px var(--sans);letter-spacing:-.01em;color:var(--txt)}
+.lhead p{font:400 14px var(--sans);color:var(--mut);margin-top:6px}
+.lbox .panel{padding:8px 8px 4px}
+.lfield{margin-bottom:14px}
+.lfield label{display:block;font:500 13px var(--sans);color:var(--mut);margin-bottom:6px}
+.lfield input{width:100%;background:var(--panel3);border:1px solid var(--line);border-radius:10px;color:var(--txt);font:400 15px var(--sans);padding:11px 14px;outline:none}
+.lfield input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueBg)}
+.lbtn{margin-top:6px;background:var(--blue)!important;color:#fff!important}
+body:not(.day) .lbtn{color:#062e6f!important}
+.lerr{font:400 13.5px var(--sans);color:var(--dn);margin-top:12px;text-align:center;min-height:18px}
+.lok{font:400 13.5px var(--sans);color:var(--up);margin-top:4px;text-align:center;min-height:18px}
+.lnote{font:400 12.5px/1.6 var(--sans);color:var(--dim);margin-top:14px;text-align:center;border-top:1px solid var(--line2);padding-top:14px}
+.lmode{display:flex;background:var(--panel2);border-radius:999px;padding:3px;margin-bottom:18px}
+.lmode button{flex:1;font:500 14px var(--sans);padding:8px 0;color:var(--mut);border-radius:999px}
+.lmode button.on{color:var(--txt);background:var(--panel);box-shadow:var(--shadow)}
 </style>
 </head>
-<body>
-<div id="crt"></div>
+<body data-page="login">
+<script src="/js/shell.js"></script>
 <div class="lbox">
   <div class="lhead">
     <span class="lx"></span>
-    <h1>GOLD INTELLIGENCE TERMINAL</h1>
-    <p>OPERATOR ACCESS - GIT/4.2.26 - SECURE</p>
+    <h1>Gold Intelligence Terminal</h1>
+    <p>Sign in to your markets desk</p>
   </div>
-  <div class="panel sig">
-    <div class="p-hd"><span class="sq"></span><span class="ttl" id="formTitle">Sign In</span></div>
+  <div class="panel">
+    <div class="p-hd"><span class="ttl" id="formTitle">Sign in</span></div>
     <div class="p-bd">
       <div class="lmode">
-        <button id="modeLogin" class="on">SIGN IN</button>
-        <button id="modeReg">SIGN UP</button>
+        <button id="modeLogin" class="on">Sign in</button>
+        <button id="modeReg">Sign up</button>
       </div>
-      <div class="lfield"><label>OPERATOR NAME</label><input id="lname" maxlength="24" autocomplete="username"></div>
-      <div class="lfield"><label id="plabel">PASSWORD</label><input id="lpass" type="password" maxlength="128" autocomplete="current-password"></div>
-      <div class="lfield" id="pass2row" style="display:none"><label>CONFIRM PASSWORD</label><input id="lpass2" type="password" maxlength="128" autocomplete="new-password"></div>
-      <button class="runbtn lbtn" id="lgo">SIGN IN</button>
+      <div class="lfield"><label>Operator name</label><input id="lname" maxlength="24" autocomplete="username"></div>
+      <div class="lfield"><label id="plabel">Password</label><input id="lpass" type="password" maxlength="128" autocomplete="current-password"></div>
+      <div class="lfield" id="pass2row" style="display:none"><label>Confirm password</label><input id="lpass2" type="password" maxlength="128" autocomplete="new-password"></div>
+      <button class="runbtn lbtn" id="lgo">Sign in</button>
       <div class="lerr" id="lerr"></div>
       <div class="lok" id="lok"></div>
-      <div class="lnote">CREDENTIALS ENCRYPTED (PBKDF2-SHA256, 100K ITERATIONS)<br>STORED IN CLOUDFLARE D1 - SQL INJECTION IMMUNE<br>SESSIONS EXPIRE IN 7 DAYS - FAILED ATTEMPTS RATE LIMITED<br><br>THIS IS A RESEARCH TERMINAL - NOT FINANCIAL ADVICE</div>
+      <div class="lnote">Passwords are hashed with PBKDF2-SHA256. Sessions last 7 days and failed attempts are rate limited.<br>Research tool, not financial advice.</div>
     </div>
   </div>
 </div>
@@ -91,10 +91,10 @@ function setMode(m){
   mode = m;
   bLogin.classList.toggle('on', m === 'login');
   bReg.classList.toggle('on', m === 'reg');
-  formTitle.textContent = m === 'login' ? 'Sign In' : 'Create Account';
-  btn.textContent = m === 'login' ? 'SIGN IN' : 'CREATE ACCOUNT';
+  formTitle.textContent = m === 'login' ? 'Sign in' : 'Create account';
+  btn.textContent = m === 'login' ? 'Sign in' : 'Create account';
   pass2row.style.display = m === 'reg' ? '' : 'none';
-  plabel.textContent = m === 'reg' ? 'PASSWORD (6+ CHARS)' : 'PASSWORD';
+  plabel.textContent = m === 'reg' ? 'Password (6+ chars)' : 'Password';
   err.textContent = ''; ok.textContent = '';
 }
 bLogin.addEventListener('click', function(){ setMode('login'); });
@@ -108,35 +108,35 @@ function show(txt, isOk){
 function submit(){
   var n = name.value.trim();
   var p = pass.value;
-  if(n.length < 2){ show('ENTER OPERATOR NAME (2+ CHARS)'); return; }
-  if(!p){ show('ENTER PASSWORD'); return; }
+  if(n.length < 2){ show('Enter operator name (2+ chars)'); return; }
+  if(!p){ show('Enter password'); return; }
   if(mode === 'reg'){
-    if(p.length < 6){ show('PASSWORD MUST BE 6+ CHARACTERS'); return; }
-    if(p !== pass2.value){ show('PASSWORDS DO NOT MATCH'); return; }
+    if(p.length < 6){ show('Password must be 6+ characters'); return; }
+    if(p !== pass2.value){ show('Passwords do not match'); return; }
   }
-  btn.disabled = true; btn.textContent = mode === 'login' ? 'VERIFYING...' : 'CREATING...';
+  btn.disabled = true; btn.textContent = mode === 'login' ? 'Verifying...' : 'Creating...';
   show('', true);
   fetch(mode === 'login' ? '/api/auth/login' : '/api/auth/register', {
-    method: 'POST',
+    method: 'Post',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ name: n, password: p })
   })
   .then(function(r){ return r.json().then(function(d){ return { status: r.status, data: d }; }); })
   .then(function(res){
-    btn.disabled = false; btn.textContent = mode === 'login' ? 'SIGN IN' : 'CREATE ACCOUNT';
+    btn.disabled = false; btn.textContent = mode === 'login' ? 'Sign in' : 'Create account';
     if(res.data && res.data.ok && res.data.token){
       localStorage.setItem('git-token', res.data.token);
       localStorage.setItem('git-name', res.data.name || n);
       localStorage.setItem('git-role', res.data.role || 'operator');
-      show('ACCESS GRANTED - REDIRECTING...', true);
+      show('Access granted - redirecting...', true);
       setTimeout(function(){ location.href = '/'; }, 600);
     } else {
-      show(res.data && res.data.error ? res.data.error : 'AUTHENTICATION FAILED');
+      show(res.data && res.data.error ? res.data.error : 'Authentication failed');
     }
   })
   .catch(function(e){
-    btn.disabled = false; btn.textContent = mode === 'login' ? 'SIGN IN' : 'CREATE ACCOUNT';
-    show('CONNECTION ERROR - ' + String(e && e.message || e));
+    btn.disabled = false; btn.textContent = mode === 'login' ? 'Sign in' : 'Create account';
+    show('Connection error - ' + String(e && e.message || e));
   });
 }
 btn.addEventListener('click', submit);

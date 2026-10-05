@@ -3,71 +3,37 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GIT/4 - ENERGY TERMINAL</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%23d99a16%22/%3E%3C/svg%3E">
+<title>Energy · Gold Intelligence Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,300..700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/terminal.css">
 <style>
-html,body{overflow-x:hidden}
-.pgrid{display:grid;grid-template-columns:repeat(12,1fr);gap:clamp(5px,.45vw,8px);width:100%;max-width:2560px;margin:0 auto;padding:8px clamp(8px,.6vw,14px)}
-#p-hero{grid-column:1/4}
-#p-chart{grid-column:4/13;min-height:clamp(320px,26vw,520px)}
-#p-mon{grid-column:1/7}
-#p-spot{grid-column:7/10}
-#p-extra{grid-column:10/13}
-#p-news{grid-column:1/8}
-#p-cal{grid-column:8/13}
-.hrow{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
-.hrow label{font-size:8px;letter-spacing:.14em}
-.hero .bigpx{font:600 clamp(30px,2.4vw,44px)/1 var(--mono);color:#f2e9d4}
-.hero .bigchg{font:600 13px var(--mono);margin-top:6px}
-.spots,.ratios{display:grid;grid-template-columns:1fr;gap:4px}
+#p-hero{grid-column:span 4} #p-chart{grid-column:span 8}
+#p-mon{grid-column:span 6} #p-spot{grid-column:span 3} #p-extra{grid-column:span 3}
+#p-news{grid-column:span 7} #p-cal{grid-column:span 5}
+#p-chart .ch-wrap{height:clamp(300px,28vw,420px)}
+.hrow{margin-top:4px}
+.spots,.ratios{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
 .ratios{margin-top:8px}
-.bi{display:grid;grid-template-columns:96px 70px 1fr;align-items:center;gap:8px;padding:3px 0;font:10.5px var(--mono)}
-.bi .n{color:var(--mut)}
-.bi:last-child{margin-bottom:4px}
-@media (max-width:1100px){
-  .pgrid{grid-template-columns:1fr 1fr}
-  .pgrid>section{grid-column:auto!important;min-height:240px}
-  #p-hero,#p-chart,#p-mon,#p-news,#p-cal{grid-column:1/-1!important}
-  #p-chart{min-height:340px}
-  #tape{display:none}
-}
-@media (max-width:700px){
-  .pgrid{grid-template-columns:1fr}
-  .hero .bigpx{font-size:30px}
-}
+.spots .hc,.ratios .hc{background:var(--panel3);cursor:default;min-height:0;gap:2px}
+.spots .hc:hover,.ratios .hc:hover{box-shadow:none}
+#spreads{margin-top:10px}
+#spreads .bi,#extraBody .bi{grid-template-columns:minmax(0,1fr) auto auto}
+@media (max-width:1280px){#p-hero,#p-chart,#p-mon,#p-news,#p-cal{grid-column:1/-1} #p-spot,#p-extra{grid-column:span 6}}
+@media (max-width:860px){.grid>*{grid-column:1/-1!important}}
 </style>
 </head>
-<body>
-<script>try{var m=localStorage.getItem('git-theme')||'auto';if(m==='day'||(m==='auto'&&matchMedia('(prefers-color-scheme: light)').matches))document.body.classList.add('day')}catch(e){}</script>
-<div id="crt"></div>
-
-<header id="top">
-  <div class="logo"><span class="lx"></span><span class="lt">GOLD INTELLIGENCE TERMINAL</span><span class="lv">GIT/4.2.26 - ENERGY</span></div>
-  <nav class="gochips">
-    <a class="gchip" href="/" style="text-decoration:none">HOME</a>
-    <a class="gchip" href="/gold.html" style="text-decoration:none">GOLD</a>
-    <a class="gchip" href="/energy.html" style="text-decoration:none">ENERGY</a>
-    <a class="gchip" href="/agri.html" style="text-decoration:none">AGRI</a>
-    <a class="gchip" href="/fx.html" style="text-decoration:none">FX</a>
-    <a class="gchip" href="/shipping.html" style="text-decoration:none">SHIPPING</a>
-    <a class="gchip" href="/ai.html" style="text-decoration:none">AI</a>
-    <a class="gchip" href="/search.html" style="text-decoration:none" title="SEARCH">🔍</a>
-  </nav>
-  <div class="tsright">
-    <button id="themeBtn" title="CYCLE AUTO / DAY / NIGHT" style="font:600 9px var(--mono);letter-spacing:.12em;color:var(--mut);border:1px solid var(--line);padding:3px 8px;background:none;cursor:pointer">AUTO/SYS</button>
-    <span class="livedot"><i></i>FEED</span>
-    <span id="clock">--:--:--</span>
-  </div>
-</header>
-
+<body data-page="energy">
+<script src="/js/shell.js"></script>
 <div id="tape"><div class="tape-in"><span id="tapeA"></span><span id="tapeB"></span></div></div>
 
-<main class="pgrid">
+<main>
+  <div class="pagehead"><div><h1>Energy</h1><p>Crude, products and natural gas futures, spreads and the EIA weekly numbers.</p></div></div>
+  <div class="grid pgrid">
 
-  <section id="p-hero" class="panel sig">
-    <div class="p-hd"><span class="sq"></span><span class="ttl" id="meta">WTI CRUDE</span>
+  <section id="p-hero" class="panel">
+    <div class="p-hd"><span class="ttl" id="meta">WTI CRUDE</span>
       <span class="chip near" id="chip">--</span><span class="src" id="prov">AWAITING FEED...</span></div>
     <div class="p-bd hero">
       <div class="bigpx" id="px">--</div>
@@ -80,7 +46,7 @@ html,body{overflow-x:hidden}
   </section>
 
   <section id="p-chart" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">CL1 - WTI CRUDE</span>
+    <div class="p-hd"><span class="ttl">CL1 - WTI CRUDE</span>
       <span class="src">YAHOO (UNOFFICIAL) - NEAR LIVE</span></div>
     <div class="ch-tools">
       <div class="tgrp"><button data-tf="5M">5M</button><button data-tf="15M">15M</button><button data-tf="1H">1H</button><button data-tf="1D" class="on">1D</button><button data-tf="1W">1W</button></div>
@@ -90,7 +56,7 @@ html,body{overflow-x:hidden}
   </section>
 
   <section id="p-mon" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Energy Monitor</span>
+    <div class="p-hd"><span class="ttl">Energy futures</span>
       <span class="chip near">NEAR LIVE</span><span class="src">YAHOO FUTURES</span></div>
     <div class="p-bd">
       <table class="tb"><thead><tr><th>SYM</th><th>DESCRIPTION</th><th class="r">LAST</th><th class="r">%CHG</th><th class="r">UNIT</th><th class="r">SRC</th></tr></thead>
@@ -99,43 +65,42 @@ html,body{overflow-x:hidden}
   </section>
 
   <section id="p-spot" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Movers - Spreads</span></div>
+    <div class="p-hd"><span class="ttl">Movers and spreads</span></div>
     <div class="p-bd"><div class="spots" id="spots"></div><div class="ratios" id="ratios"></div><div id="spreads"></div></div>
   </section>
 
   <section id="p-extra" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">EIA Weekly</span>
+    <div class="p-hd"><span class="ttl">EIA weekly</span>
       <span class="chip month">WEEKLY</span><span class="src">EIA API</span></div>
     <div class="p-bd" id="extraBody"></div>
   </section>
 
   <section id="p-news" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Energy News</span>
-      <span class="chip near">GDELT</span></div>
-    <div class="p-bd"><ul class="nwl" id="nwList"></ul></div>
+    <div class="p-hd"><span class="ttl">Energy news</span>
+      <a class="src" href="/news.html">All news</a></div>
+    <div class="p-bd"><div id="nfBody"></div><ul class="nwl hide" id="nwList"></ul></div>
   </section>
 
   <section id="p-cal" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Energy Calendar</span>
-      <span class="chip evt">REFERENCE</span></div>
+    <div class="p-hd"><span class="ttl">Energy calendar</span><a class="src" href="/gold.html#g-cal">Full calendar</a></div>
     <div class="p-bd">
-      <table class="tb"><thead><tr><th>WHEN</th><th>EVENT</th><th class="r">NOTE</th></tr></thead>
-      <tbody id="calTb"></tbody></table>
+      <div id="calBody"></div><table class="tb hide"><tbody id="calTb"></tbody></table>
     </div>
   </section>
 
+  </div>
 </main>
 
 <footer id="status">
-  <span>GIT-4.2.26 - ENERGY DESK</span>
-  <span class="mid">ANALYSIS, NOT FINANCIAL ADVICE - EVERY VALUE SHOWS ITS SOURCE</span>
+  <span>Energy desk</span>
+  <span class="mid">Analysis, not financial advice. Every value shows its source.</span>
 </footer>
 
 <script>window.PAGE_CONFIG = { type: 'energy', api: '/api/page/energy', sym: 'CL1', heroUnit: '$/BBL' };</script>
-<script>(function(){var _f=window.fetch;window.fetch=function(u,o){o=o||{};o.headers=o.headers||{};var t=localStorage.getItem('git-token');if(t){o.headers['x-session']=t}return _f(u,o)};if(!localStorage.getItem('git-token')){location.replace('/login.html')}})();</script>
-<script>window.PAGE_CONFIG = { type: 'energy', api: '/api/page/energy', sym: 'CL1', heroUnit: '$/BBL' };</script>
 <script src="/js/pages.js"></script>
+<script src="/js/newsfeed.js"></script>
+<script src="/js/calendar.js"></script>
+<script>NewsFeed.mount(document.getElementById('nfBody'), { topic: 'energy', limit: 8, filters: false }); Cal.mount(document.getElementById('calBody'), { scope: 'energy', compact: true });</script>
 <script src="/js/ml-strip.js" defer></script>
-<script src="/js/nav-extra.js" defer></script>
 </body>
 </html>

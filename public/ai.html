@@ -3,62 +3,43 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GIT/4 - AI ANALYSIS</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%23d99a16%22/%3E%3C/svg%3E">
+<title>AI analyst · Gold Intelligence Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,300..700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/terminal.css">
 <style>
-html,body{overflow-x:hidden}
-.agrid{display:grid;grid-template-columns:repeat(12,1fr);gap:clamp(5px,.45vw,8px);width:100%;max-width:1920px;margin:0 auto;padding:8px clamp(8px,.6vw,14px)}
-#a-ml{grid-column:1/5;grid-row:1/3;min-height:480px}
-#a-ask{grid-column:5/9;grid-row:1;min-height:240px}
-#a-scores{grid-column:9/13;grid-row:1;min-height:240px}
-#a-charts{grid-column:5/13;grid-row:2;min-height:240px}
-#a-history{grid-column:1/13;grid-row:3;min-height:200px}
-.qbox{width:100%;background:var(--panel3);border:1px solid var(--line);color:var(--txt);font:12px var(--mono);padding:10px;min-height:60px;resize:vertical;outline:none}
-.qbox:focus{border-color:var(--gold)}
-.qbtn{width:100%;margin-top:8px}
-.aout{margin-top:10px;background:var(--panel3);border:1px solid var(--line2);padding:10px;font:11px/1.7 var(--mono);color:#c9d1d8;min-height:120px;overflow:auto}
-.aout .ln{white-space:pre-wrap;margin-bottom:6px}
-.hist-item{padding:8px;border-top:1px dashed var(--line2);font:10.5px var(--mono);cursor:pointer}
+#a-ml{grid-column:span 4} #a-ask{grid-column:span 8}
+#a-scores{grid-column:span 5} #a-charts{grid-column:span 7}
+#a-history{grid-column:1/-1}
+.qbox{width:100%;background:var(--panel3);border:1px solid var(--line);border-radius:12px;color:var(--txt);font:400 15px/1.5 var(--sans);padding:12px 14px;min-height:84px;resize:vertical;outline:none}
+.qbox:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueBg)}
+.qbtn{margin-top:10px;width:auto}
+.aout{margin-top:12px;background:var(--panel3);border-radius:12px;padding:14px 16px;font:400 14.5px/1.65 var(--sans);color:var(--txt);min-height:120px;overflow:auto}
+.aout .ln{white-space:pre-wrap;margin-bottom:8px}
+.aout .hint{color:var(--dim)}
+.hist-item{padding:12px 0;border-top:1px solid var(--line2);font-size:14px;cursor:pointer}
 .hist-item:first-child{border-top:none}
-.hist-item .q{color:var(--gold);font-weight:600}
-.hist-item .a{color:var(--mut);margin-top:3px;line-height:1.5}
-.scorebar{display:grid;grid-template-columns:100px 50px 1fr;gap:8px;align-items:center;padding:3px 0;font:10.5px var(--mono)}
-.scorebar .sn{color:var(--mut)}
-.scorebar .sv{font-weight:700;text-align:right}
-.scorebar .sb{height:8px;background:var(--grid);border:1px solid var(--line2);position:relative}
-.scorebar .sb i{position:absolute;inset:0 auto 0 0;background:var(--gold)}
-@media (max-width:1100px){
-  .agrid{grid-template-columns:1fr 1fr}
-  .agrid>*{grid-column:auto!important;grid-row:auto!important;min-height:220px}
-  #a-ml,#a-ask,#a-history{grid-column:1/-1!important}
-  #tape{display:none}
-}
-@media (max-width:700px){.agrid{grid-template-columns:1fr}}
+.hist-item .q{color:var(--txt);font-weight:500}
+.hist-item .a{color:var(--mut);margin-top:4px;line-height:1.55}
+.scorebar{display:grid;grid-template-columns:minmax(0,1fr) 56px 120px;gap:12px;align-items:center;padding:7px 0;border-top:1px solid var(--line2);font-size:13.5px}
+.scorebar:first-child{border-top:0}
+.scorebar .sn{color:var(--txt)} .scorebar .sv{font-weight:500;text-align:right}
+.scorebar .sb{height:6px;border-radius:6px;background:var(--grid);position:relative;overflow:hidden}
+.scorebar .sb i{position:absolute;inset:0 auto 0 0;border-radius:6px;background:var(--gold)}
+#mlBody{font-size:14px;line-height:1.7;color:var(--mut)}
+@media (max-width:1280px){.grid>*{grid-column:1/-1!important}}
 </style>
 </head>
-<body>
-<script>try{var m=localStorage.getItem('git-theme')||'auto';if(m==='day'||(m==='auto'&&matchMedia('(prefers-color-scheme: light)').matches))document.body.classList.add('day')}catch(e){}</script>
-<div id="crt"></div>
-<header id="top">
-  <div class="logo"><span class="lx"></span><span class="lt">GOLD INTELLIGENCE TERMINAL</span><span class="lv">GIT/4.2.26 - AI</span></div>
-  <nav class="gochips">
-    <a class="gchip" href="/" style="text-decoration:none">HOME</a>
-    <a class="gchip" href="/gold.html" style="text-decoration:none">GOLD</a>
-    <a class="gchip" href="/shipping.html" style="text-decoration:none">SHIPPING</a>
-    <a class="gchip" href="/ai.html" style="text-decoration:none">AI</a>
-  </nav>
-  <div class="tsright">
-    <button id="themeBtn" style="font:600 9px var(--mono);color:var(--mut);border:1px solid var(--line);padding:3px 8px;background:none;cursor:pointer">AUTO</button>
-    <span id="clock">--:--:--</span>
-  </div>
-</header>
+<body data-page="ai">
+<script src="/js/shell.js"></script>
 <div id="tape"><div class="tape-in"><span id="tapeA"></span><span id="tapeB"></span></div></div>
-<main class="agrid">
+<main>
+  <div class="pagehead"><div><h1>AI analyst</h1><p>Ask about gold and markets. Answers use live prices, the model signal and your news sources.</p></div></div>
+  <div class="grid agrid">
 
-  <section id="a-ml" class="panel sig">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">ML Signal Status</span>
+  <section id="a-ml" class="panel">
+    <div class="p-hd"><span class="ttl">Model signal</span>
       <span class="chip ai" id="mlDir">--</span><span class="src">ML ENGINE</span></div>
     <div class="p-bd">
       <div id="mlBody">Loading ML data...</div>
@@ -67,24 +48,24 @@ html,body{overflow-x:hidden}
   </section>
 
   <section id="a-ask" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Ask The Analyst</span>
+    <div class="p-hd"><span class="ttl">Ask the analyst</span>
       <span class="chip ai">AI ENGINE</span></div>
     <div class="p-bd">
-      <textarea class="qbox" id="qbox" placeholder="Why is gold moving? / What is the ML signal? / How do real yields affect gold?"></textarea>
+      <textarea class="qbox" id="qbox" placeholder="Why is gold moving today? What does the model expect this week?"></textarea>
       <button class="runbtn qbtn" id="askBtn">ASK ANALYST</button>
-      <div class="aout" id="answer"><span class="hint">// ASK A QUESTION ABOVE</span></div>
+      <div class="aout" id="answer"><span class="hint">Answers appear here.</span></div>
     </div>
   </section>
 
   <section id="a-scores" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Agent Consensus</span>
+    <div class="p-hd"><span class="ttl">Agent consensus</span>
       <span class="chip near">10 AGENTS</span></div>
     <div class="p-bd" id="scoresBody">Loading...</div>
   </section>
 
   <section id="a-charts" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Visual Analysis</span>
-      <span class="chip evt">CANVAS</span></div>
+    <div class="p-hd"><span class="ttl">Agent scores and history</span>
+      </div>
     <div class="p-bd">
       <canvas id="agentCv" style="width:100%;height:140px"></canvas>
       <canvas id="histCv" style="width:100%;height:90px;margin-top:10px"></canvas>
@@ -92,17 +73,14 @@ html,body{overflow-x:hidden}
   </section>
 
   <section id="a-history" class="panel">
-    <div class="p-hd"><span class="sq"></span><span class="ttl">Recent Questions</span></div>
+    <div class="p-hd"><span class="ttl">Recent questions</span></div>
     <div class="p-bd" id="historyBody"><div class="footnote">NO QUESTIONS YET</div></div>
   </section>
 
+  </div>
 </main>
-<footer id="status"><span>GIT-4.2.26 - AI DESK</span><span class="mid">NOT FINANCIAL ADVICE - EVERY VALUE SHOWS ITS SOURCE</span></footer>
-<script>
-(function(){var _f=window.fetch;window.fetch=function(u,o){o=o||{};o.headers=o.headers||{};var t=localStorage.getItem('git-token');if(t){o.headers['x-session']=t}return _f(u,o)};if(!localStorage.getItem('git-token')){location.replace('/login.html')}})();
-</script>
+<footer id="status"><span>AI analyst</span><span class="mid">Not financial advice. Every value shows its source.</span></footer>
 <script src="/js/ai.js"></script>
 <script src="/js/ml-strip.js" defer></script>
-<script src="/js/nav-extra.js" defer></script>
 </body>
 </html>

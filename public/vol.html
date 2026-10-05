@@ -3,106 +3,79 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GIT/4 - VOLATILITY DESK</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%23d99a16%22/%3E%3C/svg%3E">
+<title>Volatility · Gold Intelligence Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,300..700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/terminal.css">
 <style>
-html,body{overflow-x:hidden}
-.vwrap{width:100%;max-width:2560px;margin:0 auto;padding:8px clamp(8px,.6vw,14px)}
-.kpis{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;margin-bottom:8px}
-.kpi{border:1px solid var(--line);background:var(--panel);padding:7px 9px;min-width:0;cursor:pointer}
-.kpi:hover{border-color:var(--goldDk)}
-.kpi label{display:block;font:600 8px var(--mono);letter-spacing:.16em;color:var(--dim);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.kpi b{font:700 18px var(--mono);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--txt)}
-.kpi small{display:block;font:9px var(--mono);color:var(--mut);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.vgrid{display:grid;grid-template-columns:repeat(12,1fr);gap:clamp(5px,.45vw,8px)}
-.c8{grid-column:span 8}.c4{grid-column:span 4}.c6{grid-column:span 6}.c12{grid-column:1/13}
-.tabs{display:flex;border:1px solid var(--line);margin:0 0 6px;width:max-content;max-width:100%;overflow-x:auto}
-.tabs button{font:600 9.5px var(--mono);letter-spacing:.14em;color:var(--dim);padding:6px 13px;background:var(--panel3);white-space:nowrap}
-.tabs button+button{border-left:1px solid var(--line)}
-.tabs button.on{color:var(--gold);background:#141007}
-body.day .tabs button.on{background:#fbf3e2}
-.tb tr.sel td{background:#171207}
-body.day .tb tr.sel td{background:#fbf3e2}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:var(--gap)}
+.kpis .kpi{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:12px 14px;cursor:pointer}
+.kpis .kpi:hover{border-color:var(--blue)}
+.kpis .kpi label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpis .kpi b{font:400 22px/1.2 var(--sans);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--txt)}
+.kpis .kpi small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tabs{display:flex;gap:4px;margin:0 0 12px;flex-wrap:wrap}
+.tabs button{font:500 13px var(--sans);color:var(--mut);padding:6px 14px;border-radius:999px;background:var(--panel2);white-space:nowrap}
+.tabs button:hover{color:var(--txt)}
+.tabs button.on{color:var(--blue);background:var(--blueBg)}
+.tb tr.sel td{background:var(--blueBg)}
 .tb tr.rowc{cursor:pointer}
-.reg{font:700 8.5px var(--mono);letter-spacing:.08em;padding:1px 5px;border:1px solid;display:inline-block;min-width:64px;text-align:center}
-.reg.LOW{color:var(--up);border-color:var(--up)}.reg.NORMAL{color:var(--mut);border-color:var(--line)}
-.reg.ELEVATED{color:var(--amber);border-color:var(--amber)}.reg.STRESS{color:var(--dn);border-color:var(--dn)}
-.pbar{position:relative;width:86px;height:8px;background:var(--grid);border:1px solid var(--line2);display:inline-block;vertical-align:middle}
-.pbar i{position:absolute;top:-2px;width:2px;height:10px;background:var(--txt)}
-.pbar s{position:absolute;inset:0 auto 0 0;background:var(--goldDk)}
-.chartbox{position:relative;height:210px;border:1px solid var(--line2);background:var(--panel3)}
+.reg{font:500 12px var(--sans);padding:2px 9px;border-radius:999px;display:inline-block;background:var(--panel2);color:var(--mut)}
+.reg.LOW{color:var(--up);background:var(--upBg)}.reg.ELEVATED{color:var(--amber);background:var(--amBg)}.reg.STRESS{color:var(--dn);background:var(--dnBg)}
+.pbar{position:relative;width:80px;height:4px;border-radius:4px;background:var(--grid);display:inline-block;vertical-align:middle}
+.pbar i{position:absolute;top:-3px;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:var(--txt)}
+.pbar s{display:none}
+.chartbox{position:relative;height:240px}
 .chartbox.sm{height:160px}
 .chartbox canvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
-.tip{position:absolute;pointer-events:none;background:var(--panel2);border:1px solid var(--line);padding:5px 7px;font:10px/1.55 var(--mono);color:var(--txt);white-space:nowrap;z-index:5;display:none}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:8px 10px;font:400 12.5px/1.5 var(--sans);color:var(--txt);white-space:nowrap;z-index:5;display:none}
 .tip .k{color:var(--dim)}
-.legend{display:flex;gap:12px;flex-wrap:wrap;font:9px var(--mono);color:var(--mut);margin:4px 0}
-.legend i{display:inline-block;width:12px;height:2px;margin-right:5px;vertical-align:3px}
-.gauge{height:12px;background:var(--grid);border:1px solid var(--line2);position:relative;margin:6px 0}
-.gauge i{position:absolute;inset:0 auto 0 0}
-.comp{display:grid;grid-template-columns:70px 1fr 34px;gap:8px;align-items:center;font:10px var(--mono);padding:3px 0}
-.comp .t{height:8px;background:var(--grid);border:1px solid var(--line2);position:relative}
-.comp .t i{position:absolute;inset:0 auto 0 0}
-.al{display:grid;grid-template-columns:62px 1fr 64px;gap:8px;padding:4px 2px;border-top:1px dashed var(--line2);font:10px var(--mono);align-items:baseline;cursor:pointer}
-.al:first-child{border-top:none}
-.note{font:9px var(--mono);color:var(--dim);line-height:1.6;margin-top:6px}
-.emptyst{font:10px var(--mono);color:var(--dim);padding:16px 6px;text-align:center;letter-spacing:.08em}
-.hbar{display:grid;grid-template-columns:120px 1fr 56px;gap:8px;align-items:center;padding:3px 0;font:10px var(--mono)}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:3px}
+.gauge{height:6px;border-radius:6px;background:var(--grid);position:relative;margin:8px 0;overflow:hidden}
+.gauge i{position:absolute;inset:0 auto 0 0;border-radius:6px}
+.comp{display:grid;grid-template-columns:90px 1fr 40px;gap:10px;align-items:center;font-size:13px;padding:5px 0}
+.comp .t{height:6px;border-radius:6px;background:var(--grid);position:relative;overflow:hidden}
+.comp .t i{position:absolute;inset:0 auto 0 0;border-radius:6px}
+#alertBox .al{display:grid;grid-template-columns:72px 1fr 72px;gap:10px;cursor:pointer}
+.note{font:400 12.5px/1.55 var(--sans);color:var(--dim);margin-top:8px}
+.emptyst{font:400 14px var(--sans);color:var(--mut);padding:20px 4px;text-align:center}
+.hbar{display:grid;grid-template-columns:minmax(0,140px) 1fr 60px;gap:10px;align-items:center;padding:5px 0;font-size:13px}
 .hbar .n{color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.hbar .t{height:9px;background:var(--grid);border:1px solid var(--line2);position:relative}
-.hbar .t i{position:absolute;top:0;bottom:0}
-.hbar .t s{position:absolute;top:-2px;bottom:-2px;width:1px;background:var(--mut)}
-.hbar .v{text-align:right;font-weight:600}
-@media (max-width:1300px){.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
-@media (max-width:1100px){.c8,.c4,.c6{grid-column:1/13}#tape{display:none}}
-@media (max-width:700px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.p-hd .src{display:none}}
+.hbar .t{height:6px;border-radius:6px;background:var(--grid);position:relative}
+.hbar .t i{position:absolute;top:0;bottom:0;border-radius:6px}
+.hbar .t s{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--mut)}
+.hbar .v{text-align:right;font-weight:500}
+#volWrap,#exBox{overflow-x:auto}
+#boardBox{columns:3 300px;column-gap:28px}
+@media (max-width:1280px){.vgrid>*{grid-column:1/-1!important}}
 </style>
 </head>
-<body>
-<script>try{var m=localStorage.getItem('git-theme')||'auto';if(m==='day'||(m==='auto'&&matchMedia('(prefers-color-scheme: light)').matches))document.body.classList.add('day')}catch(e){}</script>
-<script>if(!localStorage.getItem('git-token'))location.replace('/login.html')</script>
-<div id="crt"></div>
-<header id="top">
-  <div class="logo"><span class="lx"></span><span class="lt">GOLD INTELLIGENCE TERMINAL</span><span class="lv">GIT/4.2.26 - VOL</span></div>
-  <nav class="gochips">
-    <a class="gchip" href="/" style="text-decoration:none">HOME</a>
-    <a class="gchip" href="/gold.html" style="text-decoration:none">GOLD</a>
-    <a class="gchip" href="/fx.html" style="text-decoration:none">FX</a>
-    <a class="gchip" href="/stable.html" style="text-decoration:none">STABLE</a>
-    <a class="gchip" href="/energy.html" style="text-decoration:none">ENERGY</a>
-    <span class="gchip" style="color:var(--gold)">VOL</span>
-    <a class="gchip" href="/ai.html" style="text-decoration:none">AI</a>
-  </nav>
-  <div class="tsright">
-    <button id="themeBtn" style="font:600 9px var(--mono);color:var(--mut);border:1px solid var(--line);padding:3px 8px;background:none;cursor:pointer">AUTO</button>
-    <span class="livedot"><i></i><span id="feedTxt">VOL --</span></span>
-    <span id="clock">--:--:--</span>
-  </div>
-</header>
-
-<div class="vwrap">
+<body data-page="vol">
+<script src="/js/shell.js"></script>
+<main class="vwrap">
+  <div class="pagehead"><div><h1>Volatility</h1><p>Realized and GARCH volatility for Treasuries, FX, stablecoins, insurance prices and stocks, from stored daily data.</p></div></div>
   <div class="kpis" id="kpis"></div>
 
-  <div class="vgrid">
-    <section class="panel sig c8">
-      <div class="p-hd"><span class="sq"></span><span class="ttl" id="clsTitle">Volatility monitor</span><span class="chip near" id="clsChip">DAILY</span><span class="src" id="clsSrc">D1 WAREHOUSE</span></div>
-      <div class="p-bd" style="overflow-x:auto">
+  <div class="grid vgrid">
+    <section class="panel c8">
+      <div class="p-hd"><span class="ttl" id="clsTitle">Volatility monitor</span><span class="chip near" id="clsChip">DAILY</span><span class="src" id="clsSrc">D1 WAREHOUSE</span></div>
+      <div class="p-bd" id="volWrap">
         <div class="tabs" id="tabs">
-          <button data-c="rates" class="on">TREASURIES</button><button data-c="fx">FX</button><button data-c="stable">STABLECOINS</button>
-          <button data-c="insurance">INSURANCE</button><button data-c="equity">STOCKS</button><button data-c="commod">GOLD · OIL</button>
+          <button data-c="rates" class="on">Treasuries</button><button data-c="fx">FX</button><button data-c="stable">Stablecoins</button>
+          <button data-c="insurance">Insurance</button><button data-c="equity">Stocks</button><button data-c="commod">Gold and oil</button>
         </div>
         <table class="tb" id="volTbl"><tbody><tr><td class="emptyst">LOADING…</td></tr></tbody></table>
         <div class="note" id="clsNote"></div>
       </div>
     </section>
     <section class="panel c4">
-      <div class="p-hd"><span class="sq"></span><span class="ttl">Cross-asset stress</span><span class="chip evt">CALC</span></div>
+      <div class="p-hd"><span class="ttl">Cross-asset stress</span><span class="chip evt">CALC</span></div>
       <div class="p-bd" id="stressBox"><div class="emptyst">LOADING…</div></div>
     </section>
 
     <section class="panel c8">
-      <div class="p-hd"><span class="sq"></span><span class="ttl" id="detTitle">Series detail</span><span class="src" id="detSrc">CLICK A ROW</span></div>
+      <div class="p-hd"><span class="ttl" id="detTitle">Series detail</span><span class="src" id="detSrc">CLICK A ROW</span></div>
       <div class="p-bd">
         <div class="legend" id="lgLevel"></div>
         <div class="chartbox"><canvas id="cvLevel"></canvas><div class="tip" id="tipLevel"></div></div>
@@ -112,32 +85,28 @@ body.day .tb tr.sel td{background:#fbf3e2}
       </div>
     </section>
     <section class="panel c4">
-      <div class="p-hd"><span class="sq"></span><span class="ttl" id="exTitle">Class detail</span><span class="src" id="exSrc"></span></div>
+      <div class="p-hd"><span class="ttl" id="exTitle">Class detail</span><span class="src" id="exSrc"></span></div>
       <div class="p-bd" id="exBox"></div>
     </section>
 
     <section class="panel c6">
-      <div class="p-hd"><span class="sq"></span><span class="ttl">σ-move alerts</span><span class="chip ai">GARCH</span><span class="src">|z| ≥ 2.5 daily · ≥ 2 monthly</span></div>
+      <div class="p-hd"><span class="ttl">σ-move alerts</span><span class="chip ai">GARCH</span><span class="src">|z| ≥ 2.5 daily · ≥ 2 monthly</span></div>
       <div class="p-bd" id="alertBox"></div>
     </section>
     <section class="panel c6">
-      <div class="p-hd"><span class="sq"></span><span class="ttl">Correlation · 60 obs daily changes</span><span class="chip evt">CALC</span></div>
-      <div class="p-bd"><div class="chartbox" style="height:260px"><canvas id="cvCorr"></canvas></div>
-        <div class="note">red = move together, blue = move opposite. yields in bp, everything else log % (VIX: log change of the level).</div></div>
+      <div class="p-hd"><span class="ttl">Correlation, last 60 daily changes</span><span class="chip evt">CALC</span></div>
+      <div class="p-bd"><div class="chartbox" style="height:280px"><canvas id="cvCorr"></canvas></div>
+        <div class="note">Red moves together, blue moves opposite. Yields in bp, everything else log %.</div></div>
     </section>
     <section class="panel c12">
-      <div class="p-hd"><span class="sq"></span><span class="ttl">Vol regime board · every series ranked by 1y percentile</span><span class="src">RV20 percentile (vol indices: level percentile)</span></div>
-      <div class="p-bd" id="boardBox" style="columns:3 320px;column-gap:24px"></div>
+      <div class="p-hd"><span class="ttl">Every series ranked by 1-year percentile</span><span class="src">RV20 percentile (vol indices: level percentile)</span></div>
+      <div class="p-bd" id="boardBox"></div>
     </section>
   </div>
-</div>
-<footer id="status"><span>GIT-4.2.26 - VOLATILITY DESK</span><span class="mid" id="statusMid">REALIZED + GARCH(1,1) FROM STORED DAILY DATA · NOT FINANCIAL ADVICE</span></footer>
-<script>
-(function(){var _f=window.fetch;window.fetch=function(u,o){o=o||{};o.headers=o.headers||{};var t=localStorage.getItem('git-token');if(t){o.headers['x-session']=t}return _f(u,o)};})();
-</script>
+</main>
+<footer id="status"><span>Volatility desk</span><span class="mid" id="statusMid">REALIZED + GARCH(1,1) FROM STORED DAILY DATA · NOT FINANCIAL ADVICE</span></footer>
 <script src="/js/chartkit.js"></script>
 <script src="/js/vol.js"></script>
 <script src="/js/ml-strip.js" defer></script>
-<script src="/js/nav-extra.js" defer></script>
 </body>
 </html>
