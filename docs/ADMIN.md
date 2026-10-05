@@ -62,3 +62,8 @@ binding is missing from `wrangler.jsonc`.
 | GET | /api/admin/storage | warehouse units, series coverage, errors, snapshot ages |
 | POST | /api/admin/storage/ingest | one ingest cycle now (`{ keys?: [unitKey] }` to target units) |
 | POST | /api/admin/storage/rebuild | `{ cls }` rebuild one vol class from stored data |
+| GET | /api/admin/news/sources | your channels and feeds with stored / AI-digested counts |
+| POST | /api/admin/news/sources | `{ url, name?, topics?, favorite? }` add (YouTube link, @handle or RSS) + first crawl |
+| POST | /api/admin/news/sources/update, /delete | `{ id, enabled?, favorite?, topics? }` |
+| POST | /api/admin/news/crawl | `{ ids? }` crawl now + AI digest (max 6 per 10 min) |
+| POST | /api/admin/refs/refresh | refresh FRED release calendar + drought map |
