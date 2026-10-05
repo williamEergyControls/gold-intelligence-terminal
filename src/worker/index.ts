@@ -2,6 +2,8 @@
    GOLD INTELLIGENCE TERMINAL — WORKER ENTRY
    request cycle:  INIT (secrets + schema) → AUTH GATE → ROUTE → PUBLISH json
    cron cycle:     every 5 min  warm bootstrap cache + snapshot + health
+                   :02 :12 … :52 news crawl (own invocation) · AI digest every other run
+                                 · :32 also refreshes FRED release dates + drought map when old
                    hourly (0 *) live API probes · news sentiment · once/day GoldAPI.io
                                 seed + D1 prune · ML last (CPU heavy)
    NOTE: routing is a flat if-chain on purpose. the 2026-10-01 deploy broke on
@@ -29,6 +31,9 @@ import { SERIES, UNITS, SOURCE_LABEL } from './store/registry';
 import { refreshVol, readSnapshots, VOL_CLASSES } from './vol/snapshot';
 import { changes, rollingRv, garchFit, monthlyYoY } from './analytics/vol';
 import { mlStrip } from './ml/strip';
+import { crawlCycle, digestBatch, newsFeed, newsIdeas, listSources, addSource, updateSource, deleteSource, pruneNews } from './news/crawler';
+import { calendar, refreshFred } from './calendar';
+import { refreshDrought, readDrought } from './providers/drought';
 
 const JH = { 'content-type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store' };
 const TFS: Tf[] = ['5M', '15M', '1H', '1D', '1W'];
@@ -178,7 +183,7 @@ export default {
             return await shp.buildShippingPanel(env);
           } catch (e) {
             console.error('SHIPPING_FAIL', errMsg(e));
-            return { futures: [], indices: [], ports: [], sea: null, news: [], builtAt: Date.now() };
+            return { builtAt: Date.now(), proxies: [], chokepoints: [], chokeAsOf: null, chokeSource: 'IMF PortWatch', ports: [], portsAsOf: null, marineAsOf: null, wci: null, indices: [], errors: [errMsg(e)] };
           }
         });
         return json(r.v, 200);
@@ -245,6 +250,13 @@ export default {
         }));
         return json({ source: 'CoinGecko (public API) · stored in D1, refreshed hourly', retrievedAt: new Date(snaps.stable.ts).toISOString(), frequency: 'daily close + latest print', unit: 'USD', totalMcap: st.extras?.totalMcap ?? null, coins }, 200);
       }
+      if (path === '/api/ml/history') {
+        const rs = await memo('ml:hist', 300000, async () => (await env.DB.prepare(
+          `SELECT p.ts, p.p_up, p.direction, p.regime, o.realized_ret, o.correct FROM predictions p
+           LEFT JOIN prediction_outcomes o ON o.ts=p.ts AND o.horizon_days=p.horizon_days ORDER BY p.ts DESC LIMIT 40`
+        ).all()).results ?? []);
+        return json({ horizonDays: 5, rows: rs }, 200);
+      }
       if (path === '/api/ml') {
         const raw = await env.CACHE.get('ml:snap', 'json');
         return raw ? json(raw, 200) : json({ status: 'WARMING' }, 200);
@@ -306,23 +318,44 @@ export default {
           return json({ ok: true, answer: 'Gold ' + (gpct >= 0 ? 'up' : 'down') + ' ' + Math.abs(gpct).toFixed(2) + '% at $' + boot.v.gold.price.toFixed(2) + '. ' + (d0?.name || '') + ' ' + (d0?.delta || '') + '. NOT FINANCIAL ADVICE.', engine: 'fallback', ts: Date.now() }, 200);
         }
       }
+      /* ---- news crawler + calendar + drought (all single D1/KV reads) ---- */
+      if (path === '/api/news/feed') {
+        const topic = (url.searchParams.get('topic') || 'all').toLowerCase().replace(/[^a-z]/g, '').slice(0, 12);
+        const limit = Math.min(40, Math.max(3, parseInt(url.searchParams.get('limit') || '12', 10) || 12));
+        const r = await memo('nf:' + topic + ':' + limit + ':' + (url.searchParams.get('fav') || ''), 30000, () => newsFeed(env, topic, limit, { favOnly: url.searchParams.get('fav') === '1' }));
+        return json(r, 200);
+      }
+      if (path === '/api/news/ideas') {
+        const topic = (url.searchParams.get('topic') || 'all').toLowerCase().replace(/[^a-z]/g, '').slice(0, 12);
+        const limit = Math.min(12, Math.max(1, parseInt(url.searchParams.get('limit') || '6', 10) || 6));
+        return json(await memo('ni:' + topic + ':' + limit, 60000, () => newsIdeas(env, limit, topic)), 200);
+      }
+      if (path === '/api/calendar') {
+        return json(await calendar(env), 200);
+      }
+      if (path === '/api/drought') {
+        let d = await readDrought(env);
+        if (!d && allow('drought-lazy', 2, 600000)) { await refreshDrought(env, true); d = await readDrought(env); }
+        return d ? json(d, 200) : json({ error: 'DATA_TEMPORARILY_UNAVAILABLE', source: 'U.S. Drought Monitor', retrying: true }, 503, { 'Retry-After': '300' });
+      }
       if (path === '/api/search') {
         const q = (url.searchParams.get('q') || '').toLowerCase().slice(0, 100);
         if (!q || q.length < 2) return json({ results: [] }, 200);
         const results: any[] = [];
         const PAGES = [
-          { t: 'Gold Terminal', u: '/gold.html', k: 'gold xau price chart why miners heatmap' },
-          { t: 'Energy Terminal', u: '/energy.html', k: 'energy oil wti brent natural gas eia' },
-          { t: 'Agri Terminal', u: '/agri.html', k: 'agri corn wheat soybean cattle water usda' },
-          { t: 'FX Terminal', u: '/fx.html', k: 'fx forex dollar dxy euro currency' },
-          { t: 'Water Terminal', u: '/water.html', k: 'water drought river usgs nq' },
-          { t: 'Land Terminal', u: '/land.html', k: 'land farm acre rent usda' },
-          { t: 'Stablecoin Terminal', u: '/stable.html', k: 'stablecoin tether usdt crypto peg' },
-          { t: 'Shipping Terminal', u: '/shipping.html', k: 'shipping freight port baltic suez' },
-          { t: 'AI Analysis', u: '/ai.html', k: 'ai analyst ml question deep' },
-          { t: 'Volatility Desk', u: '/vol.html', k: 'vol volatility vix move garch treasury yields fx stablecoin depeg insurance stocks stress' },
+          { t: 'Gold desk', u: '/gold.html', k: 'gold xau price chart why miners heatmap' },
+          { t: 'Energy desk', u: '/energy.html', k: 'energy oil wti brent natural gas eia' },
+          { t: 'Agri desk', u: '/agri.html', k: 'agri corn wheat soybean cattle water usda' },
+          { t: 'FX desk', u: '/fx.html', k: 'fx forex dollar dxy euro currency' },
+          { t: 'Water desk', u: '/water.html', k: 'water drought river usgs nq' },
+          { t: 'Land desk', u: '/land.html', k: 'land farm acre rent usda' },
+          { t: 'Stablecoin desk', u: '/stable.html', k: 'stablecoin tether usdt crypto peg' },
+          { t: 'Shipping desk', u: '/shipping.html', k: 'shipping freight port baltic suez' },
+          { t: 'AI analyst', u: '/ai.html', k: 'ai analyst ml question deep' },
+          { t: 'Volatility desk', u: '/vol.html', k: 'vol volatility vix move garch treasury yields fx stablecoin depeg insurance stocks stress' },
+          { t: 'News & trading ideas', u: '/news.html', k: 'news feed youtube channel rss summary trade idea headlines' },
         ];
-        if (auth.role === 'admin') PAGES.push({ t: 'Admin Console', u: '/admin.html', k: 'admin api probe health ml db database users diagnostics' });
+        if (auth.role === 'admin') PAGES.push({ t: 'Admin console', u: '/admin.html', k: 'admin api probe health ml db database users diagnostics' });
         for (const p of PAGES) {
           if (p.t.toLowerCase().includes(q) || p.k.includes(q)) results.push({ type: 'PAGE', title: p.t, url: p.u, source: 'NAV' });
         }
@@ -334,6 +367,10 @@ export default {
             if (results.length > 15) break;
           }
         } catch { /* nav results still return */ }
+        try {
+          const rs = (await env.DB.prepare(`SELECT i.title, i.url, s.name FROM news_items i JOIN news_sources s ON s.id=i.source_id WHERE lower(i.title) LIKE ? ORDER BY i.published DESC LIMIT 8`).bind('%' + q.replace(/[%_]/g, '') + '%').all<{ title: string; url: string; name: string }>()).results ?? [];
+          for (const r of rs) if (results.length < 15) results.push({ type: 'NEWS', title: r.title, url: r.url, source: r.name });
+        } catch { /* crawler table may be empty */ }
         return json({ results: results.slice(0, 15) }, 200);
       }
 
@@ -343,6 +380,41 @@ export default {
 
       if (path === '/api/env') {
         return json({ secrets: secretStates(env), ai: !!env.AI, aiEnabled: env.AI_ENABLED ?? null, metalsTtl: env.METALS_TTL ?? null }, 200);
+      }
+
+      /* ---- news sources (your channels + feeds) ---- */
+      if (path === '/api/admin/news/sources' && req.method === 'GET') return json(await listSources(env), 200);
+      if (path === '/api/admin/news/sources' && req.method === 'POST') {
+        if (!allow('srcadd:' + actorId, 20, 600000)) return json({ error: 'RATE_LIMITED' }, 429);
+        const b = await readBody(req);
+        try {
+          const r = await addSource(env, { url: String(b.url || ''), name: b.name, topics: b.topics, favorite: b.favorite !== false }, auth.name ?? 'admin');
+          // first crawl of the new source right away so the admin sees items (or the error)
+          const c = await crawlCycle(env, { ids: [r.id] }).catch(e => ({ fetched: 0, added: 0, errors: [errMsg(e)] }));
+          return json({ ok: true, source: r, crawl: c }, 200);
+        } catch (e) { return json({ error: 'SOURCE_REJECTED', detail: errMsg(e, 200) }, 400); }
+      }
+      if (path === '/api/admin/news/sources/update' && req.method === 'POST') {
+        const b = await readBody(req);
+        await updateSource(env, Number(b.id), { enabled: b.enabled, favorite: b.favorite, topics: b.topics });
+        return json({ ok: true }, 200);
+      }
+      if (path === '/api/admin/news/sources/delete' && req.method === 'POST') {
+        const b = await readBody(req);
+        await deleteSource(env, Number(b.id));
+        return json({ ok: true }, 200);
+      }
+      if (path === '/api/admin/news/crawl' && req.method === 'POST') {
+        if (!allow('crawl:' + actorId, 6, 600000)) return json({ error: 'RATE_LIMITED', hint: 'max 6 manual crawls per 10 min' }, 429);
+        const b = await readBody(req);
+        const c = await crawlCycle(env, { ids: Array.isArray(b.ids) ? b.ids.map(Number) : undefined, max: 10 });
+        const d = b.digest === false ? null : await digestBatch(env);
+        return json({ ok: true, crawl: c, digest: d }, 200);
+      }
+      if (path === '/api/admin/refs/refresh' && req.method === 'POST') {
+        if (!allow('refs:' + actorId, 4, 600000)) return json({ error: 'RATE_LIMITED' }, 429);
+        const [f, d] = await Promise.all([refreshFred(env, true), refreshDrought(env, true)]);
+        return json({ ok: true, fred: f, drought: d }, 200);
       }
 
       /* ---- live API probes ---- */
@@ -496,6 +568,7 @@ export default {
       await ensureSecrets(env);
       await ensureSchema(env).catch(e => console.error('SCHEMA_FAIL', errMsg(e)));
       if (controller.cron === '0 * * * *') { await hourly(env); return; }
+      if (controller.cron === NEWS_CRON) { await newsCycle(env, controller.scheduledTime); return; }
       // */5 trigger alternates: :00 :10 :20… warm the UI cache, :05 :15 :25… ingest + vol.
       // separate invocations keep each one under the Free plan's 50-subrequest cap.
       if (new Date(controller.scheduledTime).getUTCMinutes() % 10 === 5) { await ingestCycle(env, controller.scheduledTime); return; }
@@ -503,6 +576,26 @@ export default {
     })());
   },
 };
+
+/* ===== news cycle (every 10 min, own invocation): crawl → digest; :32 refreshes reference data ===== */
+const NEWS_CRON = '2,12,22,32,42,52 * * * *';
+async function newsCycle(env: Env, scheduledTime: number): Promise<void> {
+  const min = new Date(scheduledTime).getUTCMinutes();
+  if (min === 32) {
+    // reference refresh slot: FRED release dates (11 calls, ≤ once/20 h) + drought map (1 call, ≤ once/12 h)
+    try { const f = await refreshFred(env); if (f.ok || f.errors.length) console.log('CAL_FRED', JSON.stringify(f)); } catch (e) { console.error('CAL_FRED_FAIL', errMsg(e)); }
+    try { const d = await refreshDrought(env); if (!d.ok) console.error('DROUGHT_FAIL', d.error); } catch (e) { console.error('DROUGHT_FAIL', errMsg(e)); }
+    try { if (new Date(scheduledTime).getUTCHours() === 3) console.log('NEWS_PRUNE', await pruneNews(env)); } catch (e) { console.error('NEWS_PRUNE_FAIL', errMsg(e)); }
+  }
+  try {
+    const c = await crawlCycle(env);
+    if (c.fetched) console.log('NEWS_CRAWL', JSON.stringify({ fetched: c.fetched, added: c.added, errors: c.errors.slice(0, 4) }));
+  } catch (e) { console.error('NEWS_CRAWL_FAIL', errMsg(e)); }
+  // AI digest on every other run (~72 calls/day × 4 items) keeps Workers AI inside the free allowance
+  if (min % 20 === 2) {
+    try { const d = await digestBatch(env); if (d.done) console.log('NEWS_DIGEST', JSON.stringify(d)); } catch (e) { console.error('NEWS_DIGEST_FAIL', errMsg(e)); }
+  }
+}
 
 /* ===== 5-min cycle: warm the cache the UI polls, snapshot price, persist health ===== */
 async function warm(env: Env): Promise<void> {
