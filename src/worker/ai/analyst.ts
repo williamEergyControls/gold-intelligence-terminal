@@ -1,4 +1,5 @@
 import type { AnalyticsResult, Env, WhyGold } from '../types';
+import { cacheGet } from '../cache';
 
 const SYSTEM = `You are the AI Analyst inside a financial research terminal.
 RULES (absolute):
@@ -6,7 +7,7 @@ RULES (absolute):
 2. Explain what the computed metrics mean and how they conflict or reinforce.
 3. Maximum 6 short lines. No preamble.
 4. End with exactly: NOT FINANCIAL ADVICE.
-5. If the data is simulated or stale, say so in one clause.
+5. If the data is stale or a daily close, say so in one clause.
 6. If an 'ml' object is present, reference its probability, regime and agent agreement; never replace them with your own estimate.`;
 
 // Model fallback chain — Cloudflare rotates/retires model IDs over time.
@@ -53,7 +54,7 @@ export async function aiAnalyst(env: Env, a: AnalyticsResult, w: WhyGold, extra:
 export async function newsSentimentHourly(env: Env): Promise<void> {
   try {
     if (!env.AI) return;
-    const cached = (await env.CACHE.get('news', 'json')) as any;
+    const cached = (await cacheGet(env, 'news')) as any;
     const all = Array.isArray(cached) ? cached : (cached?.v ?? cached?.news ?? []); // unwrap AppCache envelope
     const items = (Array.isArray(all) ? all : []).filter((n: any) => n?.topic === 'gold').slice(0, 10) as { id: string; title: string }[];
     if (!items.length) return;
