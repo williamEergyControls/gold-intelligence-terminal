@@ -38,8 +38,8 @@ function renderHero() {
   const bc = $('#pxc'); bc.className = 'bigchg ' + cls(p);
   bc.innerHTML = (c >= 0 ? '+ ' : '- ') + fmt(Math.abs(c)) + '  (' + sgn(p) + fmt(p) + '%)';
   $('#meta').textContent = (g.name || g.symbol) + ', ' + (g.unit || C.heroUnit || '');
-  $('#prov').textContent = String(g.source) + (g.delay === 'simulated' ? ', simulated' : ', near live');
-  const chip = $('#chip'); if (chip) { chip.textContent = g.delay === 'simulated' ? 'Simulated' : 'Near live'; chip.className = 'chip ' + (g.delay === 'simulated' ? 'ai' : 'near'); }
+  $('#prov').textContent = String(g.source) + (g.delay === 'stale' ? ', last known' : ', near live');
+  const chip = $('#chip'); if (chip) { chip.textContent = g.delay === 'stale' ? 'Last known' : 'Near live'; chip.className = 'chip ' + (g.delay === 'stale' ? 'evt' : 'near'); }
   $('#oo').textContent = fmt(g.open); $('#oh').textContent = fmt(g.high); $('#ol').textContent = fmt(g.low); $('#op').textContent = fmt(g.prevClose);
   $('#obid').textContent = fmt(g.bid); $('#oask').textContent = fmt(g.ask);
   if (g.high && g.low && g.high > g.low) $('#rmark').style.left = Math.round((g.price - g.low) / (g.high - g.low) * 100) + '%';
@@ -150,7 +150,7 @@ document.querySelectorAll('[data-tf]').forEach(b => b.addEventListener('click', 
 /* ---------------- init + poll ---------------- */
 async function loadAll() {
   try { D = await getJSON(C.api, AH); renderAll(); }
-  catch (e) { const s = $('#status .mid'); if (s) s.textContent = 'API ERROR - ' + String(e && e.message || e); }
+  catch (e) { const s = $('#status .mid'); if (s) s.textContent = 'Prices are unavailable right now and there is no stored copy yet. Retrying every minute.'; }
   try { const r = await getJSON('/api/candles?sym=' + encodeURIComponent(C.sym) + '&tf=' + TF, AH); CH = r.candles || []; drawChart(); } catch (e) { }
 }
 loadAll();

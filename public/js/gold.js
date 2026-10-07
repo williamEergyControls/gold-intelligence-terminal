@@ -15,7 +15,7 @@
 
   function getJSON(u) { return G.getJSON(u); }
   function setChip(el, delay) {
-    var map = { 'near-live': ['Near live', 'near'], eod: ['End of day', 'month'], daily: ['Daily', 'month'], simulated: ['Simulated', 'ai'], realtime: ['Live', 'live'] };
+    var map = { 'near-live': ['Near live', 'near'], eod: ['End of day', 'month'], daily: ['Daily close', 'month'], stale: ['Last known', 'evt'], realtime: ['Live', 'live'] };
     var m = map[delay] || ['–', 'month'];
     if (el) { el.textContent = m[0]; el.className = 'chip ' + m[1]; }
   }
@@ -149,7 +149,7 @@
     var cv = $('#chCv'); if (!cv || cv.getBoundingClientRect().width < 10) return;
     var f = fit(cv), ctx = f[0], W = f[1], H = f[2]; ctx.clearRect(0, 0, W, H);
     var gold = css('--gold'), up = css('--up'), dn = css('--dn'), grid = css('--grid'), dim = css('--dim'), cyan = css('--cyan'), blue = css('--blue'), panel = css('--panel');
-    var d = CH, n = d.length; if (!n) { ctx.fillStyle = dim; ctx.font = G.font(13); ctx.textAlign = 'center'; ctx.fillText('Loading candles…', W / 2, H / 2); return; }
+    var d = CH, n = d.length; if (!n) { ctx.fillStyle = dim; ctx.font = G.font(13); ctx.textAlign = 'center'; ctx.fillText('Waiting for candles…', W / 2, H / 2); return; }
     var padL = 4, padR = 64, padT = 10, axB = 24, plotH = H - padT - axB;
     var closes = d.map(function (k) { return k.c; });
     var m20 = view.ma20 ? sma(closes, 20) : [], m50 = view.ma50 ? sma(closes, 50) : [];

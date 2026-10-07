@@ -20,7 +20,7 @@ function renderHero(){
   const bc=$('#dxyChg');bc.className='bigchg '+cls(p);
   bc.innerHTML=(p>=0?'+':'−')+fmt(Math.abs(g.change))+'  ('+sgn(p)+fmt(p)+'%)';
   $('#dxySrc').textContent=String(g.source).toUpperCase();
-  const c=$('#dxyChip');c.textContent=g.delay==='simulated'?'SIM':'NEAR LIVE';c.className='chip '+(g.delay==='simulated'?'ai':'near');
+  const c=$('#dxyChip');c.textContent=g.delay==='stale'?'Last known':g.delay==='daily'?'Daily close':'Near live';c.className='chip '+(g.delay==='stale'?'evt':g.delay==='daily'?'month':'near');
   const up=B.fx.filter(q=>(q.changePct??0)>0).length;
   const dn=B.fx.filter(q=>(q.changePct??0)<0).length;
   $('#dxySummary').innerHTML='DXY '+fmt(g.price)+' '+(p>=0?'UP':'DOWN')+'<br>'+B.fx.length+' MAJORS: '+up+' USD-WEAK / '+dn+' USD-STRONG<br><br>'+

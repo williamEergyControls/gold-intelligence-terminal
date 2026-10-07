@@ -41,13 +41,13 @@
     var g = B.gold, p = g.changePct == null ? 0 : g.changePct;
     $('#px').textContent = '$' + fmt(g.price);
     var bc = $('#pxc'); bc.className = 'bigchg ' + cls(p); bc.textContent = sgn(g.change) + fmt(g.change) + ' (' + sgn(p) + fmt(p) + '%) today';
-    var gc = $('#gchip'); var sim = g.delay === 'simulated';
-    gc.textContent = sim ? 'Simulated' : 'Near live'; gc.className = 'chip ' + (sim ? 'ai' : 'near');
+    var gc = $('#gchip'); var st = g.delay === 'stale' ? ['Last known' + (g.ageMs ? ', ' + G.ago(Date.now() - g.ageMs) : ''), 'evt'] : g.delay === 'daily' ? ['Daily close', 'month'] : ['Near live', 'near'];
+    gc.textContent = st[0]; gc.className = 'chip ' + st[1];
     var m = B.ml;
     $('#mlLine').innerHTML = m && m.p != null
       ? '5-day model: <b class="' + (m.p >= 0.5 ? 'up' : 'dn') + '">' + (m.p >= 0.5 ? 'bullish' : 'bearish') + ' ' + Math.round(m.p * 100) + '%</b><br>' + esc(G.sc(m.regime && m.regime.state || '')) + ' regime, ' + (m.final ? m.final.agreeing : '–') + ' of 10 agents agree'
       : 'Model warming up';
-    G.feed(B.mode === 'live', B.mode === 'live' ? 'Live' : 'Simulated');
+    G.feed(B.mode === 'live', B.mode === 'live' ? 'Live' : 'Last known prices');
     $('#asof').textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     var d = ((B.series && B.series.dailyCloses) || []).slice(-90);
     if (d.length > 2 && window.GK) {

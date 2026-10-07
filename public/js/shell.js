@@ -182,7 +182,7 @@
   GT.feed = function (live, txt) {
     var fd = document.getElementById('feedDot'), ft = document.getElementById('feedTxt');
     if (!fd || !ft) return;
-    fd.classList.remove('hide'); ft.textContent = txt || (live ? 'Live' : 'Simulated');
+    fd.classList.remove('hide'); ft.textContent = txt || (live ? 'Live' : 'Last known prices');
     fd.style.color = live ? 'var(--up)' : 'var(--amber)';
   };
 })();
