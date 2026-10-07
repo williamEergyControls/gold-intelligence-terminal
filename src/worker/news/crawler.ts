@@ -337,7 +337,7 @@ export async function newsFeed(env: Env, topic: string, limit: number, opts: { f
   items = items.slice(0, limit);
   if (opts.withGdelt !== false && items.length < limit) {
     try {
-      const boot = await new AppCache(env.CACHE).read<any>('boot:15M');
+      const boot = await new AppCache(env).read<any>('boot:15M');
       const pools: any[] = [];
       for (const k of GDELT_TOPIC[t] ?? []) pools.push(...((boot?.v?.news?.[k] ?? []) as any[]));
       for (const n of pools.sort((a, b) => b.publishedTs - a.publishedTs)) {
