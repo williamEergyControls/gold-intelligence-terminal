@@ -3,6 +3,7 @@
    always try/catch-wrapped so the site can never crash from ML.
    ================================================================ */
 import type { Env } from '../types';
+import { cacheGet } from '../cache';
 import type { DailyInput } from './engine';
 import { featuresAt, labelAt, trainLogistic, predictLogistic, trainGBS, predictGBS, regimeHMM, volAnn, FEATURE_NAMES } from './engine';
 import { runAgents, consensus, bayesianRounds, evidenceLRs, finalScore } from './agents';
@@ -126,7 +127,7 @@ export async function predictAndStore(env: Env): Promise<{ ok: boolean; error?: 
     }
     let nb = 3, ne = 3;
     try {
-      const cachedN = (await env.CACHE.get('news', 'json')) as any;
+      const cachedN = (await cacheGet(env, 'news')) as any;
       const allN = Array.isArray(cachedN) ? cachedN : (cachedN?.v ?? []); // unwrap envelope
       const gold = (Array.isArray(allN) ? allN : []).filter((n: any) => n?.topic === 'gold') as { sentiment: string }[];
       nb = gold.filter(n => n.sentiment === 'bull').length || 1;

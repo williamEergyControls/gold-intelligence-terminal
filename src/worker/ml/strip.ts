@@ -5,6 +5,7 @@
      D1 snapshots vol:* (GARCH, regimes, stress, σ alerts)
    ================================================================ */
 import type { Env } from '../types';
+import { cacheGet } from '../cache';
 import { readSnapshots, type VolRow } from '../vol/snapshot';
 
 const FOCUS: Record<string, string[]> = {
@@ -35,7 +36,7 @@ async function extras(env: Env, page: string): Promise<{ id: string; k: string; 
       }
     }
     if (page === 'water') {
-      const pg = await env.CACHE.get('page:agri', 'json') as any;
+      const pg = await cacheGet(env, 'page:agri') as any;
       const w = pg?.v?.water;
       if (w?.nqH2o) out.push({ id: 'NQH2O', k: 'CA water index', b: '$' + Math.round(w.nqH2o.value).toLocaleString('en-US') + '/AF', d: pct((w.nqH2o.value / w.nqH2o.prior - 1) * 100) + ' vs prior · ' + w.nqH2o.asOf, cls: w.nqH2o.value >= w.nqH2o.prior ? 'up' : 'dn', href: '/water.html', title: 'Nasdaq Veles California Water Index via FRED' });
       const mead = (w?.levels ?? []).find((l: any) => l.site === '09420500');
