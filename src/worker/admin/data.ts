@@ -149,13 +149,16 @@ const KV_KEYS = ['boot:15M', 'boot:1D', 'series:daily', 'macro:v2', 'news', 'min
 export async function adminKV(env: Env) {
   const rows = await Promise.all(KV_KEYS.map(async (k) => {
     try {
+      // hot keys live in D1 cache_kv since v3.1; the rest are low-rate KV keys
+      const d1 = await env.DB.prepare('SELECT ts, ttl FROM cache_kv WHERE k = ?').bind(k).first<{ ts: number; ttl: number }>().catch(() => null);
+      if (d1) return { key: k, present: true, store: 'D1', ageMs: Date.now() - d1.ts, ttl: d1.ttl };
       const raw = await env.CACHE.get(k, 'json') as any;
       if (raw == null) return { key: k, present: false, ageMs: null, ttl: null };
       const ts = typeof raw?.ts === 'number' ? raw.ts : typeof raw?.t === 'number' ? raw.t : null;
-      return { key: k, present: true, ageMs: ts ? Date.now() - ts : null, ttl: typeof raw?.ttl === 'number' ? raw.ttl : null };
+      return { key: k, present: true, store: 'KV', ageMs: ts ? Date.now() - ts : null, ttl: typeof raw?.ttl === 'number' ? raw.ttl : null };
     } catch (e) { return { key: k, present: false, ageMs: null, ttl: null, error: String((e as Error)?.message ?? e).slice(0, 80) }; }
   }));
-  return { ts: Date.now(), keys: rows, note: 'KV Free = 1,000 writes/day · 100,000 reads/day. Write failures are logged (KV_WRITE_FAIL) and served from isolate memory.' };
+  return { ts: Date.now(), keys: rows, note: 'Hot cache in D1 cache_kv (Free: 100,000 row writes/day). KV keeps only low-rate keys (ML, calendar, drought, shipping) at ~100 writes/day of the 1,000 Free.' };
 }
 
 /* ---------------- USERS ---------------- */
