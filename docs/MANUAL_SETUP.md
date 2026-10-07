@@ -18,7 +18,7 @@ Cloudflare (Workers & Pages → gold-intelligence-terminal → Settings → Buil
 
 Bindings live in `wrangler.jsonc`: KV `CACHE`, D1 `DB` (gold-terminal), Workers AI `AI`,
 Secrets Store keys `METALS_API_KEY`, `FRED_API_KEY`, `EIA_API_KEY`, `GOLDAPI_KEY`.
-Remote migrations: `bun run db:migrate:remote` (0001–0006; 0006 = news sources + items).
+Remote migrations: `bun run db:migrate:remote` (0001–0007; 0006 = news, 0007 = D1 hot cache).
 Add your YouTube channels: Admin → News sources → paste the channel link or @handle → Add and crawl. Admin console: `docs/ADMIN.md`.
 Warehouse + ingest: `docs/STORAGE.md`. Volatility methods: `docs/VOLATILITY.md`. Changes: `docs/CHANGELOG.md`.
 `INGEST_BUDGET` (wrangler.jsonc vars, default 10, max 40) = upstream calls per ingest cycle.

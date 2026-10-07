@@ -1,5 +1,24 @@
 # Changelog
 
+## v3.1 · 2026-10-03 · free-plan storage fix, no simulated data
+
+**Logic**
+```
+ INIT     micro cache (per isolate, zero I/O)
+ POLL     D1 cache_kv row (1 row read) → D1 down: legacy KV read
+ EVALUATE fresh → serve | expired → upstream chain → fails → last good copy (stale) → D1 warehouse daily close → empty
+ PUBLISH  D1 upsert (1 row write). nothing is ever simulated.
+```
+- Hot cache moved from KV (Free: 1,000 writes/day, was ~600/day from crons alone plus ~60/hour per open
+  Home tab) to D1 table `cache_kv` (Free: 100,000 row writes/day). KV now carries only low-rate keys (~100/day).
+- Simulated provider deleted. Fallback order: live chain → last good copy (chip "Last known", with age) →
+  D1 warehouse futures daily close (chip "Daily close") → empty panel that says unavailable.
+- Warm cron builds both `boot:15M` and `boot:1D`; request-path rebuild only when the cron copy is > 5 min old.
+  Desk pages rebuild in the :x2 news slot, keeping each cron run well under the Free 50 D1 queries per invocation.
+- Warehouse upsert skips unchanged rows (no D1 writes for re-polled overlap days).
+- Daily prune drops per-symbol cache rows (`watch:*`, `candles2:*`) unused for 7 days.
+- Migration `0007_cache.sql` (the Worker also creates the table at runtime).
+
 ## v3 · 2026-10-02 · clean layout, news crawler, real calendar, maps
 
 **Logic**
