@@ -150,7 +150,8 @@ export function pointsUpsert(env: Env, rows: Row[]): D1PreparedStatement[] {
     out.push(env.DB.prepare(
       `INSERT INTO series_points(id, ts, v)
        SELECT json_extract(value,'$[0]'), json_extract(value,'$[1]'), json_extract(value,'$[2]') FROM json_each(?1) WHERE 1
-       ON CONFLICT(id, ts) DO UPDATE SET v = excluded.v`).bind(JSON.stringify(rows.slice(i, i + CHUNK))));
+       ON CONFLICT(id, ts) DO UPDATE SET v = excluded.v WHERE series_points.v IS NOT excluded.v`).bind(JSON.stringify(rows.slice(i, i + CHUNK))));
+    // ^ unchanged overlap rows are skipped, so re-polled days cost no D1 row writes
   }
   return out;
 }
