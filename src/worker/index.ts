@@ -33,6 +33,9 @@ import { mlStrip } from './ml/strip';
 import { crawlCycle, digestBatch, newsFeed, newsIdeas, listSources, addSource, updateSource, deleteSource, pruneNews } from './news/crawler';
 import { calendar, refreshFred } from './calendar';
 import { refreshDrought, readDrought } from './providers/drought';
+import { tick, dailyRollup, ledgerSummary, HS, type H } from './forecast/ledger';
+import { buildOutlook, readOutlook } from './outlook/engine';
+import { refreshInsiders } from './outlook/sources';
 
 const JH = { 'content-type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store' };
 const TFS: Tf[] = ['5M', '15M', '1H', '1D', '1W'];
@@ -334,6 +337,17 @@ export default {
         const limit = Math.min(12, Math.max(1, parseInt(url.searchParams.get('limit') || '6', 10) || 6));
         return json(await memo('ni:' + topic + ':' + limit, 60000, () => newsIdeas(env, limit, topic)), 200);
       }
+      /* ---- outlook (3–12 month synthesis) + forecast ledger ---- */
+      if (path === '/api/outlook') {
+        let r = await memo('outlook', 60000, () => readOutlook(env));
+        if (!r.outlook && allow('outlook-lazy', 2, 600000)) { await buildOutlook(env); r = await readOutlook(env); }
+        return json(r, 200);
+      }
+      if (path === '/api/forecast') {
+        const h = (url.searchParams.get('h') || '1d') as H;
+        if (!HS.includes(h)) return json({ error: 'BAD_HORIZON', allowed: HS }, 400);
+        return json(await memo('fc:' + h, 30000, () => ledgerSummary(env, h)), 200);
+      }
       if (path === '/api/calendar') {
         return json(await calendar(env), 200);
       }
@@ -347,6 +361,7 @@ export default {
         if (!q || q.length < 2) return json({ results: [] }, 200);
         const results: any[] = [];
         const PAGES = [
+          { t: 'Outlook', u: '/outlook.html', k: 'outlook economy cycle score gold buy hold sell forecast odds cot insider shipping water long term ledger accuracy' },
           { t: 'Gold desk', u: '/gold.html', k: 'gold xau price chart why miners heatmap' },
           { t: 'Energy desk', u: '/energy.html', k: 'energy oil wti brent natural gas eia' },
           { t: 'Agri desk', u: '/agri.html', k: 'agri corn wheat soybean cattle water usda' },
@@ -414,6 +429,15 @@ export default {
         const c = await crawlCycle(env, { ids: Array.isArray(b.ids) ? b.ids.map(Number) : undefined, max: 10 });
         const d = b.digest === false ? null : await digestBatch(env);
         return json({ ok: true, crawl: c, digest: d }, 200);
+      }
+      if (path === '/api/admin/outlook/build' && req.method === 'POST') {
+        if (!allow('outlook:' + actorId, 6, 600000)) return json({ error: 'RATE_LIMITED' }, 429);
+        const o = await buildOutlook(env);
+        return json({ ok: true, econ: o.econ.score, gold: o.gold.score, stance: o.gold.stance, inputs: o.inputs }, 200);
+      }
+      if (path === '/api/admin/insiders/refresh' && req.method === 'POST') {
+        if (!allow('insiders:' + actorId, 3, 600000)) return json({ error: 'RATE_LIMITED' }, 429);
+        return json(await refreshInsiders(env), 200);
       }
       if (path === '/api/admin/refs/refresh' && req.method === 'POST') {
         if (!allow('refs:' + actorId, 4, 600000)) return json({ error: 'RATE_LIMITED' }, 429);
@@ -573,10 +597,13 @@ export default {
       await ensureSchema(env).catch(e => console.error('SCHEMA_FAIL', errMsg(e)));
       if (controller.cron === '0 * * * *') { await hourly(env); return; }
       if (controller.cron === NEWS_CRON) { await newsCycle(env, controller.scheduledTime); return; }
-      // */5 trigger alternates: :00 :10 :20… warm the UI cache, :05 :15 :25… ingest + vol.
-      // separate invocations keep each one under the Free plan's 50-subrequest cap.
-      if (new Date(controller.scheduledTime).getUTCMinutes() % 10 === 5) { await ingestCycle(env, controller.scheduledTime); return; }
-      await warm(env);
+      // every-minute trigger: gold tick + forecast ledger first (1–2 subrequests, ~7 D1 queries),
+      // then :00 :10 :20… warm the UI cache, :05 :15 :25… ingest + vol, other minutes nothing else.
+      try { const t = await tick(env, controller.scheduledTime); if (!t.ok && new Date(controller.scheduledTime).getUTCMinutes() % 30 === 0) console.log('TICK', t.note); }
+      catch (e) { console.error('TICK_FAIL', errMsg(e)); }
+      const mm = new Date(controller.scheduledTime).getUTCMinutes();
+      if (mm % 10 === 5) { await ingestCycle(env, controller.scheduledTime); return; }
+      if (mm % 10 === 0) await warm(env);
     })());
   },
 };
@@ -596,6 +623,13 @@ async function newsCycle(env: Env, scheduledTime: number): Promise<void> {
     if (c.fetched) console.log('NEWS_CRAWL', JSON.stringify({ fetched: c.fetched, added: c.added, errors: c.errors.slice(0, 4) }));
   } catch (e) { console.error('NEWS_CRAWL_FAIL', errMsg(e)); }
   await warmPages(env);
+  // outlook: rebuilt in the :52 slot when the stored one is over 6 h old (≈ 4 builds a day)
+  if (min === 52) {
+    try {
+      const l = await env.DB.prepare('SELECT ts FROM outlook_log ORDER BY day DESC LIMIT 1').first<{ ts: number }>().catch(() => null);
+      if (!l || Date.now() - l.ts > 6 * 36e5) { const o = await buildOutlook(env); console.log('OUTLOOK', o.econ.score, o.gold.score, o.gold.stance); }
+    } catch (e) { console.error('OUTLOOK_FAIL', errMsg(e)); }
+  }
   // AI digest on every other run (~72 calls/day × 4 items) keeps Workers AI inside the free allowance
   if (min % 20 === 2) {
     try { const d = await digestBatch(env); if (d.done) console.log('NEWS_DIGEST', JSON.stringify(d)); } catch (e) { console.error('NEWS_DIGEST_FAIL', errMsg(e)); }
@@ -662,6 +696,11 @@ async function ingestCycle(env: Env, scheduledTime: number): Promise<void> {
 async function hourly(env: Env): Promise<void> {
   // order matters: on Workers Free a CPU-limit kill cannot be caught, so the cheap
   // steps run first and ML (training is the CPU hog) runs last.
+
+  // 0) forecast ledger roll-up just after midnight UTC, SEC Form 4 pull at 12 UTC (both cheap)
+  const hr = new Date().getUTCHours();
+  if (hr === 0) { try { console.log('FC_ROLLUP', JSON.stringify((await dailyRollup(env)).rows)); } catch (e) { console.error('FC_ROLLUP_FAIL', errMsg(e)); } }
+  if (hr === 12) { try { console.log('INSIDERS', JSON.stringify(await refreshInsiders(env))); } catch (e) { console.error('INSIDERS_FAIL', errMsg(e)); } }
 
   // 1) live API probes (free endpoints only — quota APIs are admin-forced)
   try { await storeProbes(env, await runProbes(env, false)); }
