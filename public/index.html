@@ -29,6 +29,15 @@
 .health span{font-size:12.5px;padding:4px 10px;border-radius:999px;background:var(--panel2);color:var(--mut);display:inline-flex;align-items:center;gap:6px}
 .health span i{width:7px;height:7px;border-radius:50%;background:var(--dim)}
 .health span.on i{background:var(--up)} .health span.deg i{background:var(--amber)}
+.olk{text-decoration:none!important;color:var(--txt)}
+.olk:hover{border-color:var(--blue)}
+.olk-in{display:flex;align-items:center;gap:14px 28px;flex-wrap:wrap;padding:16px 20px}
+.olk-k{font:500 16px var(--sans)}
+.olk-s{display:flex;align-items:baseline;gap:8px}
+.olk-s b{font:400 30px/1 var(--sans)}
+.olk-s span{color:var(--mut);font-size:14px}
+.olk-t{flex:1;min-width:240px;color:var(--mut);font-size:14px;line-height:1.5}
+.olk-go{color:var(--blue);font-size:14px;font-weight:500}
 </style>
 </head>
 <body data-page="home">
@@ -42,6 +51,9 @@
   </div>
 
   <div class="grid">
+    <a id="h-outlook" class="panel c12 olk" href="/outlook.html" aria-label="Open the outlook">
+      <div class="olk-in" id="olkBody"><span class="olk-k">Outlook</span><span class="dim">Building the first outlook…</span></div>
+    </a>
     <section id="h-gold" class="panel c5">
       <div class="p-hd"><span class="ttl">Gold</span><span class="chip near" id="gchip">–</span><a class="src" href="/gold.html">Open gold desk</a></div>
       <div class="p-bd">

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%23d99a16%22/%3E%3C/svg%3E">
+<title>Outlook · Gold Intelligence Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,300..700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/terminal.css">
+<style>
+#o-econ,#o-gold{grid-column:span 6}
+#o-read{grid-column:1/-1}
+#o-gf,#o-ef{grid-column:span 6}
+#o-flip{grid-column:span 5} #o-miss{grid-column:span 7}
+#o-long{grid-column:1/-1}
+#o-ledger{grid-column:1/-1}
+#o-card{grid-column:span 7} #o-inputs{grid-column:span 5}
+
+.score{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap}
+.score .big{font:300 72px/0.9 var(--sans);letter-spacing:-.03em}
+.score .big small{font:400 22px var(--sans);color:var(--dim);letter-spacing:0;margin-left:4px}
+.score .lab{display:flex;flex-direction:column;gap:6px;padding-bottom:6px}
+.score .ph{font:500 20px/1.2 var(--sans)}
+.score .tr{font:400 13.5px var(--sans);color:var(--mut)}
+.dots10{display:flex;gap:5px;margin:16px 0 4px}
+.dots10 i{flex:1;height:8px;border-radius:4px;background:var(--grid)}
+.dots10 i.on{background:currentColor}
+.dots10-l{display:flex;justify-content:space-between;font:400 12px var(--sans);color:var(--dim)}
+.hist{position:relative;height:84px;margin-top:14px}
+.hist-e{margin-top:14px;font:400 12.5px var(--sans);color:var(--dim)}
+.hist canvas{position:absolute;inset:0;width:100%;height:100%}
+.note{font:400 13.5px/1.55 var(--sans);color:var(--mut);margin-top:12px}
+.note b{color:var(--txt);font-weight:500}
+.odds{margin-top:14px;padding:12px 14px;border-radius:12px;background:var(--panel3);font:400 14px/1.5 var(--sans)}
+.odds b{font-weight:600}
+.odds small{display:block;color:var(--dim);font-size:12px;margin-top:4px}
+.read{font:400 17px/1.6 var(--sans);max-width:86ch;color:var(--txt)}
+.read-f{font:400 12.5px var(--sans);color:var(--dim);margin-top:10px}
+
+.fx{display:grid;grid-template-columns:minmax(0,1fr) 64px;gap:4px 14px;padding:12px 0;border-top:1px solid var(--line2)}
+.fx:first-child{border-top:0}
+.fx .n{font:500 14.5px var(--sans)}
+.fx .rd{grid-column:1;font:400 13.5px/1.5 var(--sans);color:var(--mut);text-align:left}
+.fx .ms{grid-column:1;font:400 12px var(--sans);color:var(--dim)}
+.fx .e{grid-row:1/3;grid-column:2;align-self:center;justify-self:end;font:500 14px var(--sans);padding:4px 10px;border-radius:999px;background:var(--panel2);color:var(--dim);min-width:56px;text-align:center}
+.fx .e.p{background:var(--upBg);color:var(--up)} .fx .e.n2{background:var(--dnBg);color:var(--dn)}
+.fx.off{opacity:.55}
+
+.flip li,.miss li{list-style:none;padding:10px 0;border-top:1px solid var(--line2);font:400 14px/1.55 var(--sans)}
+.flip li:first-child,.miss li:first-child{border-top:0}
+.miss b{display:block;font-weight:500;margin-bottom:2px}
+.miss .t{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;background:var(--dim)}
+.miss .t.pos{background:var(--up)} .miss .t.neg{background:var(--dn)}
+.miss span{color:var(--mut)}
+
+.longs{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.lc{border:1px solid var(--line2);border-radius:14px;padding:16px;background:var(--panel3);display:flex;flex-direction:column;gap:8px}
+.lc h4{font:500 14px var(--sans);color:var(--mut)}
+.lc .call{display:flex;align-items:center;gap:10px;font:400 24px/1.2 var(--sans)}
+.lc .arr{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;flex:none;background:var(--panel2)}
+.lc .arr svg{width:16px;height:16px}
+.lc.up .arr{background:var(--upBg);color:var(--up)} .lc.down .arr{background:var(--dnBg);color:var(--dn)}
+.lc .meta{font:400 12.5px var(--sans);color:var(--dim)}
+.lc ul{margin:4px 0 0 16px;font:400 13.5px/1.5 var(--sans);color:var(--mut)}
+.lc li{margin-bottom:4px}
+
+.hz{display:flex;gap:4px;flex-wrap:wrap}
+.lk{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:14px 0}
+.lk .kpi{background:var(--panel3);border-radius:12px;padding:12px 14px}
+.lk .kpi b{font-size:24px}
+.chartbox{position:relative;height:300px}
+.chartbox canvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:8px 10px;font:400 12.5px/1.5 var(--sans);color:var(--txt);white-space:nowrap;z-index:5;display:none}
+.tip .k{color:var(--dim)}
+.wts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.honest{font:400 13px/1.55 var(--sans);color:var(--dim);margin-top:12px;max-width:90ch}
+
+@media (max-width:1100px){#o-econ,#o-gold,#o-gf,#o-ef,#o-flip,#o-miss,#o-card,#o-inputs{grid-column:1/-1}}
+@media (max-width:600px){.score .big{font-size:60px}.read{font-size:16px}}
+</style>
+</head>
+<body data-page="outlook">
+<script src="/js/shell.js"></script>
+<main>
+  <div class="pagehead">
+    <div><h1>Outlook</h1><p>The slow picture for a 3 to 12 month holder: where the economy sits in its cycle, whether gold is worth buying, and what most of the market isn't watching.</p></div>
+    <div class="ph-r" id="built"></div>
+  </div>
+  <div class="grid">
+    <section id="o-econ" class="panel">
+      <div class="p-hd"><span class="ttl">Economy</span><span class="src" id="eCov"></span></div>
+      <div class="p-bd" id="eBody"><div class="empty">Building the first outlook…</div></div>
+    </section>
+    <section id="o-gold" class="panel">
+      <div class="p-hd"><span class="ttl">Gold, 3 to 12 months</span><span class="src" id="gCov"></span></div>
+      <div class="p-bd" id="gBody"></div>
+    </section>
+
+    <section id="o-read" class="panel">
+      <div class="p-hd"><span class="ttl">The read</span><span class="chip ai plain" id="readEng">AI</span></div>
+      <div class="p-bd"><p class="read" id="read">–</p><div class="read-f">Written from the factor tables below and nothing else. Not investment advice.</div></div>
+    </section>
+
+    <section id="o-gf" class="panel">
+      <div class="p-hd"><span class="ttl">Why gold scores this way</span><span class="src">Sorted by effect</span></div>
+      <div class="p-bd" id="gF"></div>
+    </section>
+    <section id="o-ef" class="panel">
+      <div class="p-hd"><span class="ttl">Why the economy scores this way</span><span class="src">Sorted by effect</span></div>
+      <div class="p-bd" id="eF"></div>
+    </section>
+
+    <section id="o-flip" class="panel">
+      <div class="p-hd"><span class="ttl">What would change the call</span></div>
+      <div class="p-bd"><ul class="flip" id="flip"></ul></div>
+    </section>
+    <section id="o-miss" class="panel">
+      <div class="p-hd"><span class="ttl">What the street is missing</span><span class="src">Slow signals at unusual readings</span></div>
+      <div class="p-bd"><ul class="miss" id="miss"></ul></div>
+    </section>
+
+    <section id="o-long" class="panel">
+      <div class="p-hd"><span class="ttl">Long-range outlooks</span><span class="src">Direction over the next 3 to 6 months, from signals that agree or don't</span></div>
+      <div class="p-bd"><div class="longs" id="longs"></div></div>
+    </section>
+
+    <section id="o-ledger" class="panel">
+      <div class="p-hd"><span class="ttl">Forecast ledger, gold spot</span><div class="tgrp hz" id="hz" role="group" aria-label="Horizon"></div><span class="src" id="ledSrc">Every forecast logged, then graded against the real price</span></div>
+      <div class="p-bd">
+        <div class="lk" id="lk"></div>
+        <div class="legend" id="lg"></div>
+        <div class="chartbox"><canvas id="cvLed" aria-label="Predicted vs actual gold price"></canvas><div class="tip" id="tipLed"></div></div>
+        <div class="wts" id="wts"></div>
+        <p class="honest" id="honest"></p>
+      </div>
+    </section>
+
+    <section id="o-card" class="panel">
+      <div class="p-hd"><span class="ttl">Scorecard of past calls</span><span class="src">Gold 91 days after each call</span></div>
+      <div class="p-bd" id="card"></div>
+    </section>
+    <section id="o-inputs" class="panel">
+      <div class="p-hd"><span class="ttl">Inputs</span></div>
+      <div class="p-bd"><div class="lst" id="inputs"></div></div>
+    </section>
+  </div>
+</main>
+<footer id="status"><span>Outlook</span><span class="mid">A model's view, not financial advice. Every factor shows its source and date.</span></footer>
+<script src="/js/chartkit.js"></script>
+<script src="/js/outlook.js"></script>
+<script src="/js/ml-strip.js" defer></script>
+</body>
+</html>
