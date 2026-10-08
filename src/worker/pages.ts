@@ -1,7 +1,6 @@
 import type { Env, Quote } from './types';
 import { AppCache } from './cache';
 import * as yahoo from './providers/yahoo';
-import * as sim from './providers/simulated';
 import { eiaRows, type EiaRow } from './providers/eia';
 
 const ENERGY: { sym: string; name: string; unit: string }[] = [
@@ -21,17 +20,15 @@ const AGRI: { sym: string; name: string; unit: string }[] = [
 ];
 
 async function getQuotes(env: Env, syms: { sym: string; name: string; unit: string }[], cacheKey: string): Promise<(Quote & { unit: string })[]> {
-  const cache = new AppCache(env.CACHE);
-  const out = (await cache.wrap(cacheKey, 300, async () => {
-    try {
-      const all = [...syms.map(s => s.sym), 'XAU:USD', 'DXY'];
-      const q = await yahoo.yahooBatchQuotes(all);
-      if (q.length >= 3) return q;
-      throw new Error('thin: ' + q.length);
-    } catch {
-      return sim.simQuotes(syms.map(s => s.sym));
-    }
-  })).v as Quote[];
+  const cache = new AppCache(env);
+  // yahoo → last good copy (labeled stale) → throw; the page endpoint then serves its own last good copy
+  const r = await cache.wrap(cacheKey, 300, async () => {
+    const all = [...syms.map(s => s.sym), 'XAU:USD', 'DXY'];
+    const q = await yahoo.yahooBatchQuotes(all);
+    if (q.length >= 3) return q;
+    throw new Error('thin: ' + q.length);
+  });
+  const out = (r.v as Quote[]).map(q => (r.stale ? { ...q, delay: 'stale' as const } : q));
   return out.map(q => {
     const m = syms.find(s => s.sym === q.symbol);
     return { ...q, name: m?.name ?? q.name, unit: m?.unit ?? '' } as (Quote & { unit: string });
@@ -56,10 +53,10 @@ export async function buildEnergyPage(env: Env): Promise<any> {
 
   // EIA weekly — own 6h cache so the 15-min page rebuild never re-hits EIA
   let eia: EiaRow[] = [];
-  try { eia = (await new AppCache(env.CACHE).wrap('eia:rows', 21600, () => eiaRows(env))).v; }
+  try { eia = (await new AppCache(env).wrap('eia:rows', 21600, () => eiaRows(env))).v; }
   catch (e) { console.error('EIA_FAIL', String((e as Error)?.message ?? e).slice(0, 200)); }
 
-  const mode = monitor[0]?.source === 'simulated' ? 'simulated' : 'live';
+  const mode = monitor[0]?.delay === 'stale' ? 'stale' : 'live';
   return {
     mode, builtAt: Date.now(), tf: '1D',
     hero, tape: monitor.filter(q => q.symbol !== 'XAU:USD' && q.symbol !== 'DXY'),
@@ -88,7 +85,7 @@ export async function buildAgriPage(env: Env): Promise<any> {
   const xau = get('XAU:USD');
   const c = get('C1');
 
-  const mode = monitor[0]?.source === 'simulated' ? 'simulated' : 'live';
+  const mode = monitor[0]?.delay === 'stale' ? 'stale' : 'live';
 
   let water: any = null;
   try {

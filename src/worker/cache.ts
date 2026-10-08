@@ -1,38 +1,67 @@
+import type { Env } from './types';
+
+/* ================================================================
+   APP CACHE — hot data lives in D1 (table cache_kv), not KV.
+   why: KV Free = 1,000 writes/day; this cache rewrites ~600/day from the
+   crons alone and more per visitor. D1 Free = 100,000 row writes/day.
+   INIT     per-isolate micro map (shields 20-60 s poll bursts, zero I/O)
+   POLL     micro fresh → return | D1 row (1 row read) | D1 down → legacy KV read
+   EVALUATE fresh → serve | expired → fetch upstream → on failure serve last good, labeled stale
+   PUBLISH  D1 upsert (1 row written). rows are never expired, so "last good" survives outages.
+   ================================================================ */
 interface Envelope<T> { v: T; ts: number; ttl: number }
-const micro = new Map<string, Envelope<unknown>>(); // per-isolate shield for 30s poll bursts
+const micro = new Map<string, Envelope<unknown>>();
+let tableReady = false;
+const MAX_ROW = 1_900_000; // D1 row/value cap is 2 MB
+
+async function ensureTable(db: D1Database): Promise<void> {
+  if (tableReady) return;
+  await db.prepare('CREATE TABLE IF NOT EXISTS cache_kv (k TEXT PRIMARY KEY, v TEXT NOT NULL, ts INTEGER NOT NULL, ttl INTEGER NOT NULL)').run();
+  tableReady = true;
+}
 
 export class AppCache {
-  constructor(private kv: KVNamespace) {}
+  constructor(private env: Env) {}
 
   async read<T>(k: string): Promise<{ v: T; ageMs: number; ttl: number } | null> {
     const m = micro.get(k) as Envelope<T> | undefined;
-    // fresh isolate copy → no KV read. expired copy → KV may hold a newer one (cron writes it)
     if (m && Date.now() - m.ts < m.ttl * 1000) return { v: m.v, ageMs: Date.now() - m.ts, ttl: m.ttl };
     let raw: Envelope<T> | null = null;
-    try { raw = (await this.kv.get(k, 'json')) as Envelope<T> | null; }
-    catch (e) { console.error('KV_READ_FAIL', k, String((e as Error)?.message ?? e).slice(0, 120)); }
+    try {
+      await ensureTable(this.env.DB);
+      const r = await this.env.DB.prepare('SELECT v, ts, ttl FROM cache_kv WHERE k = ?').bind(k).first<{ v: string; ts: number; ttl: number }>();
+      if (r) raw = { v: JSON.parse(r.v) as T, ts: r.ts, ttl: r.ttl };
+    } catch (e) {
+      // D1 down or over its daily limit: the pre-v3.1 KV copy is still a valid last-good value
+      console.error('CACHE_D1_READ_FAIL', k, String((e as Error)?.message ?? e).slice(0, 120));
+      try { raw = (await this.env.CACHE.get(k, 'json')) as Envelope<T> | null; } catch { raw = null; }
+    }
     const best = raw && (!m || raw.ts > m.ts) ? raw : m ?? null;
     if (!best) return null;
     micro.set(k, best);
     return { v: best.v, ageMs: Date.now() - best.ts, ttl: best.ttl };
   }
 
-  /** micro-cache first, KV second. a KV put failure (free plan = 1,000 writes/day)
-      is logged, never thrown — the value is still served from the isolate. */
+  /** never throws: a failed write still leaves the value in this isolate */
   async write(k: string, v: unknown, ttlSec: number): Promise<boolean> {
     const e: Envelope<unknown> = { v, ts: Date.now(), ttl: ttlSec };
     micro.set(k, e);
     try {
-      // KV ttl is 6x the logical ttl so wrap() can serve STALE data on upstream failure,
-      // instead of fabricating anything. KV minimum ttl is 60s.
-      await this.kv.put(k, JSON.stringify(e), { expirationTtl: Math.max(60, ttlSec * 6) });
+      const s = JSON.stringify(v);
+      if (s.length > MAX_ROW) { console.error('CACHE_TOO_BIG', k, s.length); return false; }
+      await ensureTable(this.env.DB);
+      await this.env.DB.prepare(
+        `INSERT INTO cache_kv (k, v, ts, ttl) VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(k) DO UPDATE SET v = excluded.v, ts = excluded.ts, ttl = excluded.ttl`
+      ).bind(k, s, e.ts, ttlSec).run();
       return true;
     } catch (err) {
-      console.error('KV_WRITE_FAIL', k, String((err as Error)?.message ?? err).slice(0, 120));
+      console.error('CACHE_D1_WRITE_FAIL', k, String((err as Error)?.message ?? err).slice(0, 120));
       return false;
     }
   }
 
+  /** fresh copy → serve. expired → fetch. fetch fails → last good value, stale: true. nothing at all → throw. */
   async wrap<T>(k: string, ttlSec: number, fetcher: () => Promise<T>):
     Promise<{ v: T; ageMs: number; stale: boolean }> {
     const hit = await this.read<T>(k);
@@ -41,10 +70,25 @@ export class AppCache {
     try {
       v = await fetcher();
     } catch (err) {
-      if (hit) return { v: hit.v, ageMs: hit.ageMs, stale: true }; // last valid value, labeled stale
+      if (hit) return { v: hit.v, ageMs: hit.ageMs, stale: true };
       throw err;
     }
-    await this.write(k, v, ttlSec); // never throws
+    await this.write(k, v, ttlSec);
     return { v, ageMs: 0, stale: false };
   }
+}
+
+/** envelope read for code that used to call env.CACHE.get(key) on AppCache keys */
+export async function cacheGet<T = any>(env: Env, k: string): Promise<{ v: T; ts: number } | null> {
+  const r = await new AppCache(env).read<T>(k);
+  return r ? { v: r.v, ts: Date.now() - r.ageMs } : null;
+}
+
+/** daily: per-symbol keys (watchlists, ad-hoc charts) that nobody asked for in a week */
+export async function pruneCache(env: Env): Promise<number> {
+  try {
+    await ensureTable(env.DB);
+    const r = await env.DB.prepare(`DELETE FROM cache_kv WHERE ts < ? AND (k LIKE 'watch:%' OR k LIKE 'candles2:%')`).bind(Date.now() - 7 * 864e5).run();
+    return r.meta?.changes ?? 0;
+  } catch { return 0; }
 }

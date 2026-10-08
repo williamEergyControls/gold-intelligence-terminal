@@ -1,6 +1,6 @@
 export type Delay =
   | 'realtime' | 'near-live' | 'delayed' | 'eod' | 'daily'
-  | 'monthly' | 'reference' | 'event-driven' | 'simulated';
+  | 'monthly' | 'reference' | 'event-driven' | 'stale';
 export type Tf = '5M' | '15M' | '1H' | '1D' | '1W';
 
 export interface Quote {
@@ -52,7 +52,7 @@ export interface ProviderStatus {
 }
 export interface AlertItem { se: 'crit' | 'warn' | 'info'; t: string; txt: string; cat: string }
 export interface Bootstrap {
-  mode: 'live' | 'simulated'; builtAt: number; tf: Tf;
+  mode: 'live' | 'stale'; builtAt: number; tf: Tf;
   gold: Quote; silver: Quote; dxy: Quote; ratio: number | null; tape: Quote[];
   candles: Candle[];
   miners: Quote[];
@@ -81,7 +81,7 @@ export interface Bootstrap {
 /* ===== EXPANSION: page payloads (ENERGY / AGRI) ===== */
 export interface SpotCard { symbol: string; name: string; price: number; changePct: number; note: string }
 export interface PagePayload {
-  mode: 'live' | 'simulated'; builtAt: number;
+  mode: 'live' | 'stale'; builtAt: number;
   hero: Quote; tape: Quote[]; monitor: (Quote & { unit: string })[];
   spotlights: SpotCard[];
   ratios: { label: string; value: number; unit: string }[];

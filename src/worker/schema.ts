@@ -24,6 +24,8 @@ const DDL = [
   `CREATE TABLE IF NOT EXISTS ingest_units (key TEXT PRIMARY KEY, fetched_at INTEGER, ok_at INTEGER, error TEXT, last_rows INTEGER, last_ms INTEGER, last_ts INTEGER, fails INTEGER DEFAULT 0)`,
   // computed analytics (vol snapshots, strip) — D1 instead of KV: no 1,000 writes/day cap
   `CREATE TABLE IF NOT EXISTS snapshots (key TEXT PRIMARY KEY, ts INTEGER NOT NULL, json TEXT NOT NULL)`,
+  // hot cache (cache.ts) — moved off KV in v3.1: KV Free allows 1,000 writes/day, D1 Free 100,000
+  `CREATE TABLE IF NOT EXISTS cache_kv (k TEXT PRIMARY KEY, v TEXT NOT NULL, ts INTEGER NOT NULL, ttl INTEGER NOT NULL)`,
   // ---- news crawler (news/crawler.ts) ----
   `CREATE TABLE IF NOT EXISTS news_sources (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, url TEXT NOT NULL UNIQUE, name TEXT NOT NULL, topics TEXT NOT NULL DEFAULT 'markets', enabled INTEGER DEFAULT 1, favorite INTEGER DEFAULT 0, added_by TEXT, created_at INTEGER, last_fetch INTEGER, last_ok INTEGER, last_error TEXT, items INTEGER DEFAULT 0, fails INTEGER DEFAULT 0)`,
   `CREATE TABLE IF NOT EXISTS news_items (id TEXT PRIMARY KEY, source_id INTEGER NOT NULL, url TEXT NOT NULL, title TEXT NOT NULL, published INTEGER NOT NULL, fetched INTEGER, summary_raw TEXT, thumb TEXT, topics TEXT, ai_summary TEXT, ai_json TEXT, ai_at INTEGER, sentiment TEXT)`,

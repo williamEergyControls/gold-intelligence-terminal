@@ -1,4 +1,4 @@
-import type { AlertItem, Bootstrap, Candle, Env, MacroRow, Quote, Tf } from './types';
+import type { AlertItem, Bootstrap, Candle, Env, MacroRow, NewsItem, Quote, Tf } from './types';
 import { AppCache } from './cache';
 import { firstOk, healthSnapshot, secret } from './providers/provider';
 import * as metalsdev from './providers/metalsdev';
@@ -7,7 +7,6 @@ import * as stooq from './providers/stooq';
 import * as frankfurter from './providers/frankfurter';
 import * as fred from './providers/fred';
 import * as gdelt from './providers/gdelt';
-import * as sim from './providers/simulated';
 import { score, attribution, corr } from './analytics/engine';
 import * as goldapicom from './providers/goldapicom';
 import { readSeries } from './store/ingest';
@@ -75,27 +74,58 @@ const fmt1 = (n: number | undefined | null) => (n == null ? '—' : n.toFixed(2)
 const sgn = (n: number | undefined) => (n != null && n > 0 ? '+' : '');
 const nowHM = () => new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
+/* NO SIMULATED DATA. every value is, in order:
+     1. live from a provider chain
+     2. the last good value from the D1 cache (labeled stale, with its age)
+     3. the latest daily close from the D1 warehouse (labeled daily)
+     4. nothing → the panel says unavailable. */
+const WH: Record<string, string> = { 'XAU:USD': 'GOLD', 'XAG:USD': 'SILVER', DXY: 'DXY' };
+async function warehouseCloses(env: Env, sym: string, days = 400): Promise<{ t: number; v: number }[]> {
+  const id = WH[sym]; if (!id) return [];
+  try { return (await readSeries(env, [id], Date.now() - days * 864e5))[id] ?? []; } catch { return []; }
+}
+async function quoteLKG(env: Env, cache: AppCache, sym: string, chain: { name: string; fn: () => Promise<Quote> }[]): Promise<Quote> {
+  try {
+    const r = await cache.wrap('q:' + sym, 15, () => firstOk<Quote>(chain).then(x => x.value));
+    const q = { ...r.v } as Quote & { ageMs?: number };   // copy: providers memoize quote objects
+    if (r.stale) { q.delay = 'stale'; q.ageMs = r.ageMs; }
+    return q;
+  } catch (e) {
+    const pts = await warehouseCloses(env, sym, 14);
+    if (!pts.length) throw new Error(sym + ': no live, cached or stored price — ' + String((e as Error)?.message ?? e).slice(0, 80));
+    const last = pts[pts.length - 1], prev = pts.length > 1 ? pts[pts.length - 2].v : null;
+    return { symbol: sym, price: last.v, prevClose: prev ?? undefined, change: prev != null ? last.v - prev : undefined, changePct: prev != null ? (last.v / prev - 1) * 100 : undefined,
+      currency: 'USD', source: 'D1 warehouse (futures daily close)', delay: 'daily', ts: last.t } as Quote;
+  }
+}
+async function closesLKG(env: Env, sym: string): Promise<number[]> {
+  try { return (await yahoo.yahooCandles(env, sym, '1D')).map(c => c.c); }
+  catch { return (await warehouseCloses(env, sym)).map(p => p.v); }
+}
+/** wrap() that degrades to an empty value instead of fabricating one */
+async function orEmpty<T>(p: Promise<{ v: T }>, empty: T, tag: string): Promise<T> {
+  try { return (await p).v; } catch (e) { console.error(tag + '_UNAVAILABLE', String((e as Error)?.message ?? e).slice(0, 120)); return empty; }
+}
+
 export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml: any }> {
-  const cache = new AppCache(env.CACHE);
+  const cache = new AppCache(env);
 
   // ---- gold: gold-api.com (free, no key) → yahoo → metals.dev (quota backup) → stooq → sim ----
-  const gold = ({ ...(await firstOk<Quote>([
+  const gold = await quoteLKG(env, cache, 'XAU:USD', [
     { name: 'gold-api.com', fn: () => goldapicom.goldapiComQuote('XAU:USD') },
     { name: 'yahoo', fn: () => yahoo.yahooQuote(env, 'XAU:USD') },
     { name: 'metals.dev', fn: () => metalsdev.metalsdevQuote(env, 'XAU:USD') },
     { name: 'stooq', fn: async () => (await stooq.stooqQuotes(env, ['XAU:USD']))[0] },
-    { name: 'simulated', fn: () => Promise.resolve(sim.simQuote('XAU:USD')) },
-  ])).value }) as Quote; // copy: providers memoize quote objects, never mutate the memo
+  ]);
   if (gold.prevClose == null) {
     const pc = await env.CACHE.get('prevclose:XAU:USD', 'json') as { c: number } | null;
     if (pc) { gold.prevClose = pc.c; gold.change = gold.price - pc.c; gold.changePct = (gold.price / pc.c - 1) * 100; }
   }
-  const silver = ({ ...(await firstOk<Quote>([
+  const silver = await quoteLKG(env, cache, 'XAG:USD', [
     { name: 'gold-api.com', fn: () => goldapicom.goldapiComQuote('XAG:USD') },
     { name: 'yahoo', fn: () => yahoo.yahooQuote(env, 'XAG:USD') },
     { name: 'metals.dev', fn: () => metalsdev.metalsdevQuote(env, 'XAG:USD') },
-    { name: 'simulated', fn: () => Promise.resolve(sim.simQuote('XAG:USD')) },
-  ])).value }) as Quote;
+  ]);
   // GoldAPI.io DAILY SEED (cron writes KV 'goldio:daily' ~1x/day, 2 calls).
   // only prevClose is used, and only if the seed was taken after the most recent
   // 17:00 ET session roll (22:00 UTC, conservative across DST). bid/ask/OHLC from a
@@ -114,34 +144,20 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
       }
     }
   } catch { /* seed optional */ }
-  const dxy = (await firstOk<Quote>([
+  const dxy = await quoteLKG(env, cache, 'DXY', [
     { name: 'yahoo', fn: () => yahoo.yahooQuote(env, 'DXY') },
     { name: 'stooq', fn: async () => (await stooq.stooqQuotes(env, ['DXY']))[0] },
-    { name: 'simulated', fn: () => Promise.resolve(sim.simQuote('DXY')) },
-  ])).value;
+  ]);
 
   // ---- candles for the current timeframe — cached 300s (1D: via endpoint TTL) ----
-  const candles = (await cache.wrap(`candles:XAU:${tf}`, 300, () =>
-    firstOk([
-      { name: 'yahoo', fn: () => yahoo.yahooCandles(env, 'XAU:USD', tf) },
-      { name: 'simulated', fn: () => Promise.resolve(sim.simCandles('XAU:USD', tf)) },
-    ]).then(r => r.value)
-  )).v;
+  let candles: Candle[] = await orEmpty(cache.wrap(`candles:XAU:${tf}`, 300, () => yahoo.yahooCandles(env, 'XAU:USD', tf)), [] as Candle[], 'CANDLES');
+  if (!candles.length && tf === '1D') candles = (await warehouseCloses(env, 'XAU:USD', 200)).map((p, i, a) => ({ t: p.t, o: a[Math.max(0, i - 1)].v, h: Math.max(p.v, a[Math.max(0, i - 1)].v), l: Math.min(p.v, a[Math.max(0, i - 1)].v), c: p.v, v: 0 }));
 
   // ---- daily relationships: gold/dxy/real-yield indexed + correlations — cached 1h ----
   const daily = await cache.wrap('series:daily', 3600, async () => {
-    const g = (await firstOk([
-      { name: 'yahoo', fn: () => yahoo.yahooCandles(env, 'XAU:USD', '1D') },
-      { name: 'simulated', fn: () => Promise.resolve(sim.simCandles('XAU:USD', '1D')) },
-    ]).then(r => r.value)).map(c => c.c);
-    const d = (await firstOk([
-      { name: 'yahoo', fn: () => yahoo.yahooCandles(env, 'DXY', '1D') },
-      { name: 'simulated', fn: () => Promise.resolve(sim.simCandles('DXY', '1D')) },
-    ]).then(r => r.value)).map(c => c.c);
-    const s = (await firstOk([
-      { name: 'yahoo', fn: () => yahoo.yahooCandles(env, 'XAG:USD', '1D') },
-      { name: 'simulated', fn: () => Promise.resolve(sim.simCandles('XAG:USD', '1D')) },
-    ]).then(r => r.value)).map(c => c.c);
+    // yahoo → D1 warehouse daily closes (GC=F / SI=F / DX-Y.NYB). empty → throw so wrap() keeps the last good copy
+    const [g, d, s] = await Promise.all([closesLKG(env, 'XAU:USD'), closesLKG(env, 'DXY'), closesLKG(env, 'XAG:USD')]);
+    if (g.length < 2) throw new Error('daily gold series unavailable');
     let ry: number[] = [];
     // no FRED → empty series (corr = null, chart empty). the old fallback fabricated a
     // straight-line "real yield" and correlated gold against it.
@@ -158,7 +174,7 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
       goldDaily: g, dxyDaily: d, ryDaily: ry,
     };
   });
-  const ryLast = daily.v.ryDaily.length ? daily.v.ryDaily[daily.v.ryDaily.length - 1] : 1.51;
+  const ryLast = daily.v.ryDaily.length ? daily.v.ryDaily[daily.v.ryDaily.length - 1] : 0; // no FRED → no move, never a made-up level
   const ryPrev = daily.v.ryDaily.length > 1 ? daily.v.ryDaily[daily.v.ryDaily.length - 2] : ryLast;
   // prevClose fill: stored day-close first, else REAL previous daily close
   if (gold.prevClose == null) {
@@ -171,8 +187,8 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
     }
   }
 
-  // ---- miners heatmap: stooq CSV → yahoo batch → simulated (errors logged, never silent) ----
-  const miners = (await cache.wrap('miners', 3600, async () => {
+  // ---- miners heatmap: stooq CSV → yahoo batch → last good copy → empty (errors logged, never silent) ----
+  const miners = await orEmpty(cache.wrap('miners', 3600, async () => {
     try {
       const q = await stooq.stooqQuotes(env, stooq.MINERS);
       if (q.length >= 6) return q;
@@ -185,22 +201,22 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
         throw new Error('yahoo thin: ' + q2.length);
       } catch (e2) {
         console.error('MINERS_YAHOO_FAIL', String((e2 as Error).message).slice(0, 120));
-        return sim.simMiners();
+        throw e2;
       }
     }
-  })).v;
+  }), [] as Quote[], 'MINERS');
 
-  // ---- FX: frankfurter (one call, DAILY) → simulated ----
-  const fx = (await cache.wrap('fx', 3600, () => frankfurter.frankfurterFx(env).catch(() => sim.simFx()))).v;
+  // ---- FX: frankfurter (one call, DAILY) → last good copy → empty ----
+  const fx = await orEmpty(cache.wrap('fx', 3600, () => frankfurter.frankfurterFx(env)), [] as Quote[], 'FX');
 
-  // ---- macro: FRED (key) → simulated — cached 6h ----
+  // ---- macro: FRED (key) → last good copy → empty — cached 6h ----
   // key bumped to macro:v2 — the old cached rows carried AUTOINS = CPI motor fuel
-  const macro = (await cache.wrap('macro:v2', 21600, () => fred.fredRows(env).catch(() => sim.simMacro()))).v;
+  const macro: MacroRow[] = await orEmpty(cache.wrap('macro:v2', 21600, () => fred.fredRows(env)), [] as MacroRow[], 'MACRO');
   const row = (k: string) => macro.find((m: MacroRow) => m.key === k);
   const cpi = row('CPI'); const autoins = row('AUTOINS');
   const lm = await liveMacro(env);
   const L = (x: { v: number; asOf: string } | null, ref: number, src: string) => x ? { yoy: x.v, source: `${src} · ${x.asOf}` } : { yoy: ref, source: 'STATIC REFERENCE (warehouse warming)' };
-  const autoLive = lm.insAuto ? { v: lm.insAuto.v, asOf: lm.insAuto.asOf } : (autoins && autoins.source !== 'simulated' ? { v: autoins.value, asOf: autoins.asOf.slice(0, 7) } : null);
+  const autoLive = lm.insAuto ? { v: lm.insAuto.v, asOf: lm.insAuto.asOf } : (autoins ? { v: autoins.value, asOf: autoins.asOf.slice(0, 7) } : null);
   const cpiBreakdown = [
     { label: 'SHELTER', ...L(lm.shelter, 4.2, 'FRED CUSR0000SAH1') },
     { label: 'FOOD', ...L(lm.food, 2.7, 'FRED CPIUFDSL') },
@@ -228,8 +244,8 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
     shipping: RE.shipping.map(x => ({ ...x, note: x.note.startsWith('news') ? x.note : 'STATIC REFERENCE · not a live quote' })),
   };
 
-  // ---- news: GDELT → simulated — cached 1 HOUR ----
-  const news = (await cache.wrap('news', 3600, () => gdelt.gdeltNews(env, ['gold', 'mining', 'macro']).catch(() => sim.simNews()))).v;
+  // ---- news: GDELT → last good copy → empty — cached 1 HOUR ----
+  const news = await orEmpty(cache.wrap('news', 3600, () => gdelt.gdeltNews(env, ['gold', 'mining', 'macro'])), [] as NewsItem[], 'NEWS');
   // hourly Llama sentiment (if fresh) overrides the keyword heuristic — labeled LLAMA HOURLY
   try {
     const nse = (await env.CACHE.get('news:sentiment', 'json')) as { ts: number; items: { id: string; s: string }[] } | null;
@@ -283,7 +299,7 @@ export async function buildBootstrap(env: Env, tf: Tf): Promise<Bootstrap & { ml
   });
 
   return {
-    mode: gold.source === 'simulated' ? 'simulated' : 'live',
+    mode: gold.delay === 'stale' || gold.delay === 'daily' ? 'stale' : 'live',
     builtAt: Date.now(), tf,
     gold, silver, dxy, ratio: gold.price && silver.price ? gold.price / silver.price : null, tape,
     candles, miners, fx,

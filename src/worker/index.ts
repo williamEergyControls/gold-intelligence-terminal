@@ -11,7 +11,7 @@
    ("Unexpected case"). keep it if-chain; never mix the two styles.
    ================================================================ */
 import type { Env, Tf } from './types';
-import { AppCache } from './cache';
+import { AppCache, pruneCache } from './cache';
 import { buildBootstrap } from './bootstrap';
 import { aiAnalyst, newsSentimentHourly } from './ai/analyst';
 import { agentChat } from './ai/chat';
@@ -25,7 +25,6 @@ import { runProbes, storeProbes, probeHistory, lastProbes, type ProbeResult } fr
 import { adminML, adminDB, adminKV, adminUsers, setUserRole, unlockUser, revokeSessions, pruneDB } from './admin/data';
 import * as yahoo from './providers/yahoo';
 import { goldapiComQuote } from './providers/goldapicom';
-import * as sim from './providers/simulated';
 import { runIngest, unitStates, dueUnits, readSeries, readMeta } from './store/ingest';
 import { SERIES, UNITS, SOURCE_LABEL } from './store/registry';
 import { refreshVol, readSnapshots, VOL_CLASSES } from './vol/snapshot';
@@ -71,14 +70,16 @@ function parseTf(s: string | null): Tf { return TFS.includes(s as Tf) ? (s as Tf
    NO zero-price "degraded" objects get cached — a cached $0 gold overwrote
    the last good value for 60s and was labeled live. */
 async function cachedBoot(env: Env, tf: Tf) {
-  return new AppCache(env.CACHE).wrap('boot:' + tf, 60, () => buildBootstrap(env, tf));
+  // the warm cron rebuilds boot:15M and boot:1D every 10 min; a request only rebuilds
+  // when the cron copy is over 5 min old. live price between rebuilds comes from /api/quote.
+  return new AppCache(env).wrap('boot:' + tf, 300, () => buildBootstrap(env, tf));
 }
 async function bootOrFallback(env: Env, tf: Tf) {
   try { return { ...(await cachedBoot(env, tf)), tfFallback: null as Tf | null }; }
   catch (e) {
     console.error('BOOTSTRAP_FAIL', tf, errMsg(e));
     if (tf !== '15M') {
-      const alt = await new AppCache(env.CACHE).read<any>('boot:15M');
+      const alt = await new AppCache(env).read<any>('boot:15M');
       if (alt) return { v: alt.v, ageMs: alt.ageMs, stale: true, tfFallback: '15M' as Tf };
     }
     throw e;
@@ -123,7 +124,7 @@ export default {
       }
       if (path === '/api/health') {
         // read-only: never triggers an upstream build from an unauthenticated route
-        const hit = await new AppCache(env.CACHE).read<any>('boot:15M');
+        const hit = await new AppCache(env).read<any>('boot:15M');
         if (!hit) return json({ mode: 'unknown', builtAt: null, stale: true, providers: [] }, 200);
         return json({ mode: hit.v.mode, builtAt: hit.v.builtAt, ageMs: hit.ageMs, stale: hit.ageMs > hit.ttl * 1000, providers: hit.v.health }, 200);
       }
@@ -148,11 +149,12 @@ export default {
         if (!/^[A-Z0-9=^.:\-]{1,15}$/.test(sym)) return json({ error: 'BAD_SYMBOL' }, 400);
         try {
           // only real yahoo candles are cached; the label travels with the data
-          const r = await new AppCache(env.CACHE).wrap('candles2:' + sym + ':' + tf, tf === '1D' ? 3600 : 300,
+          const r = await new AppCache(env).wrap('candles2:' + sym + ':' + tf, tf === '1D' ? 3600 : 300,
             async () => ({ candles: await yahoo.yahooCandles(env, sym, tf), source: 'yahoo-finance(unofficial)' }));
           return json({ tf, sym, candles: r.v.candles, source: r.v.source, stale: r.stale, ageMs: r.ageMs }, 200);
         } catch {
-          return json({ tf, sym, candles: sim.simCandles(sym, tf), source: 'simulated', stale: false, ageMs: 0 }, 200);
+          // no live and no stored copy: an empty chart says so; nothing is invented
+          return json({ tf, sym, candles: [], source: 'unavailable', stale: true, ageMs: null, retryAfterSec: 60 }, 200);
         }
       }
       if (path === '/api/quote') {
@@ -169,15 +171,15 @@ export default {
         return json(out, 200);
       }
       if (path === '/api/page/energy') {
-        const r = await new AppCache(env.CACHE).wrap('page:energy', 900, () => buildEnergyPage(env));
+        const r = await new AppCache(env).wrap('page:energy', 900, () => buildEnergyPage(env));
         return json({ ...r.v, stale: r.stale }, 200);
       }
       if (path === '/api/page/agri') {
-        const r = await new AppCache(env.CACHE).wrap('page:agri', 900, () => buildAgriPage(env));
+        const r = await new AppCache(env).wrap('page:agri', 900, () => buildAgriPage(env));
         return json({ ...r.v, stale: r.stale }, 200);
       }
       if (path === '/api/page/shipping') {
-        const r = await new AppCache(env.CACHE).wrap('page:shipping', 900, async () => {
+        const r = await new AppCache(env).wrap('page:shipping', 900, async () => {
           try {
             const shp = await import('./providers/shipping');
             return await shp.buildShippingPanel(env);
@@ -191,8 +193,10 @@ export default {
       if (path === '/api/watch') {
         const syms = (url.searchParams.get('syms') || '').split(',').map(s => s.trim().toUpperCase()).filter(s => /^[A-Z0-9=^.:\-]{1,15}$/.test(s)).slice(0, 12);
         if (!syms.length) return json({ quotes: [] }, 200);
-        const r = await new AppCache(env.CACHE).wrap('watch:' + syms.join(','), 120, () => yahoo.yahooBatchQuotes(syms).catch(() => sim.simQuotes(syms)));
-        return json({ quotes: r.v }, 200);
+        try {
+          const r = await new AppCache(env).wrap('watch:' + syms.join(','), 120, () => yahoo.yahooBatchQuotes(syms));
+          return json({ quotes: r.v, stale: r.stale, ageMs: r.ageMs }, 200);
+        } catch { return json({ quotes: [], stale: true, unavailable: true }, 200); }
       }
       if (path === '/api/macro') return json((await cachedBoot(env, '15M')).v.macro, 200);
       if (path === '/api/news') return json((await cachedBoot(env, '15M')).v.news, 200);
@@ -529,7 +533,7 @@ export default {
 
       /* ---- legacy diagnostics (old /diagnostics.html) ---- */
       if (path === '/api/admin/diagnostics') {
-        const hit = await new AppCache(env.CACHE).read<any>('boot:15M');
+        const hit = await new AppCache(env).read<any>('boot:15M');
         const ml: any = await env.CACHE.get('ml:snap', 'json');
         const [models, pc, oc, uc, sc] = await Promise.all([
           env.DB.prepare('SELECT id, name, trained_at, active FROM ml_models ORDER BY id DESC LIMIT 5').all(),
@@ -591,6 +595,7 @@ async function newsCycle(env: Env, scheduledTime: number): Promise<void> {
     const c = await crawlCycle(env);
     if (c.fetched) console.log('NEWS_CRAWL', JSON.stringify({ fetched: c.fetched, added: c.added, errors: c.errors.slice(0, 4) }));
   } catch (e) { console.error('NEWS_CRAWL_FAIL', errMsg(e)); }
+  await warmPages(env);
   // AI digest on every other run (~72 calls/day × 4 items) keeps Workers AI inside the free allowance
   if (min % 20 === 2) {
     try { const d = await digestBatch(env); if (d.done) console.log('NEWS_DIGEST', JSON.stringify(d)); } catch (e) { console.error('NEWS_DIGEST_FAIL', errMsg(e)); }
@@ -602,8 +607,12 @@ async function warm(env: Env): Promise<void> {
   try {
     const boot = await buildBootstrap(env, '15M');
     // ttl 600 = warm cadence (every 10 min): requests read the cron copy instead of
-    // rebuilding against yahoo. KV keeps it 60 min as the stale fallback.
-    await new AppCache(env.CACHE).write('boot:15M', boot, 600);
+    // rebuilding against upstream. D1 keeps it as the last good copy.
+    await new AppCache(env).write('boot:15M', boot, 600);
+    // home asks for 1D: build it here too (quotes, series, miners, fx, macro, news come from
+    // this isolate's fresh micro cache, so it costs one candle fetch and one D1 write)
+    try { await new AppCache(env).write('boot:1D', await buildBootstrap(env, '1D'), 600); }
+    catch (e) { console.error('CRON_WARM_1D_FAIL', errMsg(e)); }
     const stmts: D1PreparedStatement[] = persistHealthRows().map(h => env.DB.prepare(
       `INSERT INTO provider_health(provider,last_success,last_failure,latency_ms,status) VALUES(?,?,?,?,?)
        ON CONFLICT(provider) DO UPDATE SET
@@ -616,18 +625,21 @@ async function warm(env: Env): Promise<void> {
              >= MAX(COALESCE(excluded.last_failure,0), COALESCE(provider_health.last_failure,0)) THEN 'online'
            ELSE 'degraded' END`
     ).bind(h.provider, h.last_success, h.last_failure, h.latency_ms, h.status));
-    // never write simulated prices into history — it would poison charts and ML
-    if (boot.gold.source !== 'simulated' && isFinite(boot.gold.price) && boot.gold.price > 0) {
+    // only live prints go into history; a stale or daily-close fallback would repeat itself
+    if (boot.gold.delay !== 'stale' && boot.gold.delay !== 'daily' && isFinite(boot.gold.price) && boot.gold.price > 0) {
       stmts.push(env.DB.prepare('INSERT OR REPLACE INTO price_snapshots(ts,symbol,price,source) VALUES(?,?,?,?)')
         .bind(Date.now(), 'XAU:USD', boot.gold.price, boot.gold.source));
     }
     if (stmts.length) await env.DB.batch(stmts);
   } catch (e) { console.error('CRON_WARM_FAIL', errMsg(e)); }
-  // pages: rebuild only when the copy is ~15 min old (KV Free = 1,000 writes/day;
-  // rewriting both every 5 min alone cost 576/day). key was 'age:agri' before — never hit.
+}
+
+/* desk pages: rebuilt in the news slot (:x2), not the warm slot, so neither cron run goes near
+   the Free plan's 50 D1 queries per invocation. a copy younger than ~15 min is left alone. */
+async function warmPages(env: Env): Promise<void> {
   for (const [key, build] of [['page:energy', buildEnergyPage], ['page:agri', buildAgriPage]] as const) {
     try {
-      const c = new AppCache(env.CACHE);
+      const c = new AppCache(env);
       const cur = await c.read(key);
       if (cur && cur.ageMs < 840000) continue;
       await c.write(key, await build(env), 900);
@@ -667,7 +679,7 @@ async function hourly(env: Env): Promise<void> {
         const seed = await goldapiIoSeed(env);
         await env.CACHE.put('goldio:daily', JSON.stringify(seed), { expirationTtl: 2 * 86400 });
       } catch (e) { console.error('GOLDIO_SEED_FAIL', errMsg(e)); }
-      try { console.log('PRUNE', JSON.stringify(await pruneDB(env))); }
+      try { console.log('PRUNE', JSON.stringify(await pruneDB(env)), 'cache_kv', await pruneCache(env)); }
       catch (e) { console.error('PRUNE_FAIL', errMsg(e)); }
       await env.CACHE.put('cron:daily', JSON.stringify({ t: Date.now() }), { expirationTtl: 3 * 86400 });
     }
