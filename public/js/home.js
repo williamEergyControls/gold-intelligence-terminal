@@ -154,4 +154,16 @@
     if (document.hidden || !B) return;
     G.getJSON('/api/quote').then(function (q) { if (isFinite(q.gold) && B.gold.prevClose) { B.gold.price = q.gold; B.gold.change = q.gold - B.gold.prevClose; B.gold.changePct = (q.gold / B.gold.prevClose - 1) * 100; } renderGold(); }).catch(function () { });
   }, 20000);
+  /* ---- outlook card ---- */
+  function outlookCard() {
+    G.getJSON('/api/outlook').then(function (R) {
+      var O = R && R.outlook; if (!O) return;
+      var c = function (x) { return x >= 6.8 ? 'var(--up)' : x >= 4.5 ? 'var(--gold)' : 'var(--dn)'; };
+      $('#olkBody').innerHTML = '<span class="olk-k">Outlook</span>' +
+        '<span class="olk-s"><b style="color:' + c(O.econ.score) + '">' + O.econ.score.toFixed(1) + '</b><span>Economy · ' + esc(O.econ.phase) + '</span></span>' +
+        '<span class="olk-s"><b style="color:' + c(O.gold.score) + '">' + O.gold.score.toFixed(1) + '</b><span>Gold · ' + esc(O.gold.stance) + '</span></span>' +
+        '<span class="olk-t">' + esc(O.narrative.text.length > 220 ? O.narrative.text.slice(0, 217) + '…' : O.narrative.text) + '</span><span class="olk-go">Open outlook</span>';
+    }).catch(function () { });
+  }
+  outlookCard(); setInterval(function () { if (!document.hidden) outlookCard(); }, 900000);
 })();

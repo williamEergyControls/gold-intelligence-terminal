@@ -53,7 +53,7 @@
 
   /* ---------- header ---------- */
   var NAV = [
-    ['/', 'Home', 'home'], ['/gold.html', 'Gold', 'gold'], ['/energy.html', 'Energy', 'energy'], ['/agri.html', 'Agri', 'agri'],
+    ['/', 'Home', 'home'], ['/outlook.html', 'Outlook', 'outlook'], ['/gold.html', 'Gold', 'gold'], ['/energy.html', 'Energy', 'energy'], ['/agri.html', 'Agri', 'agri'],
     ['/fx.html', 'FX', 'fx'], ['/stable.html', 'Stablecoins', 'stable'], ['/vol.html', 'Volatility', 'vol'],
     ['/shipping.html', 'Shipping', 'shipping'], ['/water.html', 'Water', 'water'], ['/land.html', 'Land', 'land'],
     ['/news.html', 'News', 'news'], ['/ai.html', 'AI', 'ai']

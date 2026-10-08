@@ -63,12 +63,12 @@ function draw(id) {
       pts.forEach(function (p, i) { if (i) ctx.lineTo(X(p.x), Y(p.y)); else ctx.moveTo(X(p.x), Y(p.y)); });
       ctx.lineTo(X(pts[pts.length - 1].x), T + ph); ctx.lineTo(X(pts[0].x), T + ph); ctx.closePath(); ctx.fill(); ctx.restore();
     }
-    if (pts.length > 1) {
+    if (pts.length > 1 && !s.noLine) {
       ctx.strokeStyle = s.color; ctx.lineWidth = s.width || 2; ctx.lineJoin = 'round'; if (s.dash) ctx.setLineDash(s.dash);
       ctx.beginPath(); pts.forEach(function (p, i) { if (i) ctx.lineTo(X(p.x), Y(p.y)); else ctx.moveTo(X(p.x), Y(p.y)); }); ctx.stroke();
       ctx.setLineDash([]); ctx.lineWidth = 1;
     }
-    if (s.dots || pts.length === 1) pts.forEach(function (p) { ctx.fillStyle = p.c || s.color; ctx.beginPath(); ctx.arc(X(p.x), Y(p.y), 4, 0, Math.PI * 2); ctx.fill(); });
+    if (s.dots || pts.length === 1) pts.forEach(function (p) { ctx.fillStyle = p.c || s.color; ctx.beginPath(); ctx.arc(X(p.x), Y(p.y), s.r || 4, 0, Math.PI * 2); ctx.fill(); });
   });
   c.geo = { X: X, Y: Y, T: T, ph: ph, x0: x0, x1: x1, L: L, pw: pw };
   if (c.hover != null) {
