@@ -119,6 +119,13 @@ export const UNITS: UnitDef[] = [
   Y('LAND', d('LAND', 'Gladstone Land (farmland REIT)', 'equity', 'price', 'USD'), 60),
   Y('FPI', d('FPI', 'Farmland Partners (farmland REIT)', 'equity', 'price', 'USD'), 60),
   // Nasdaq Veles California Water Index on FRED (weekly, $/acre-foot). id was wrong (NQH2O) before v3
+  /* ---------- CYCLE (outlook engine): curve, credit, labour, consumer, miners ---------- */
+  F('T10Y3M', d('CURVE', '10Y minus 3M Treasury spread', 'aux', 'rate', '%'), 720, 1825),
+  F('BAA10Y', d('CREDIT', 'Baa corporate minus 10Y spread', 'aux', 'rate', '%'), 720, 1825),
+  F('ICSA', d('CLAIMS', 'Initial jobless claims (weekly)', 'aux', 'rate', 'claims'), 1440, 1825),
+  F('UNRATE', d('UNRATE', 'Unemployment rate', 'aux', 'rate', '%', 'monthly'), 1440, 3650),
+  F('UMCSENT', d('CONSENT', 'UMich consumer sentiment', 'aux', 'rate', 'index', 'monthly'), 1440, 3650),
+  Y('GDX', d('GDX', 'Gold miners ETF (GDX)', 'aux', 'price', 'USD'), 60),
   F('NASDAQNQH2O', d('NQH2O', 'California water index (NQH2O)', 'aux', 'price', 'USD/acre-ft'), 720, 1825),
 ];
 
