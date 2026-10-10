@@ -52,9 +52,9 @@ function nextWeekday(date: string): string {
 }
 
 /* ---------------- fetchers: unit → rows ---------------- */
-async function fetchYahoo(u: UnitDef, lastTs: number | null): Promise<Row[]> {
+async function fetchYahoo(u: UnitDef, lastTs: number | null, DEEP = false): Promise<Row[]> {
   const gapDays = lastTs ? (Date.now() - lastTs) / DAY : Infinity;
-  const range = gapDays === Infinity ? '2y' : gapDays > 25 ? '6mo' : gapDays > 4 ? '1mo' : '5d';
+  const range = DEEP ? '10y' : gapDays === Infinity ? '2y' : gapDays > 25 ? '6mo' : gapDays > 4 ? '1mo' : '5d';
   let lastErr: unknown;
   for (const host of ['query1.finance.yahoo.com', 'query2.finance.yahoo.com']) {
     try {
@@ -90,10 +90,10 @@ async function fetchYahoo(u: UnitDef, lastTs: number | null): Promise<Row[]> {
   throw lastErr ?? new Error('yahoo failed');
 }
 
-async function fetchFred(env: Env, u: UnitDef, lastTs: number | null): Promise<Row[]> {
+async function fetchFred(env: Env, u: UnitDef, lastTs: number | null, DEEP = false): Promise<Row[]> {
   const key = secret(env, 'FRED_API_KEY');
   if (!key) throw new Error('FRED_API_KEY not resolved');
-  const start = lastTs ? isoDay(lastTs - (u.series[0].freq === 'monthly' ? 100 : 10) * DAY) : isoDay(Date.now() - u.backfillDays * DAY);
+  const start = DEEP ? isoDay(Date.now() - 3700 * DAY) : lastTs ? isoDay(lastTs - (u.series[0].freq === 'monthly' ? 100 : 10) * DAY) : isoDay(Date.now() - u.backfillDays * DAY);
   const j = await getJSON(`https://api.stlouisfed.org/fred/series/observations?series_id=${encodeURIComponent(u.arg)}&api_key=${key}&file_type=json&observation_start=${start}`);
   const out: Row[] = [];
   for (const o of j?.observations ?? []) {
@@ -126,16 +126,19 @@ async function fetchCoinGecko(u: UnitDef, lastTs: number | null): Promise<Row[]>
   const j = await getJSON(`https://api.coingecko.com/api/v3/coins/${encodeURIComponent(u.arg)}/market_chart?vs_currency=usd&days=${days}&interval=daily`);
   const [px, mc] = [u.series[0].id, u.series[1].id];
   const out: Row[] = [];
-  for (const [t, v] of (j?.prices ?? []) as [number, number][]) if (isFinite(v) && v > 0) out.push([px, dayKey(new Date(t).toISOString()), v]);
-  for (const [t, v] of (j?.market_caps ?? []) as [number, number][]) if (isFinite(v) && v > 0) out.push([mc, dayKey(new Date(t).toISOString()), v]);
+  // CoinGecko stamps each daily point at 00:00 UTC with the PREVIOUS day's close; key it to that day so it lines
+  // up with Yahoo/FRED closes (correlations were shifted a day). the live print (not on midnight) keeps today.
+  const k = (t: number) => dayKey(new Date(t % DAY === 0 ? t - DAY : t).toISOString());
+  for (const [t, v] of (j?.prices ?? []) as [number, number][]) if (isFinite(v) && v > 0) out.push([px, k(t), v]);
+  for (const [t, v] of (j?.market_caps ?? []) as [number, number][]) if (isFinite(v) && v > 0) out.push([mc, k(t), v]);
   if (!out.length) throw new Error('no prices');
   return out;
 }
 
-async function fetchUnit(env: Env, u: UnitDef, lastTs: number | null): Promise<Row[]> {
+async function fetchUnit(env: Env, u: UnitDef, lastTs: number | null, deep = false): Promise<Row[]> {
   switch (u.source) {
-    case 'yahoo': return fetchYahoo(u, lastTs);
-    case 'fred': return fetchFred(env, u, lastTs);
+    case 'yahoo': return fetchYahoo(u, lastTs, deep);
+    case 'fred': return fetchFred(env, u, lastTs, deep);
     case 'frankfurter': return fetchFrankfurter(u, lastTs);
     case 'coingecko': return fetchCoinGecko(u, lastTs);
   }
@@ -224,7 +227,10 @@ function pickFair<T extends { u: UnitDef }>(due: T[], budget: number): T[] {
   return out;
 }
 
-export async function runIngest(env: Env, budget = 10, onlyKeys?: string[]): Promise<{ ran: UnitResult[]; due: number; rows: number }> {
+export async function runIngest(env: Env, budget = 10, onlyKeys?: string[], deep = false): Promise<{ ran: UnitResult[]; due: number; rows: number }> {
+  return runIngestInner(env, budget, onlyKeys, deep && !!onlyKeys?.length);
+}
+async function runIngestInner(env: Env, budget: number, onlyKeys: string[] | undefined, deep: boolean): Promise<{ ran: UnitResult[]; due: number; rows: number }> {
   const cycleStart = Date.now();
   const states = await unitStates(env);
   let due = dueUnits(states);
@@ -238,7 +244,7 @@ export async function runIngest(env: Env, budget = 10, onlyKeys?: string[]): Pro
   const runOne = async ({ u, backfill }: { u: UnitDef; backfill: boolean }): Promise<UnitResult> => {
     const t0 = Date.now();
     try {
-      const rs = await fetchUnit(env, u, backfill ? null : (states[u.key]?.last_ts ?? null));
+      const rs = await fetchUnit(env, u, backfill ? null : (states[u.key]?.last_ts ?? null), deep);
       rows.push(...rs);
       lastTs[u.key] = rs.reduce((m, r) => Math.max(m, r[1]), 0) || null;
       return { key: u.key, ok: true, rows: rs.length, error: null, ms: Date.now() - t0, backfill };

@@ -126,7 +126,19 @@ export const UNITS: UnitDef[] = [
   F('UNRATE', d('UNRATE', 'Unemployment rate', 'aux', 'rate', '%', 'monthly'), 1440, 3650),
   F('UMCSENT', d('CONSENT', 'UMich consumer sentiment', 'aux', 'rate', 'index', 'monthly'), 1440, 3650),
   Y('GDX', d('GDX', 'Gold miners ETF (GDX)', 'aux', 'price', 'USD'), 60),
+  F('USEPUINDXD', d('EPU', 'US economic policy uncertainty (daily news index)', 'aux', 'rate', 'index', 'daily', 365), 720, 1825),
   F('NASDAQNQH2O', d('NQH2O', 'California water index (NQH2O)', 'aux', 'price', 'USD/acre-ft'), 720, 1825),
+  /* ---------- v3.4: refined products (3-2-1 crack spread), full Treasury curve, Bitcoin ---------- */
+  Y('RB=F', d('RBOB', 'RBOB gasoline futures (RB)', 'aux', 'price', 'USD/gal'), 60),
+  Y('HO=F', d('HEATOIL', 'ULSD / heating oil futures (HO)', 'aux', 'price', 'USD/gal'), 60),
+  F('DGS1MO', d('UST1M', 'UST 1M yield', 'aux', 'yield', '%'), 720, 1825),
+  F('DGS6MO', d('UST6M', 'UST 6M yield', 'aux', 'yield', '%'), 720, 1825),
+  F('DGS1', d('UST1Y', 'UST 1Y yield', 'aux', 'yield', '%'), 720, 1825),
+  F('DGS3', d('UST3Y', 'UST 3Y yield', 'aux', 'yield', '%'), 720, 1825),
+  F('DGS7', d('UST7Y', 'UST 7Y yield', 'aux', 'yield', '%'), 720, 1825),
+  F('DGS20', d('UST20Y', 'UST 20Y yield', 'aux', 'yield', '%'), 720, 1825),
+  { key: 'coingecko:bitcoin', source: 'coingecko', arg: 'bitcoin', cadenceMin: 60, backfillDays: 365,
+    series: [d('BTC', 'Bitcoin (BTC/USD)', 'aux', 'price', 'USD', 'daily', 365), d('BTC.MCAP', 'Bitcoin market cap', 'aux', 'mcap', 'USD', 'daily', 365)] },
 ];
 
 export const SERIES: Record<string, SeriesDef & { unitKey: string; source: Source; srcId: string }> = {};
