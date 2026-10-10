@@ -156,6 +156,11 @@
   }, 20000);
   /* ---- outlook card ---- */
   function outlookCard() {
+    if (G.tier === 'free') {
+      // Pro feature: free accounts see what it is, not the numbers
+      $('#olkBody').innerHTML = '<span class="olk-k">Outlook</span><span class="protag">Pro</span><span class="olk-t">Economy and gold scores for a 3–12 month holder, graded against what happened. Ask the site admin for Pro access.</span>';
+      return;
+    }
     G.getJSON('/api/outlook').then(function (R) {
       var O = R && R.outlook; if (!O) return;
       var c = function (x) { return x >= 6.8 ? 'var(--up)' : x >= 4.5 ? 'var(--gold)' : 'var(--dn)'; };

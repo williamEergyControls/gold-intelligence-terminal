@@ -495,19 +495,26 @@ $('#bPrune').addEventListener('click', function () {
    USERS
    ================================================================= */
 var USERS = null;
+/* tier: admin · pro (until a date, or open-ended) · free. an expired pro shows as free with the old date. */
+function tierCell(u) {
+  var pu = u.pro_until ? new Date(u.pro_until).toISOString().slice(0, 10) : '';
+  var live = u.role === 'pro' && (!u.pro_until || u.pro_until > Date.now());
+  var opt = function (v, t) { return '<option value="' + v + '"' + (u.role === v || (v === 'operator' && u.role !== 'pro' && u.role !== 'admin') ? ' selected' : '') + '>' + t + '</option>'; };
+  return '<div class="tiercell"><select data-role-for="' + u.id + '" aria-label="Role for ' + esc(u.name) + '">' + opt('operator', 'Free') + opt('pro', 'Pro') + opt('admin', 'Admin') + '</select>' +
+    '<input type="date" data-until-for="' + u.id + '" value="' + pu + '" title="Pro until (empty = no end date)" aria-label="Pro until"' + (u.role === 'pro' ? '' : ' hidden') + '>' +
+    (u.role === 'pro' ? (live ? '<span class="st ok">Pro' + (pu ? ' to ' + pu : '') + '</span>' : '<span class="st bad">Pro expired</span>') : '') + '</div>';
+}
 function renderUsers() {
   var d = USERS; if (!d) return;
   var admins = d.users.filter(function (u) { return u.role === 'admin'; }).length;
-  $('#usrTbl').innerHTML = '<thead><tr><th>ID</th><th>OPERATOR</th><th>ROLE</th><th>CREATED</th><th>LAST LOGIN</th><th class="r">ACTIVE SESSIONS</th><th class="r">FAILED</th><th>LOCK</th><th>ACTIONS</th></tr></thead><tbody>' + d.users.map(function (u) {
+  $('#usrTbl').innerHTML = '<thead><tr><th>ID</th><th>OPERATOR</th><th>ACCESS</th><th>CREATED</th><th>LAST LOGIN</th><th class="r">ACTIVE SESSIONS</th><th class="r">FAILED</th><th>LOCK</th><th>ACTIONS</th></tr></thead><tbody>' + d.users.map(function (u) {
     var me = d.me && d.me.id === u.id;
     var locked = u.locked_until && u.locked_until > Date.now();
     return '<tr' + (me ? ' class="hl"' : '') + '><td>' + u.id + '</td><td><b>' + esc(u.name) + '</b>' + (me ? ' <span class="gold">(YOU)</span>' : '') + '</td>' +
-      '<td>' + (u.role === 'admin' ? '<span class="st skip">ADMIN</span>' : '<span class="st na">OPERATOR</span>') + '</td>' +
+      '<td>' + tierCell(u) + '</td>' +
       '<td class="mut">' + esc(dt(u.created_at)) + '</td><td class="mut">' + ago(u.last_login) + '</td><td class="r">' + u.active_sessions + '</td><td class="r ' + (u.login_attempts ? 'dn' : 'dim') + '">' + (u.login_attempts || 0) + '</td>' +
       '<td>' + (locked ? '<span class="st bad">' + age(u.locked_until - Date.now()) + '</span>' : '<span class="dim">--</span>') + '</td>' +
-      '<td>' + (u.role === 'admin'
-        ? '<button class="abtn sm warn" data-act="role" data-id="' + u.id + '" data-role="operator"' + (admins <= 1 ? ' disabled title="last admin"' : '') + '>DEMOTE</button>'
-        : '<button class="abtn sm" data-act="role" data-id="' + u.id + '" data-role="admin">PROMOTE</button>') +
+      '<td><button class="abtn sm" data-act="role" data-id="' + u.id + '"' + (u.role === 'admin' && admins <= 1 ? ' data-last="1"' : '') + '>Save role</button>' +
       ' <button class="abtn sm" data-act="unlock" data-id="' + u.id + '"' + (locked || u.login_attempts ? '' : ' disabled') + '>UNLOCK</button>' +
       ' <button class="abtn sm warn" data-act="revoke" data-id="' + u.id + '"' + (me || !u.active_sessions ? ' disabled' : '') + '>REVOKE</button></td></tr>';
   }).join('') + '</tbody>';
@@ -519,10 +526,21 @@ function loadUsers() {
   return api('/api/admin/users').then(function (d) { USERS = d; renderUsers(); }).catch(function (e) { if (e.message !== 'FORBIDDEN') setText('#usrMeta', 'USERS ERROR: ' + e.message); });
 }
 $('#bUsers').addEventListener('click', loadUsers);
+$('#usrTbl').addEventListener('change', function (ev) {
+  var sel = ev.target.closest('select[data-role-for]'); if (!sel) return;
+  var d = $('[data-until-for="' + sel.dataset.roleFor + '"]'); if (d) d.hidden = sel.value !== 'pro';
+});
 $('#usrTbl').addEventListener('click', function (ev) {
   var b = ev.target.closest('button[data-act]'); if (!b || b.disabled) return;
   var id = Number(b.dataset.id), act = b.dataset.act, p;
-  if (act === 'role') { if (!confirm('Set user #' + id + ' role to ' + b.dataset.role.toUpperCase() + '?')) return; p = post('/api/admin/users/role', { id: id, role: b.dataset.role }); }
+  if (act === 'role') {
+    var role = ($('[data-role-for="' + id + '"]') || {}).value || 'operator';
+    var until = ($('[data-until-for="' + id + '"]') || {}).value || '';
+    if (b.dataset.last && role !== 'admin') { alert('This is the last admin. Promote someone else first.'); return; }
+    var label = role === 'operator' ? 'Free' : role === 'pro' ? 'Pro' + (until ? ' until ' + until : ' (no end date)') : 'Admin';
+    if (!confirm('Set user #' + id + ' to ' + label + '?')) return;
+    p = post('/api/admin/users/role', { id: id, role: role, proUntil: role === 'pro' ? until : '' });
+  }
   else if (act === 'unlock') p = post('/api/admin/users/unlock', { id: id });
   else { if (!confirm('Sign user #' + id + ' out of every device?')) return; p = post('/api/admin/users/revoke', { id: id }); }
   p.then(function (r) { setText('#statusMid', act.toUpperCase() + (r.ok === false ? ' FAILED: ' + (r.error || '') : ' OK')); return loadUsers(); })

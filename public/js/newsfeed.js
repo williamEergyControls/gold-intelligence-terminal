@@ -30,6 +30,7 @@
       '<span class="src">' + esc(it.source) + '</span>' +
       (it.kind === 'youtube' ? '<span class="yt">Video</span>' : '') +
       (it.favorite ? '<span title="One of your sources">Your source</span>' : '') +
+      (it.cls === 'independent' ? '<span class="indep" title="Independent channel or podcast">Independent</span>' : '') +
       '<time datetime="' + new Date(it.published).toISOString() + '">' + ago(it.published) + '</time>' +
       (it.aiSummary ? '<span class="dim">AI summary</span>' : '');
     var tags = '';
@@ -46,7 +47,7 @@
   function mount(el, o) {
     if (!el) return;
     o = o || {};
-    var st = { topic: o.topic || 'all', fav: false, limit: o.limit || 8 };
+    var st = { topic: o.topic || 'all', fav: false, ind: false, limit: o.limit || 8 };
     el.classList.add('nf');
     el.innerHTML = (o.filters ? '<div class="nf-filters" role="tablist"></div>' : '') + '<div class="nf-list"><div class="empty">Loading stories…</div></div>' +
       (o.more ? '<button class="btn ghost sm auto nf-more" type="button">Show more</button>' : '');
@@ -54,10 +55,11 @@
     if (o.filters) {
       var f = el.querySelector('.nf-filters');
       f.innerHTML = TOPICS.map(function (t) { return '<button type="button" class="tag' + (t[0] === st.topic ? ' on' : '') + '" data-t="' + t[0] + '">' + t[1] + '</button>'; }).join('') +
-        '<button type="button" class="tag" data-fav="1">Your sources only</button>';
+        '<button type="button" class="tag" data-fav="1">Your sources only</button><button type="button" class="tag" data-ind="1">Independent only</button>';
       f.addEventListener('click', function (e) {
         var b = e.target.closest('button'); if (!b) return;
         if (b.dataset.fav) { st.fav = !st.fav; b.classList.toggle('on', st.fav); }
+        else if (b.dataset.ind) { st.ind = !st.ind; b.classList.toggle('on', st.ind); }
         else { st.topic = b.dataset.t; f.querySelectorAll('[data-t]').forEach(function (x) { x.classList.toggle('on', x === b); }); }
         st.limit = o.limit || 8; load();
       });
@@ -65,7 +67,7 @@
     var more = el.querySelector('.nf-more');
     if (more) more.addEventListener('click', function () { st.limit = Math.min(40, st.limit + (o.limit || 8)); load(); });
     function load() {
-      fetch('/api/news/feed?topic=' + encodeURIComponent(st.topic) + '&limit=' + st.limit + (st.fav ? '&fav=1' : ''))
+      fetch('/api/news/feed?topic=' + encodeURIComponent(st.topic) + '&limit=' + st.limit + (st.fav ? '&fav=1' : '') + (st.ind ? '&ind=1' : ''))
         .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
         .then(function (d) {
           var items = d.items || [];

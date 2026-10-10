@@ -5,10 +5,12 @@
             long-range cards, forecast ledger (predicted vs actual, error vs naive) */
 (function () {
   'use strict';
+  if (window.GT && GT.locked) return; // free account: shell shows the Pro card
   var G = window.GT, $ = function (s) { return document.querySelector(s); };
   var esc = G.esc, fmt = G.fmt, sgn = G.sgn;
   var O = null, HIST = [], H = '1d';
   try { H = localStorage.getItem('git-led-h') || '1d'; } catch (e) { }
+  if (['1m', '30m', '1d', '1w', '30d'].indexOf(H) < 0) H = '1d';
   var HZ = [['1m', '1 min'], ['30m', '30 min'], ['1d', '1 day'], ['1w', '1 week'], ['30d', '30 days']];
   var ARROW = {
     up: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5"/></svg>',
@@ -109,9 +111,12 @@
     k += '<div class="kpi"><label>Within ' + L.band + '%</label><b>' + (l30.hitBand == null ? '–' : Math.round(l30.hitBand * 100) + '%') + '</b><small>Within 5%: ' + (l30.hit5 == null ? '–' : Math.round(l30.hit5 * 100) + '%') + '</small></div>';
     k += '<div class="kpi"><label>Last 24 hours</label><b>' + pc(t.mape_blend, H === '1m' ? 3 : 2) + '</b><small>' + (t.n || 0) + ' graded · naive ' + pc(t.mape_naive, H === '1m' ? 3 : 2) + '</small></div>';
     $('#lk').innerHTML = k;
-    var w = L.weights || {}, ws = (w.naive || 0) + (w.drift || 0) + (w.revert || 0) || 1;
+    var w = L.weights || {}, day = H === '1d' || H === '1w' || H === '30d';
+    var MM = [['naive', 'Stays put'], ['drift', 'Momentum'], ['revert', 'Back to the mean']].concat(day ? [['signal', 'Signal (models B + C)'], ['evo', 'Evolved network']] : []);
+    var ws = MM.reduce(function (a, m) { return a + (w[m[0]] || 0); }, 0) || 1;
     $('#wts').innerHTML = '<span class="tmeta" style="font-size:13px;color:var(--dim)">Blend weights, relearned nightly from each model\'s error:</span>' +
-      [['naive', 'Stays put'], ['drift', 'Momentum'], ['revert', 'Back to the mean']].map(function (m) { return '<span class="chip plain">' + m[1] + ' ' + Math.round((w[m[0]] || 0) / ws * 100) + '%</span>'; }).join('');
+      MM.map(function (m) { return '<span class="chip plain">' + m[1] + ' ' + Math.round((w[m[0]] || 0) / ws * 100) + '%</span>'; }).join('') +
+      (day ? '<a class="chip plain" href="/loops.html" style="text-decoration:none">How the models are made</a>' : '');
     var gold = G.css('--gold'), blue = G.css('--blue'), dim = G.css('--dim');
     var series = [{ name: 'Gold spot', color: gold, width: 1.6, pts: (L.ticks || []).map(function (x) { return { x: x.ts, y: x.price }; }) }];
     var P = (L.pairs || []).filter(function (p) { return p.actual > 0; });
@@ -137,5 +142,6 @@
   }
   load(); loadLedger();
   setInterval(function () { if (!document.hidden) load(); }, 900000);
-  setInterval(function () { if (!document.hidden) loadLedger(); }, 60000);
+  // minute horizons refresh every minute; day horizons only change every few minutes
+  setInterval(function () { if (!document.hidden && (H === '1m' || H === '30m' || Date.now() % 300000 < 60000)) loadLedger(); }, 60000);
 })();

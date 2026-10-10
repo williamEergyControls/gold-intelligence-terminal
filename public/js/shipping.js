@@ -33,15 +33,19 @@
     $('#sh-kpis').innerHTML = h;
   }
 
+  var EGEO = null;
   function map() {
     if (!window.WorldMap) return;
+    if (LAYER === 'energy' && !EGEO) { MapKit.energyGeo().then(function (g) { EGEO = g; map(); }).catch(function () { $('#mapBody').innerHTML = '<div class="empty">Energy map data did not load.</div>'; }); return; }
     var ch = D.chokepoints || [], ports = D.ports || [], pts = [], routes = [];
     var maxT = Math.max.apply(null, ch.map(function (c) { return c.avg7 || 0; }).concat([1]));
     if (LAYER === 'all' || LAYER === 'ports') ports.forEach(function (p) {
       pts.push({ lon: p.lon, lat: p.lat, r: 3.2, fill: 'var(--dim)', opacity: 0.85,
         html: '<b>' + esc(p.name) + '</b> <span class="m">' + esc(p.country) + '</span><div class="m">' + (p.calls7 != null ? fmt(p.calls7, 0) + ' port calls in 7 days' : 'No recent count') + (p.chgPct != null ? '<br>' + pc(p.chgPct) + ' vs 28-day pace' : '') + '</div>' });
     });
-    if (LAYER === 'all' || LAYER === 'choke') ch.forEach(function (c) {
+    var EX = LAYER === 'energy' ? MapKit.energyLayers(EGEO, { crude: true, gas: true, products: true, refineries: true, lng: true }) : null;
+    if (EX) { routes = routes.concat(EX.routes); pts = pts.concat(EX.points); }
+    if (LAYER === 'all' || LAYER === 'choke' || LAYER === 'energy') ch.forEach(function (c) {
       var r = 4 + 9 * Math.sqrt((c.avg7 || 0) / maxT);
       pts.push({ lon: c.lon, lat: c.lat, r: r, fill: tone(c.chgPct), ring: c.chgPct != null && c.chgPct <= -10, label: c.major ? c.name : null,
         html: '<b>' + esc(c.name) + '</b><div class="m">' + (c.avg7 != null ? fmt(c.avg7, 1) + ' ships a day (7-day avg)' : 'No recent data') +
@@ -55,8 +59,8 @@
         html: '<b>' + esc(l.from) + ' to ' + esc(l.to) + '</b><div class="m">$' + fmt(l.usd, 0) + ' per 40 ft container' + (l.chgPct != null ? ' · ' + pc(l.chgPct, 0) + ' this week' : '') + '<br>Drewry WCI, ' + esc(l.asOf || D.wci.asOf) + '. Route line is indicative.</div>' });
     });
     WorldMap.draw($('#mapBody'), {
-      title: 'Chokepoints, ports and container lanes', points: pts, routes: routes,
-      legend: '<span class="sw"><i style="background:var(--up);border-radius:50%"></i>Busier than usual</span><span class="sw"><i style="background:var(--blue);border-radius:50%"></i>Normal</span><span class="sw"><i style="background:var(--amber);border-radius:50%"></i>Slower</span><span class="sw"><i style="background:var(--dn);border-radius:50%"></i>Down 10% or more</span><span class="sw"><i style="background:var(--dim);border-radius:50%"></i>Port</span><span class="sw"><i style="background:var(--gold);height:3px;border-radius:2px"></i>Container lane, $ per 40 ft</span><span>Dot size is ships a day</span>'
+      title: 'Chokepoints, ports and container lanes', points: pts, routes: routes, flow: !EX,
+      legend: EX ? EX.legend + '<span>Chokepoint dots as above. Pipelines and plants are reference data.</span>' : '<span class="sw"><i style="background:var(--up);border-radius:50%"></i>Busier than usual</span><span class="sw"><i style="background:var(--blue);border-radius:50%"></i>Normal</span><span class="sw"><i style="background:var(--amber);border-radius:50%"></i>Slower</span><span class="sw"><i style="background:var(--dn);border-radius:50%"></i>Down 10% or more</span><span class="sw"><i style="background:var(--dim);border-radius:50%"></i>Port</span><span class="sw"><i style="background:var(--gold);height:3px;border-radius:2px"></i>Container lane, $ per 40 ft</span><span>Dot size is ships a day</span>'
     });
   }
 

@@ -23,7 +23,7 @@ function setup(cv) {
 var dateFmt = function (x) { var d = new Date(x); return (d.getUTCMonth() + 1) + '/' + d.getUTCDate() + (d.getUTCFullYear() !== new Date().getUTCFullYear() ? '/' + String(d.getUTCFullYear()).slice(2) : ''); };
 
 /* spec: { series:[{name, pts:[{x,y}], color, width, dash, dots}], refs:[{y,label,color,left}],
-           yFmt, xFmt, yMin, yMax, empty, unit } */
+           yFmt, xFmt, xTicks:[{x,label}], tipX, yMin, yMax, empty, unit } */
 function line(cv, tip, spec) {
   if (!cv) return;
   REG[cv.id] = { cv: cv, tip: tip, spec: spec, hover: null };
@@ -50,7 +50,9 @@ function draw(id) {
     ctx.fillStyle = dim; ctx.textAlign = 'right'; ctx.fillText(sp.yFmt ? sp.yFmt(val) : fmt(val, 2), L - 5, yy + 3);
   }
   ctx.textAlign = 'center';
-  for (var k = 0; k <= 4; k++) { var xv = x0 + (x1 - x0) * k / 4; ctx.fillStyle = dim; ctx.fillText((sp.xFmt || dateFmt)(xv), Math.min(W - R - 22, Math.max(L + 22, X(xv))), H - 6); }
+  if (sp.xTicks) { // explicit ticks [{x, label}] (yield curve tenors); labels that would overlap are skipped
+    var lastX = -1e9; sp.xTicks.forEach(function (t) { var px = X(t.x); if (px - lastX < 26) return; lastX = px; ctx.fillStyle = dim; ctx.fillText(t.label, Math.min(W - R - 10, Math.max(L + 10, px)), H - 6); });
+  } else for (var k = 0; k <= 4; k++) { var xv = x0 + (x1 - x0) * k / 4; ctx.fillStyle = dim; ctx.fillText((sp.xFmt || dateFmt)(xv), Math.min(W - R - 22, Math.max(L + 22, X(xv))), H - 6); }
   (sp.refs || []).forEach(function (r) {
     ctx.strokeStyle = r.color || mut; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(L, Y(r.y)); ctx.lineTo(W - R, Y(r.y)); ctx.stroke(); ctx.setLineDash([]);
     if (r.label) { ctx.fillStyle = r.color || mut; ctx.textAlign = r.left ? 'left' : 'right'; ctx.fillText(r.label, r.left ? L + 4 : W - R - 2, Y(r.y) - 3); }

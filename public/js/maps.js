@@ -122,7 +122,9 @@
         segs.forEach(function (sg) {
           if (sg.length < 2) return;
           var d = 'M' + sg.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join('L');
-          s += '<path class="route' + (o.flow === false ? '' : ' flow') + '" d="' + d + '" style="stroke:' + (rt.color || 'var(--blue)') + ';stroke-width:' + (rt.width || 1.8) + '" data-tip="r' + i + '"></path>';
+          var fl = o.flow !== false && rt.flow !== false;
+          s += '<path class="route' + (fl ? ' flow' : '') + '" d="' + d + '" style="stroke:' + (rt.color || 'var(--blue)') + ';stroke-width:' + (rt.width || 1.8) +
+            (rt.dash ? ';stroke-dasharray:' + rt.dash + ';animation:none' : '') + (rt.opacity ? ';opacity:' + rt.opacity : '') + '" data-tip="r' + i + '"></path>';
         });
         tips.push(['r' + i, rt.html || esc(rt.label || '')]);
         if (rt.label && rt.at) {
@@ -154,9 +156,39 @@
     return '<svg width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" style="display:block;margin-top:6px"><path d="' + d + '" fill="none" stroke="' + (color || 'currentColor') + '" stroke-width="1.6" stroke-linejoin="round"></path></svg>';
   }
 
+  /* ---- energy infrastructure layers (/geo/energy.json, reference data) ----
+     layers: { crude, gas, products, refineries, lng } booleans → { routes, points, legend } for WorldMap.draw */
+  var EK = { crude: 'var(--amber)', gas: 'var(--blue)', products: 'var(--cyan)', refinery: 'var(--mut)', lng: 'var(--up)', off: 'var(--dn)', plan: 'var(--dim)' };
+  var ST = { operating: 'Operating', reduced: 'Reduced flows', offline: 'Offline', construction: 'Under construction', planned: 'Planned' };
+  function energyLayers(g, L) {
+    var routes = [], points = [];
+    (g.pipelines || []).forEach(function (p) {
+      if (!L[p.kind]) return;
+      var col = p.status === 'offline' ? EK.off : (p.status === 'planned' || p.status === 'construction') ? EK.plan : EK[p.kind];
+      var dash = p.status === 'offline' ? '5 4' : (p.status === 'planned' || p.status === 'construction') ? '2 4' : p.status === 'reduced' ? '8 3' : null;
+      var html = '<b>' + esc(p.name) + '</b> <span class="m">' + esc(p.kind === 'products' ? 'refined products' : p.kind) + ' pipeline</span><div class="m">' + esc(ST[p.status] || p.status) + ' · ' + esc(p.cap) + '<br>' + esc(p.note || '') + '</div>';
+      [p.pts].concat(p.branch ? [p.branch] : []).forEach(function (pts) { routes.push({ pts: pts, color: col, width: p.kind === 'gas' ? 1.7 : 2, dash: dash, flow: false, html: html }); });
+    });
+    if (L.refineries) (g.refineries || []).forEach(function (r) {
+      points.push({ lon: r.lon, lat: r.lat, r: 2.5 + 5 * Math.sqrt(r.kbd / 1400), fill: EK.refinery, opacity: 0.9,
+        html: '<b>' + esc(r.name) + '</b> <span class="m">' + esc(r.country) + '</span><div class="m">Refinery · ' + esc(r.owner) + '<br>About ' + r.kbd.toLocaleString() + ' thousand barrels a day' + (r.note ? '<br>' + esc(r.note) : '') + '</div>' });
+    });
+    if (L.lng) (g.lng || []).forEach(function (x) {
+      points.push({ lon: x.lon, lat: x.lat, r: 2.5 + 4 * Math.sqrt(x.mtpa / 77), fill: EK.lng, opacity: 0.9,
+        html: '<b>' + esc(x.name) + '</b> <span class="m">' + esc(x.country) + '</span><div class="m">LNG export terminal · about ' + x.mtpa + ' million tonnes a year</div>' });
+    });
+    var sw = function (c, t, dash) { return '<span class="sw"><i style="background:' + (dash ? 'repeating-linear-gradient(90deg,' + c + ' 0 5px,transparent 5px 9px)' : c) + ';height:3px;border-radius:2px"></i>' + t + '</span>'; };
+    var dot = function (c, t) { return '<span class="sw"><i style="background:' + c + ';border-radius:50%"></i>' + t + '</span>'; };
+    var lg = (L.crude ? sw(EK.crude, 'Crude pipeline') : '') + (L.gas ? sw(EK.gas, 'Gas pipeline') : '') + (L.products ? sw(EK.products, 'Products pipeline') : '') +
+      sw(EK.off, 'Offline', true) + sw(EK.plan, 'Planned or under construction', true) +
+      (L.refineries ? dot(EK.refinery, 'Refinery, size = capacity') : '') + (L.lng ? dot(EK.lng, 'LNG export') : '');
+    return { routes: routes, points: points, legend: lg };
+  }
+  var energyGeo = function () { return getGeo('/geo/energy.json'); };
+
   window.USMap = { draw: usDraw, project: albers };
   window.WorldMap = { draw: worldDraw };
-  window.MapKit = { ramp: ramp, rampCss: rampCss, spark: spark, esc: esc };
+  window.MapKit = { ramp: ramp, rampCss: rampCss, spark: spark, esc: esc, energyLayers: energyLayers, energyGeo: energyGeo };
   // drought ramp shared by water, agri and home: 0% → neutral, then tan → orange → deep red
   window.MapKit.DROUGHT = [[0, '#f3e3b5'], [0.15, '#f6c66b'], [0.4, '#ee8a2b'], [0.7, '#d0451b'], [1, '#7a1a08']];
 })();

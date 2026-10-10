@@ -25,7 +25,7 @@
           var err = s.last_error ? '<div class="dn" style="font-size:12px;white-space:normal;max-width:340px">' + esc(s.last_error) + '</div>' : '';
           return '<tr' + (s.enabled ? '' : ' style="opacity:.55"') + '><td><button class="star' + (s.favorite ? ' on' : '') + '" data-a="fav" data-id="' + s.id + '" data-v="' + (s.favorite ? 0 : 1) + '" title="' + (s.favorite ? 'Unstar' : 'Star as favorite') + '" aria-label="Favorite">★</button></td>' +
             '<td><span class="kindtag' + (s.kind === 'youtube' ? ' yt' : '') + '">' + (s.kind === 'youtube' ? 'YouTube' : 'RSS') + '</span> <b>' + esc(s.name) + '</b><div class="dim" style="font-size:12px;max-width:380px;overflow:hidden;text-overflow:ellipsis">' + esc(s.url) + '</div>' + err + '</td>' +
-            '<td class="mut">' + esc(String(s.topics || '').split(',').join(', ')) + '</td>' +
+            '<td class="mut">' + esc(String(s.topics || '').split(',').join(', ')) + '<div><button class="abtn sm ghost" data-a="cls" data-id="' + s.id + '" data-v="' + (s.cls === 'independent' ? 'mainstream' : 'independent') + '" title="Radar class: click to switch">' + (s.cls === 'independent' ? 'Independent' : 'Mainstream') + '</button></div></td>' +
             '<td class="r">' + (s.stored || 0) + '</td><td class="r">' + (s.summarized || 0) + '</td>' +
             '<td class="mut">' + (s.last_fetch ? G.ago(s.last_fetch) : 'Never') + (s.fails ? ' · <span class="dn">' + s.fails + ' fails</span>' : '') + '</td>' +
             '<td class="r" style="white-space:nowrap"><button class="abtn sm ghost" data-a="crawl" data-id="' + s.id + '">Crawl</button> <button class="abtn sm ghost" data-a="en" data-id="' + s.id + '" data-v="' + (s.enabled ? 0 : 1) + '">' + (s.enabled ? 'Pause' : 'Resume') + '</button> <button class="abtn sm warn" data-a="del" data-id="' + s.id + '" data-n="' + esc(s.name) + '">Remove</button></td></tr>';
@@ -37,6 +37,7 @@
     var id = +b.dataset.id, a = b.dataset.a, p;
     b.disabled = true;
     if (a === 'fav') p = post('/api/admin/news/sources/update', { id: id, favorite: b.dataset.v === '1' });
+    else if (a === 'cls') p = post('/api/admin/news/sources/update', { id: id, cls: b.dataset.v });
     else if (a === 'en') p = post('/api/admin/news/sources/update', { id: id, enabled: b.dataset.v === '1' });
     else if (a === 'del') { if (!confirm('Remove ' + b.dataset.n + ' and its stored items?')) { b.disabled = false; return; } p = post('/api/admin/news/sources/delete', { id: id }); }
     else if (a === 'crawl') p = post('/api/admin/news/crawl', { ids: [id] }).then(function (d) { $('#crawlMeta').textContent = 'Fetched ' + (d.crawl.fetched || 0) + ', added ' + (d.crawl.added || 0) + (d.digest ? ', AI digested ' + (d.digest.done || d.digest.summarized || 0) : ''); });
@@ -57,6 +58,12 @@
   $('#bCrawl').addEventListener('click', function () {
     var b = this; b.disabled = true; $('#crawlMeta').textContent = 'Crawling…';
     post('/api/admin/news/crawl', {}).then(function (d) { $('#crawlMeta').textContent = 'Fetched ' + (d.crawl.fetched || 0) + ', added ' + (d.crawl.added || 0) + (d.crawl.errors && d.crawl.errors.length ? ', ' + d.crawl.errors.length + ' errors' : ''); load(); })
+      .catch(function (er) { $('#crawlMeta').textContent = er.message; }).then(function () { b.disabled = false; });
+  });
+  var by = $('#bYt');
+  if (by) by.addEventListener('click', function () {
+    var b = this; b.disabled = true; $('#crawlMeta').textContent = 'Running one digest step…';
+    post('/api/admin/news/ytstep', {}).then(function (d) { $('#crawlMeta').textContent = 'Podcast digest: ' + d.step + (d.note ? ' · ' + d.note : ''); })
       .catch(function (er) { $('#crawlMeta').textContent = er.message; }).then(function () { b.disabled = false; });
   });
   $('#bRefs').addEventListener('click', function () {
