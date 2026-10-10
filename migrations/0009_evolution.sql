@@ -1,0 +1,8 @@
+-- v3.3: ledger v2 (5 models), point-in-time feature table, evolution log (the Worker also creates these at runtime)
+CREATE TABLE IF NOT EXISTS forecast_log (made INTEGER NOT NULL, h TEXT NOT NULL, target INTEGER NOT NULL, base REAL NOT NULL, naive REAL NOT NULL, drift REAL, revert REAL, signal REAL, evo REAL, blend REAL NOT NULL, actual REAL, actual_ts INTEGER, PRIMARY KEY (made, h)) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_fl_open ON forecast_log(target) WHERE actual IS NULL;
+CREATE TABLE IF NOT EXISTS forecast_stats (day TEXT NOT NULL, h TEXT NOT NULL, n INTEGER NOT NULL, mape_naive REAL, mape_drift REAL, mape_revert REAL, mape_signal REAL, mape_evo REAL, mape_blend REAL, hit_band REAL, hit5 REAL, bias REAL, PRIMARY KEY (day, h));
+CREATE TABLE IF NOT EXISTS fx_daily (day TEXT PRIMARY KEY, ts INTEGER NOT NULL, px REAL NOT NULL, r1 REAL, r5 REAL, r20 REAL, r60 REAL, dist50 REAL, vol20 REAL, rsi14 REAL, dist200 REAL, dd60 REAL, cot_pct REAL, cot_chg REAL, dxy20 REAL, ry REAL, ryd20 REAL, vix REAL, oil20 REAL, curve REAL, credit REAL, ml_p REAL, gold_score REAL, econ_score REAL, crowd_bull REAL, crowd_n REAL, yt_share REAL, epu REAL, epu_z REAL, reg_news REAL, ins_buys REAL, ins_net REAL, fomc_days REAL, wx_temp REAL, wx_rain REAL, y1 REAL, y5 REAL, y21 REAL, updated INTEGER);
+CREATE TABLE IF NOT EXISTS evo_log (day TEXT NOT NULL, h TEXT NOT NULL, gen INTEGER, evals INTEGER, accepted INTEGER, best_fit REAL, med_fit REAL, champ_hk REAL, promoted INTEGER, gates TEXT, feat_use TEXT, PRIMARY KEY (day, h));
+-- carry over any v3.2 ledger rows
+INSERT OR IGNORE INTO forecast_log (made, h, target, base, naive, drift, revert, blend, actual, actual_ts) SELECT made, h, target, base, naive, drift, revert, blend, actual, actual_ts FROM forecasts;
