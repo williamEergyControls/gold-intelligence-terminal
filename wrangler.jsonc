@@ -3,7 +3,8 @@
   "name": "gold-intelligence-terminal",
   "main": "src/worker/index.ts",
   "compatibility_date": "2025-01-15",
-  "assets": { "directory": "./public" },
+  // run_worker_first: these paths reach the Worker before the static files (sitemap, robots, Google verification)
+  "assets": { "directory": "./public", "run_worker_first": ["/sitemap.xml", "/robots.txt", "/google*"] },
   "secrets_store_secrets": [
     { "binding": "METALS_API_KEY", "store_id": "b880f1ab4595433da0a4ce5f6a90d71f", "secret_name": "METALS_API_KEY" },
     { "binding": "FRED_API_KEY", "store_id": "b880f1ab4595433da0a4ce5f6a90d71f", "secret_name": "FRED_API_KEY" },
@@ -14,6 +15,6 @@
   "d1_databases": [{ "binding": "DB", "database_name": "gold-terminal", "database_id": "a456b81e-1825-4293-ab60-f703312688b4" }],
   "ai": { "binding": "AI" },
   "triggers": { "crons": ["* * * * *", "0 * * * *", "2,12,22,32,42,52 * * * *"] },
-  "vars": { "AI_ENABLED": "true", "METALS_TTL": "28800", "INGEST_BUDGET": "10", "SEC_USER_AGENT": "" },
+  "vars": { "AI_ENABLED": "true", "METALS_TTL": "28800", "INGEST_BUDGET": "10", "SEC_USER_AGENT": "", "GOOGLE_SITE_VERIFICATION": "" },
   "observability": { "enabled": true }
 }
