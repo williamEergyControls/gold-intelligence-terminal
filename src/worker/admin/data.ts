@@ -165,24 +165,26 @@ export async function adminKV(env: Env) {
 export async function adminUsers(env: Env) {
   const now = Date.now();
   const r = await env.DB.prepare(
-    `SELECT u.id, u.name, COALESCE(u.role,'operator') AS role, u.created_at, u.login_attempts, u.locked_until,
+    `SELECT u.id, u.name, COALESCE(u.role,'operator') AS role, u.pro_until, u.created_at, u.login_attempts, u.locked_until,
             (SELECT MAX(s.created_at) FROM sessions s WHERE s.user_id=u.id) AS last_login,
             (SELECT COUNT(*) FROM sessions s WHERE s.user_id=u.id AND s.expires_at > ?) AS active_sessions
      FROM users u ORDER BY u.id ASC LIMIT 500`
-  ).bind(now).all<{ id: number; name: string; role: string; created_at: number; login_attempts: number; locked_until: number | null; last_login: number | null; active_sessions: number }>();
+  ).bind(now).all<{ id: number; name: string; role: string; pro_until: number | null; created_at: number; login_attempts: number; locked_until: number | null; last_login: number | null; active_sessions: number }>();
   return { ts: now, users: r.results ?? [] };
 }
 
-export async function setUserRole(env: Env, actorId: number, id: number, role: string): Promise<{ ok: boolean; error?: string }> {
-  if (role !== 'admin' && role !== 'operator') return { ok: false, error: 'ROLE MUST BE admin OR operator' };
+/** role: admin | pro | operator (free). proUntil: ms epoch, null = no end date. only used for 'pro'. */
+export async function setUserRole(env: Env, actorId: number, id: number, role: string, proUntil: number | null = null): Promise<{ ok: boolean; error?: string }> {
+  if (role !== 'admin' && role !== 'operator' && role !== 'pro') return { ok: false, error: 'Role must be admin, pro or operator (free)' };
   if (!Number.isInteger(id)) return { ok: false, error: 'BAD USER ID' };
-  if (role === 'operator') {
+  if (proUntil != null && (!isFinite(proUntil) || proUntil < Date.now() - 864e5)) return { ok: false, error: 'Pro end date must be today or later' };
+  if (role !== 'admin') {
     const admins = await env.DB.prepare(`SELECT COUNT(*) AS n FROM users WHERE role='admin'`).first<{ n: number }>();
     const target = await env.DB.prepare('SELECT role FROM users WHERE id=?').bind(id).first<{ role: string }>();
     if (target?.role === 'admin' && (admins?.n ?? 0) <= 1) return { ok: false, error: 'CANNOT DEMOTE THE LAST ADMIN' };
     if (id === actorId && (admins?.n ?? 0) <= 1) return { ok: false, error: 'CANNOT DEMOTE YOURSELF AS LAST ADMIN' };
   }
-  const r = await env.DB.prepare('UPDATE users SET role=? WHERE id=?').bind(role, id).run();
+  const r = await env.DB.prepare('UPDATE users SET role=?, pro_until=? WHERE id=?').bind(role, role === 'pro' ? proUntil : null, id).run();
   return (r.meta?.changes ?? 0) > 0 ? { ok: true } : { ok: false, error: 'USER NOT FOUND' };
 }
 
