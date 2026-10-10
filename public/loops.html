@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%23d99a16%22/%3E%3C/svg%3E">
+<title>Loops · Gold Intelligence Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,300..700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/terminal.css">
+<style>
+#l-flow,#l-evo,#l-feat{grid-column:1/-1}
+#l-a,#l-b,#l-c,#l-d{grid-column:span 6}
+#l-maint,#l-admin{grid-column:span 6}
+
+/* flow: sources → stored → loops → outputs */
+.flow{display:grid;grid-template-columns:1fr 28px 1fr 28px 1.35fr 28px 1fr;align-items:stretch;gap:0}
+.fcol h5{font:500 12.5px var(--sans);color:var(--dim);margin:0 0 8px}
+.fcol .nd{border:1px solid var(--line2);background:var(--panel3);border-radius:10px;padding:8px 11px;margin-bottom:8px;font:400 13px/1.35 var(--sans)}
+.fcol .nd small{display:block;color:var(--dim);font-size:12px}
+.farr{display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:18px}
+.lp{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:11px 13px;margin-bottom:10px;display:grid;grid-template-columns:auto 1fr auto;gap:2px 10px;align-items:center}
+.lp .k{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font:600 13px var(--sans);background:var(--blueBg);color:var(--blue);grid-row:1/3}
+.lp b{font:500 14px var(--sans)}
+.lp .c{font:400 12px var(--sans);color:var(--dim)}
+.lp .s{grid-row:1/3;grid-column:3;text-align:right;font:400 12.5px var(--sans);color:var(--mut)}
+.pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--dim);margin-right:6px;vertical-align:1px}
+.pulse.on{background:var(--up);box-shadow:0 0 0 0 var(--upBg);animation:pl 2s ease-out infinite}
+.pulse.late{background:var(--amber)}
+@keyframes pl{0%{box-shadow:0 0 0 0 var(--up)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.back{grid-column:1/-1;margin-top:6px;font:400 12.5px var(--sans);color:var(--dim);text-align:center;border-top:1px dashed var(--line);padding-top:8px}
+
+.kv4{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:12px}
+.kv4 .kpi{background:var(--panel3);border-radius:10px;padding:10px 12px}
+.kv4 .kpi b{font-size:20px}
+.wt td,.wt th{text-align:right}
+.wt td:first-child,.wt th:first-child{text-align:left}
+.wt .hi{color:var(--blue);font-weight:600}
+.agents{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.agents span{font:400 12.5px var(--sans);padding:4px 10px;border-radius:999px;background:var(--panel2);color:var(--mut)}
+.agents span.u{background:var(--upBg);color:var(--up)} .agents span.d{background:var(--dnBg);color:var(--dn)}
+.sl{display:grid;grid-template-columns:110px 1fr 46px;gap:10px;align-items:center;padding:6px 0;font-size:13.5px}
+.sl input{width:100%}
+.sl b{text-align:right;font-weight:500}
+.chartbox{position:relative;height:240px}
+.chartbox canvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:8px 10px;font:400 12.5px/1.5 var(--sans);color:var(--txt);white-space:nowrap;z-index:5;display:none}
+.tip .k{color:var(--dim)}
+.dots5{display:inline-flex;gap:3px;vertical-align:middle;margin-left:6px}
+.dots5 i{width:7px;height:7px;border-radius:50%;background:var(--grid)}
+.dots5 i.on{background:var(--blue)}
+.mask{display:flex;gap:2px;flex-wrap:wrap;max-width:240px}
+.mask i{width:7px;height:7px;border-radius:2px;background:var(--grid)}
+.mask i.on{background:var(--gold)}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+.fg h6{font:500 13.5px var(--sans);margin-bottom:6px;display:flex;justify-content:space-between}
+.fg h6 span{color:var(--dim);font-weight:400}
+.fg div{display:flex;justify-content:space-between;gap:10px;font:400 13px/1.7 var(--sans);color:var(--mut)}
+.fg div b{font-weight:500;color:var(--txt)}
+.fg div.low b{color:var(--dim)}
+.mlog div{display:grid;grid-template-columns:120px 1fr;gap:10px;padding:7px 0;border-top:1px solid var(--line2);font-size:13px}
+.mlog div:first-child{border-top:0}
+.mlog .o{color:var(--mut);word-break:break-word}
+.mlog small{font-size:12px}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+@media (max-width:1100px){#l-a,#l-b,#l-c,#l-d,#l-maint,#l-admin{grid-column:1/-1}}
+@media (max-width:900px){.flow{grid-template-columns:1fr}.farr{transform:rotate(90deg);height:24px}}
+</style>
+</head>
+<body data-page="loops">
+<script src="/js/shell.js"></script>
+<main>
+  <div class="pagehead">
+    <div><h1>Loops</h1><p>How every forecast on this site is made, running live. Each loop writes its prediction down before the outcome is known, then grades itself and adjusts.</p></div>
+    <div class="ph-r" id="asof"></div>
+  </div>
+  <div class="grid">
+    <section id="l-flow" class="panel">
+      <div class="p-hd"><span class="ttl">Signal flow</span><span class="src">Green dot = ran on schedule · amber = late</span></div>
+      <div class="p-bd" id="flow"></div>
+    </section>
+
+    <section id="l-a" class="panel">
+      <div class="p-hd"><span class="ttl">A · Forecast ledger</span><span class="chip live plain">Every minute</span><a class="src" href="/outlook.html#o-ledger">Open ledger</a></div>
+      <div class="p-bd" id="la"></div>
+    </section>
+    <section id="l-b" class="panel">
+      <div class="p-hd"><span class="ttl">B · 5-day direction model</span><span class="chip plain">Every 6 hours</span><a class="src" href="/ai.html">AI page</a></div>
+      <div class="p-bd" id="lb"></div>
+    </section>
+    <section id="l-c" class="panel">
+      <div class="p-hd"><span class="ttl">C · Outlook</span><span class="chip plain">About 4× a day</span><a class="src" href="/outlook.html">Open outlook</a></div>
+      <div class="p-bd" id="lc"></div>
+    </section>
+    <section id="l-d" class="panel">
+      <div class="p-hd"><span class="ttl">D · Evolution</span><span class="chip ai plain">8 of every 10 minutes</span></div>
+      <div class="p-bd" id="ld"></div>
+    </section>
+
+    <section id="l-evo" class="panel">
+      <div class="p-hd"><span class="ttl">Evolved networks</span><div class="tgrp" id="eh" role="group" aria-label="Horizon"><button data-h="1d" class="on">1 day</button><button data-h="1w">1 week</button><button data-h="30d">30 days</button></div><span class="src">Fitness = skill vs naive − 0.003 × inputs used</span></div>
+      <div class="p-bd" id="evo"></div>
+    </section>
+
+    <section id="l-feat" class="panel">
+      <div class="p-hd"><span class="ttl">Inputs the networks can use</span><a class="src" href="/data.html?t=fx_daily">Open the feature table</a></div>
+      <div class="p-bd" id="feat"></div>
+    </section>
+
+    <section id="l-maint" class="panel">
+      <div class="p-hd"><span class="ttl">Daily jobs</span><span class="src">One job per :x7 slot, so no run goes over the Free CPU limit</span></div>
+      <div class="p-bd"><div class="mlog keepcase" id="mlog"></div></div>
+    </section>
+    <section id="l-admin" class="panel hide">
+      <div class="p-hd"><span class="ttl">Admin controls</span></div>
+      <div class="p-bd">
+        <div class="secH">Run a daily job now</div>
+        <div class="btnrow" id="jobs"></div>
+        <div class="secH" style="margin-top:14px">10-year history for the feature table (one series per click)</div>
+        <div class="btnrow keepcase" id="deep"></div>
+        <p class="note" id="admMsg" style="font-size:13px;color:var(--mut)">Deep history gives the networks ~10 years of rows instead of ~1. Run each series once, then "Rebuild features (backfill)".</p>
+      </div>
+    </section>
+  </div>
+</main>
+<footer id="status"><span>Loops</span><span class="mid">Every number here is read from the stored logs. Nothing on this page is simulated.</span></footer>
+<script src="/js/chartkit.js"></script>
+<script src="/js/loops.js"></script>
+</body>
+</html>

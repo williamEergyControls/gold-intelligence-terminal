@@ -32,6 +32,7 @@
 .tmeta b{color:var(--txt);font-weight:500}
 .st{font:500 12px var(--sans);padding:2px 9px;border-radius:999px;display:inline-block;background:var(--panel2);color:var(--dim)}
 .st.ok{color:var(--up);background:var(--upBg)} .st.bad{color:var(--dn);background:var(--dnBg)} .st.skip{color:var(--amber);background:var(--amBg)}
+.tiercell{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.tiercell select,.tiercell input{font:400 13px var(--sans);padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--txt)}
 .tb td.wrap{white-space:normal;min-width:180px;max-width:380px;color:var(--mut);font-size:12.5px;line-height:1.45}
 .tb td.samp{color:var(--txt)}
 .spark{width:120px;height:24px;display:block}
@@ -239,7 +240,7 @@
       <section class="panel c12">
         <div class="p-hd"><span class="ttl">Your sources</span><span class="src" id="srcMeta"></span></div>
         <div class="p-bd tbx">
-          <div class="toolbar"><button class="abtn" id="bCrawl" type="button" title="Crawls every source that is due, up to 10 per run">Crawl due sources now</button><button class="abtn ghost" id="bRefs" type="button">Refresh calendar and drought</button><span class="tmeta" id="crawlMeta"></span></div>
+          <div class="toolbar"><button class="abtn" id="bCrawl" type="button" title="Crawls every source that is due, up to 10 per run">Crawl due sources now</button><button class="abtn ghost" id="bYt" type="button" title="Fetch a transcript, or summarize the next part, of the next queued episode">Run one podcast digest step</button><button class="abtn ghost" id="bRefs" type="button">Refresh calendar and drought</button><span class="tmeta" id="crawlMeta"></span></div>
           <table class="tb" id="srcTbl"><tbody><tr><td class="emptyst">Loading…</td></tr></tbody></table>
         </div>
       </section>

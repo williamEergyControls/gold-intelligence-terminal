@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%23d99a16%22/%3E%3C/svg%3E">
+<title>Treasury · Gold Intelligence Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,300..700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/terminal.css">
+<style>
+#t-kpi{grid-column:1/-1}
+#t-curve{grid-column:span 7} #t-read{grid-column:span 5}
+#t-spr,#t-real,#t-debt,#t-int,#t-tga,#t-how{grid-column:span 6}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.kv .kpi{background:var(--panel3);border-radius:10px;padding:10px 12px}
+.kv .kpi b{font-size:20px}
+.kv .kpi small{display:block}
+.chartbox{position:relative;height:250px}
+.chartbox.sm{height:210px}
+.chartbox canvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:8px 10px;font:400 12.5px/1.5 var(--sans);white-space:nowrap;z-index:5;display:none}
+.tip .k{color:var(--dim)}
+.lg{display:flex;flex-wrap:wrap;gap:6px 16px;font:400 12.5px var(--sans);color:var(--mut);margin:8px 0 0}
+.lg i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:3px;margin-right:6px}
+.read p{font-size:14px;line-height:1.6;color:var(--mut);margin:0 0 10px}
+.read p b{color:var(--txt);font-weight:500}
+.read h3{font:500 14.5px var(--sans);margin:12px 0 4px}
+.read h3:first-child{margin-top:0}
+.how{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.how div{background:var(--panel3);border-radius:10px;padding:12px 14px}
+.how h4{font:500 14px var(--sans);margin:0 0 4px}
+.how p{font-size:13.5px;line-height:1.55;color:var(--mut)}
+.mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:10px}
+.mini div{background:var(--panel3);border-radius:10px;padding:8px 10px;font-size:12.5px;color:var(--dim)}
+.mini b{display:block;font:600 17px var(--sans);color:var(--txt)}
+@media (max-width:1180px){#t-curve,#t-read,#t-spr,#t-real,#t-debt,#t-int,#t-tga,#t-how{grid-column:1/-1}}
+</style>
+</head>
+<body data-page="treasury">
+<script src="/js/shell.js"></script>
+<main>
+  <div class="pagehead">
+    <div><h1>Treasury</h1><p>What the US government pays to borrow, how that is changing across maturities, how much it owes and what that costs. Explained as we go.</p></div>
+    <div class="ph-r" id="asof"></div>
+  </div>
+  <div class="grid">
+    <section id="t-kpi" class="panel"><div class="p-bd"><div class="kv" id="kpis"><div class="empty">Loading…</div></div></div></section>
+
+    <section id="t-curve" class="panel">
+      <div class="p-hd"><span class="ttl">Yield curve</span><span class="src">FRED · Treasury par yields</span></div>
+      <div class="p-bd">
+        <div class="chartbox"><canvas id="cvCurve"></canvas><div class="tip" id="tpCurve"></div></div>
+        <div class="lg"><span><i style="background:var(--gold)"></i>Now</span><span><i style="background:var(--blue)"></i>About a month ago</span><span><i style="background:var(--dim)"></i>About a year ago</span></div>
+      </div>
+    </section>
+    <section id="t-read" class="panel">
+      <div class="p-hd"><span class="ttl">What the curve says</span></div>
+      <div class="p-bd read" id="read"></div>
+    </section>
+
+    <section id="t-spr" class="panel">
+      <div class="p-hd"><span class="ttl">Curve spreads</span><span class="src">Percentage points, 2 years</span></div>
+      <div class="p-bd">
+        <div class="chartbox sm"><canvas id="cvSpr"></canvas><div class="tip" id="tpSpr"></div></div>
+        <div class="lg"><span><i style="background:var(--gold)"></i>10Y minus 2Y</span><span><i style="background:var(--blue)"></i>10Y minus 3M</span><span>Below zero = inverted</span></div>
+        <p class="note" id="sprNote" style="font-size:13.5px;color:var(--mut);margin-top:8px"></p>
+      </div>
+    </section>
+    <section id="t-real" class="panel">
+      <div class="p-hd"><span class="ttl">Real yield and inflation expectations</span><span class="src">10-year, percent</span></div>
+      <div class="p-bd">
+        <div class="chartbox sm"><canvas id="cvReal"></canvas><div class="tip" id="tpReal"></div></div>
+        <div class="lg"><span><i style="background:var(--gold)"></i>Nominal 10Y</span><span><i style="background:var(--up)"></i>Real 10Y (TIPS)</span><span><i style="background:var(--amber)"></i>Breakeven inflation</span></div>
+        <p class="note" style="font-size:13.5px;color:var(--mut);margin-top:8px">Nominal ≈ real + breakeven. The real yield is what a bond pays after expected inflation; gold pays nothing, so a falling real yield usually helps gold.</p>
+      </div>
+    </section>
+
+    <section id="t-debt" class="panel">
+      <div class="p-hd"><span class="ttl">National debt</span><span class="src">Treasury · debt to the penny</span></div>
+      <div class="p-bd">
+        <div class="mini" id="debtKpi"></div>
+        <div class="chartbox sm"><canvas id="cvDebt"></canvas><div class="tip" id="tpDebt"></div></div>
+        <div class="lg"><span><i style="background:var(--gold)"></i>Total public debt</span><span><i style="background:var(--blue)"></i>Held by the public</span><span>$ trillions</span></div>
+      </div>
+    </section>
+    <section id="t-int" class="panel">
+      <div class="p-hd"><span class="ttl">What the Treasury pays on it</span><span class="src">Treasury · average interest rates, monthly</span></div>
+      <div class="p-bd">
+        <div class="mini" id="intKpi"></div>
+        <div class="chartbox sm"><canvas id="cvInt"></canvas><div class="tip" id="tpInt"></div></div>
+        <div class="lg"><span><i style="background:var(--gold)"></i>All interest-bearing debt</span><span><i style="background:var(--blue)"></i>Bills</span><span><i style="background:var(--up)"></i>Notes</span><span><i style="background:var(--amber)"></i>Bonds</span></div>
+        <p class="note" style="font-size:13.5px;color:var(--mut);margin-top:8px">The average rate climbs slowly: old cheap debt rolls off and is refinanced at today's yields. Bills reprice within months, bonds over decades.</p>
+      </div>
+    </section>
+
+    <section id="t-tga" class="panel">
+      <div class="p-hd"><span class="ttl">Treasury cash account (TGA)</span><span class="src">Daily Treasury Statement · $ billions</span></div>
+      <div class="p-bd">
+        <div class="chartbox sm"><canvas id="cvTga"></canvas><div class="tip" id="tpTga"></div></div>
+        <p class="note" id="tgaNote" style="font-size:13.5px;color:var(--mut);margin-top:8px"></p>
+      </div>
+    </section>
+    <section id="t-how" class="panel">
+      <div class="p-hd"><span class="ttl">How to read this desk</span></div>
+      <div class="p-bd how">
+        <div><h4>The curve</h4><p>Each point is the yield on a Treasury of that maturity. Normally longer loans pay more. When short yields sit above long ones (inverted), markets expect rate cuts, and that has come before most US recessions.</p></div>
+        <div><h4>Re-steepening</h4><p>The recession signal is often the end of an inversion, not its start: when the curve turns positive again because short rates fall, the slowdown is usually already under way.</p></div>
+        <div><h4>The Fed band</h4><p>The Fed sets overnight rates. Bills track that band closely; anything past two years is the market's guess about where the Fed goes plus a premium for holding long.</p></div>
+        <div><h4>Debt and interest</h4><p>A bigger debt at higher rates means more of the budget goes to interest. Watch the average rate on the debt, not just the headline total.</p></div>
+        <div><h4>The TGA</h4><p>The Treasury's bank account at the Fed. When it fills, cash drains from banks and markets; when it is spent down, liquidity flows back in.</p></div>
+        <div><h4>Why gold cares</h4><p>Real yields are gold's opportunity cost. Rising debt costs and worries about who buys Treasuries are part of the case central banks make for buying gold.</p></div>
+      </div>
+    </section>
+  </div>
+</main>
+<footer id="status"><span>Treasury</span><span class="mid">FRED and U.S. Treasury Fiscal Data. Interest cost is an estimate (debt × average rate), not the official monthly figure.</span></footer>
+<script src="/js/chartkit.js"></script>
+<script src="/js/treasury.js"></script>
+<script src="/js/ml-strip.js" defer></script>
+</body>
+</html>

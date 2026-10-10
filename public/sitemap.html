@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Every desk in the Gold Intelligence Terminal: gold, energy, treasury, crypto, shipping, water, news radar, forecasts and the tools behind them.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%23d99a16%22/%3E%3C/svg%3E">
+<title>Site map · Gold Intelligence Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,300..700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/terminal.css">
+<style>
+.smap{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.smap section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.smap h2{font:600 16px var(--sans);margin:0 0 4px}
+.smap .gd{font:400 13px/1.5 var(--sans);color:var(--dim);margin:0 0 10px}
+.smap a.d{display:block;padding:9px 0;border-top:1px solid var(--line2);color:var(--txt);text-decoration:none}
+.smap a.d:first-of-type{border-top:0}
+.smap a.d:hover b{color:var(--blue)}
+.smap a.d b{font:500 14.5px var(--sans)}
+.smap a.d>span{display:block;font:400 13px/1.45 var(--sans);color:var(--mut);margin-top:2px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font:400 13.5px var(--sans);color:var(--mut);margin:0 0 16px}
+.tree{font:400 12.5px/1.55 var(--code);color:var(--mut);background:var(--panel3);border-radius:10px;padding:12px 14px;overflow-x:auto;margin:0}
+</style>
+</head>
+<body data-page="sitemap">
+<script src="/js/shell.js"></script>
+<main>
+  <div class="pagehead">
+    <div><h1>Site map</h1><p>Every desk, what it answers and where its numbers come from. Desks marked Pro need a Pro account, which the site admin grants.</p></div>
+  </div>
+  <p class="legend"><span><span class="protag">Pro</span> Pro desk or section</span><span>Everything else: any signed-in account</span></p>
+
+  <div class="smap">
+    <section>
+      <h2>Start here</h2>
+      <p class="gd">The day at a glance and the long view.</p>
+      <a class="d" href="/"><b>Home</b><span>Gold price, drivers, trade ideas from your sources, drought map, ML strip.</span></a>
+      <a class="d" href="/outlook.html"><b>Outlook <span class="protag">Pro</span></b><span>Economy and gold scores for a 3–12 month holder, what the street is missing, the forecast ledger.</span></a>
+      <a class="d" href="/news.html"><b>News &amp; narrative radar</b><span>YouTube, podcasts and RSS summarised. Radar and full podcast digests are Pro.</span></a>
+      <a class="d" href="/search.html"><b>Search</b><span>Desks and headlines.</span></a>
+    </section>
+
+    <section>
+      <h2>Markets</h2>
+      <p class="gd">Prices, curves and risk by asset.</p>
+      <a class="d" href="/gold.html"><b>Gold</b><span>Spot and futures, why it moved, miners, calendar of releases and central banks.</span></a>
+      <a class="d" href="/treasury.html"><b>Treasury</b><span>Yield curve now vs a month and a year ago, 2s10s, real yields, breakevens, national debt and what the Treasury pays on it.</span></a>
+      <a class="d" href="/fx.html"><b>FX</b><span>Dollar index and the majors.</span></a>
+      <a class="d" href="/stable.html"><b>Crypto: stablecoins &amp; Bitcoin</b><span>Peg health, stablecoin supply, Bitcoin vs gold, stocks and the dollar, with plain explanations.</span></a>
+      <a class="d" href="/vol.html"><b>Volatility</b><span>Realised and implied vol across rates, FX, stocks, metals; GARCH ranges and stress.</span></a>
+    </section>
+
+    <section>
+      <h2>Real economy</h2>
+      <p class="gd">Physical flows behind the prices.</p>
+      <a class="d" href="/energy.html"><b>Energy</b><span>Oil, gas, the 3-2-1 crack spread, and a map of major pipelines and refineries.</span></a>
+      <a class="d" href="/shipping.html"><b>Shipping</b><span>Chokepoint transits, busiest ports, container lanes, energy routes on the same map.</span></a>
+      <a class="d" href="/agri.html"><b>Agriculture</b><span>Grains and livestock futures, weather.</span></a>
+      <a class="d" href="/water.html"><b>Water</b><span>US drought monitor and river gauges.</span></a>
+      <a class="d" href="/land.html"><b>Land</b><span>Farmland values and rents.</span></a>
+    </section>
+
+    <section>
+      <h2>Models &amp; tools</h2>
+      <p class="gd">How the forecasts are made, and the raw data.</p>
+      <a class="d" href="/chart.html"><b>Chart builder <span class="protag">Pro</span></b><span>Pick any stored series, index or z-score them, add rolling correlation, save and share.</span></a>
+      <a class="d" href="/loops.html"><b>Loops <span class="protag">Pro</span></b><span>Forecast ledger, 5-day model, outlook and the evolving neural networks, live.</span></a>
+      <a class="d" href="/data.html"><b>Data explorer <span class="protag">Pro</span></b><span>Every stored table and column, filters, stats, CSV export.</span></a>
+      <a class="d" href="/ai.html"><b>AI analyst</b><span>Ask questions against today's numbers.</span></a>
+    </section>
+  </div>
+
+  <section class="panel" style="margin-top:16px">
+    <div class="p-hd"><span class="ttl">How the site fits together</span></div>
+    <div class="p-bd">
+<pre class="tree keepcase">sources (free APIs, your YouTube + RSS)        every minute · 10 min · hourly · daily
+   │
+   ├── warehouse (D1 series_points) ──► desks: Gold · Treasury · Crypto · Energy · FX · Vol
+   ├── news crawler + transcripts  ──► News · Narrative radar · Podcast digests
+   ├── reference maps (geo/*.json) ──► Energy map · Shipping map · Drought
+   └── feature table (fx_daily)    ──► Loops (ledger, model, outlook, evolution) ──► Outlook</pre>
+    </div>
+  </section>
+</main>
+<footer id="status"><span>Site map</span><span class="mid">Signed-out visitors see this page and the sign-in page only.</span></footer>
+</body>
+</html>

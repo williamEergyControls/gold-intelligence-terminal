@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%23d99a16%22/%3E%3C/svg%3E">
+<title>Data · Gold Intelligence Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,300..700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/terminal.css">
+<style>
+#d-pick{grid-column:1/-1}
+#d-table{grid-column:1/-1}
+#d-stats{grid-column:1/-1}
+.pick{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.pick select,.pick .inp{min-width:0}
+.pick select{background:var(--panel3);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font:400 14px var(--sans);color:var(--txt)}
+.tdesc{color:var(--mut);font-size:14px;margin-top:10px;max-width:90ch}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.bar .grow{flex:1}
+.fchips{display:flex;gap:6px;flex-wrap:wrap}
+.fchip{display:inline-flex;align-items:center;gap:6px;font:400 12.5px var(--sans);padding:4px 6px 4px 10px;border-radius:999px;background:var(--blueBg);color:var(--blue)}
+.fchip button{width:20px;height:20px;border-radius:50%;color:var(--blue)}
+.fchip button:hover{background:var(--panel)}
+details.cols summary{cursor:pointer;list-style:none;font:500 13.5px var(--sans);color:var(--blue);padding:6px 12px;border-radius:999px;background:var(--blueBg)}
+details.cols summary::-webkit-details-marker{display:none}
+details.cols[open] .colbox{display:grid}
+.colbox{display:none;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:4px 14px;margin-top:10px;padding:12px;border:1px solid var(--line2);border-radius:12px;background:var(--panel3);max-height:280px;overflow:auto}
+.colbox label{font:400 13px var(--sans);display:flex;gap:6px;align-items:center;color:var(--mut)}
+.dt{overflow:auto;max-height:70vh;border:1px solid var(--line2);border-radius:12px}
+.dt table{border-collapse:separate;border-spacing:0;width:100%;font:400 13px var(--sans)}
+.dt th{position:sticky;top:0;background:var(--panel);z-index:1;text-align:left;font:500 12.5px var(--sans);color:var(--mut);padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.dt th.s{cursor:pointer}
+.dt th.s:hover{color:var(--txt)}
+.dt th small{display:block;font:400 11.5px var(--sans);color:var(--dim);max-width:160px;white-space:normal}
+.dt th .ar{color:var(--blue);margin-left:4px}
+.dt td{padding:7px 10px;border-bottom:1px solid var(--line2);white-space:nowrap;max-width:420px;overflow:hidden;text-overflow:ellipsis}
+.dt td.n{text-align:right;font-variant-numeric:tabular-nums}
+.dt td.nl{color:var(--dim)}
+.dt tr:hover td{background:var(--panel3)}
+.pager{display:flex;gap:8px;align-items:center;margin-top:12px;color:var(--mut);font-size:13px}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.sc{background:var(--panel3);border-radius:12px;padding:10px 12px;font:400 12.5px var(--sans);color:var(--mut)}
+.sc b{display:block;font:500 13.5px var(--sans);color:var(--txt);margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sc .lb{color:var(--dim);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sc svg{color:var(--blue)}
+</style>
+</head>
+<body data-page="data">
+<script src="/js/shell.js"></script>
+<main>
+  <div class="pagehead"><div><h1>Data</h1><p>Every stored table, column by column: what the models see, what they predicted, and what happened. Sort, filter, and export to CSV for your own models.</p></div></div>
+  <div class="grid">
+    <section id="d-pick" class="panel">
+      <div class="p-bd" style="padding-top:18px">
+        <div class="pick">
+          <select id="tsel" aria-label="Table"></select>
+          <select id="sid" class="hide" aria-label="Series"></select>
+          <span class="tmeta" id="tmeta" style="color:var(--dim);font-size:13px"></span>
+        </div>
+        <p class="tdesc" id="tdesc"></p>
+      </div>
+    </section>
+    <section id="d-table" class="panel">
+      <div class="p-bd" style="padding-top:18px">
+        <div class="bar">
+          <details class="cols" id="cols"><summary>Columns</summary><div class="colbox" id="colbox"></div></details>
+          <select id="fcol" aria-label="Filter column" class="inp"></select>
+          <select id="fop" aria-label="Filter operator" class="inp"><option value="eq">=</option><option value="gt">&gt;</option><option value="lt">&lt;</option><option value="contains">contains</option><option value="notnull">has a value</option></select>
+          <input id="fval" class="inp" placeholder="Value" aria-label="Filter value" style="width:140px">
+          <button class="btn auto sm" id="fadd" type="button">Add filter</button>
+          <span class="grow"></span>
+          <select id="psize" aria-label="Rows per page" class="inp"><option>50</option><option selected>100</option><option>250</option><option>500</option></select>
+          <button class="btn ghost auto sm" id="csv" type="button">Export CSV</button>
+        </div>
+        <div class="fchips" id="fchips"></div>
+        <div class="dt keepcase" id="dt" style="margin-top:10px"><div class="empty">Pick a table.</div></div>
+        <div class="pager"><button class="btn ghost auto sm" id="prev" type="button">Previous</button><button class="btn ghost auto sm" id="next" type="button">Next</button><span id="pinfo"></span></div>
+      </div>
+    </section>
+    <section id="d-stats" class="panel">
+      <div class="p-hd"><span class="ttl">Column summary</span><span class="src">For the rows on this page</span></div>
+      <div class="p-bd"><div class="stats keepcase" id="stats"></div></div>
+    </section>
+  </div>
+</main>
+<footer id="status"><span>Data</span><span class="mid">Read-only. Exports are capped at 5,000 rows to stay inside the free database read allowance.</span></footer>
+<script src="/js/data.js"></script>
+</body>
+</html>

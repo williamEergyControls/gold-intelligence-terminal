@@ -12,6 +12,18 @@
 #p-hero{grid-column:span 4} #p-chart{grid-column:span 8}
 #p-mon{grid-column:span 6} #p-spot{grid-column:span 3} #p-extra{grid-column:span 3}
 #p-news{grid-column:span 7} #p-cal{grid-column:span 5}
+#p-crack{grid-column:span 5} #p-infra{grid-column:span 7}
+.ckpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:12px}
+.ckpi .kpi{background:var(--panel3);border-radius:10px;padding:10px 12px}
+.ckpi .kpi b{font-size:20px}
+.chartbox{position:relative;height:220px}
+.chartbox canvas{position:absolute;inset:0;width:100%;height:100%}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:8px 10px;font:400 12.5px/1.5 var(--sans);white-space:nowrap;z-index:5;display:none}
+.tip .k{color:var(--dim)}
+.cnote{font-size:13px;color:var(--mut);line-height:1.55;margin-top:10px}
+.lyr{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.lyr label{display:inline-flex;align-items:center;gap:6px;font:400 13px var(--sans);color:var(--mut);padding:5px 10px;border:1px solid var(--line);border-radius:999px;cursor:pointer}
+.lyr input{accent-color:var(--blue)}
 #p-chart .ch-wrap{height:clamp(300px,28vw,420px)}
 .hrow{margin-top:4px}
 .spots,.ratios{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
@@ -20,7 +32,7 @@
 .spots .hc:hover,.ratios .hc:hover{box-shadow:none}
 #spreads{margin-top:10px}
 #spreads .bi,#extraBody .bi{grid-template-columns:minmax(0,1fr) auto auto}
-@media (max-width:1280px){#p-hero,#p-chart,#p-mon,#p-news,#p-cal{grid-column:1/-1} #p-spot,#p-extra{grid-column:span 6}}
+@media (max-width:1280px){#p-hero,#p-chart,#p-mon,#p-news,#p-cal,#p-crack,#p-infra{grid-column:1/-1} #p-spot,#p-extra{grid-column:span 6}}
 @media (max-width:860px){.grid>*{grid-column:1/-1!important}}
 </style>
 </head>
@@ -29,7 +41,7 @@
 <div id="tape"><div class="tape-in"><span id="tapeA"></span><span id="tapeB"></span></div></div>
 
 <main>
-  <div class="pagehead"><div><h1>Energy</h1><p>Crude, products and natural gas futures, spreads and the EIA weekly numbers.</p></div></div>
+  <div class="pagehead"><div><h1>Energy</h1><p>Crude, products and natural gas futures, the refining margin, the EIA weekly numbers and a map of the pipes and plants behind them.</p></div></div>
   <div class="grid pgrid">
 
   <section id="p-hero" class="panel">
@@ -75,6 +87,28 @@
     <div class="p-bd" id="extraBody"></div>
   </section>
 
+  <section id="p-crack" class="panel">
+    <div class="p-hd"><span class="ttl">3-2-1 crack spread</span><span class="src" id="crackSrc">Yahoo futures · warehouse daily close</span></div>
+    <div class="p-bd">
+      <div class="ckpi" id="crackKpi"><div class="empty">Loading…</div></div>
+      <div class="chartbox"><canvas id="crackCv"></canvas><div class="tip" id="crackTip"></div></div>
+      <p class="cnote">What a refiner earns turning 3 barrels of WTI into 2 barrels of gasoline and 1 of diesel. <span id="crackF"></span> High margins pull crude demand up and push refiners to run hard; a collapsing spread warns of weak fuel demand.</p>
+    </div>
+  </section>
+
+  <section id="p-infra" class="panel">
+    <div class="p-hd"><span class="ttl">Pipelines, refineries and LNG</span><span class="src">Reference data, routes simplified</span></div>
+    <div class="p-bd">
+      <div class="lyr" id="lyr">
+        <label><input type="checkbox" data-k="crude" checked>Crude</label><label><input type="checkbox" data-k="gas" checked>Gas</label>
+        <label><input type="checkbox" data-k="products" checked>Products</label><label><input type="checkbox" data-k="refineries" checked>Refineries</label>
+        <label><input type="checkbox" data-k="lng" checked>LNG export</label>
+      </div>
+      <div id="infraMap"><div class="empty">Loading map…</div></div>
+      <p class="cnote" id="infraNote"></p>
+    </div>
+  </section>
+
   <section id="p-news" class="panel">
     <div class="p-hd"><span class="ttl">Energy news</span>
       <a class="src" href="/news.html">All news</a></div>
@@ -101,6 +135,35 @@
 <script src="/js/newsfeed.js"></script>
 <script src="/js/calendar.js"></script>
 <script>NewsFeed.mount(document.getElementById('nfBody'), { topic: 'energy', limit: 8, filters: false }); Cal.mount(document.getElementById('calBody'), { scope: 'energy', compact: true });</script>
+<script src="/js/chartkit.js"></script>
+<script src="/js/maps.js"></script>
+<script>
+/* crack spread + infrastructure map (INIT /api/page/energy · /geo/energy.json → PUBLISH kpis, 1-year chart, layered map) */
+(function () {
+  var G = window.GT, esc = G.esc, fmt = G.fmt;
+  function crack(c) {
+    if (!c || c.now == null) { document.getElementById('crackKpi').innerHTML = '<div class="empty">The crack spread needs RBOB, ULSD and WTI prices. The warehouse fills them within the hour.</div>'; return; }
+    var d = function (a) { return a == null ? '–' : (c.now - a >= 0 ? '+' : '') + fmt(c.now - a, 2); };
+    document.getElementById('crackKpi').innerHTML =
+      '<div class="kpi"><label>Now</label><b>$' + fmt(c.now, 2) + '</b><small>per barrel · ' + (c.live ? 'live' : 'last close') + '</small></div>' +
+      '<div class="kpi"><label>vs 1 month</label><b class="' + G.cls(c.m1 == null ? 0 : c.now - c.m1) + '">' + d(c.m1) + '</b><small>$/bbl</small></div>' +
+      '<div class="kpi"><label>vs 1 year</label><b class="' + G.cls(c.y1 == null ? 0 : c.now - c.y1) + '">' + d(c.y1) + '</b><small>$/bbl</small></div>' +
+      '<div class="kpi"><label>1-year rank</label><b>' + (c.pct1y == null ? '–' : c.pct1y + '%') + '</b><small>of days were lower</small></div>';
+    if (c.legs) document.getElementById('crackSrc').textContent = 'WTI $' + fmt(c.legs.cl, 2) + ' · RBOB $' + fmt(c.legs.rb, 3) + '/gal · ULSD $' + fmt(c.legs.ho, 3) + '/gal';
+    document.getElementById('crackF').textContent = 'Formula: ' + c.formula + '.';
+    GK.line(document.getElementById('crackCv'), document.getElementById('crackTip'), { series: [{ name: '3-2-1 crack', pts: (c.series || []).map(function (p) { return { x: p.t, y: p.v }; }), color: GK.css('--gold'), fill: true }], yFmt: function (v) { return '$' + fmt(v, 0); }, empty: 'History builds as the warehouse fills' });
+  }
+  G.getJSON('/api/energy/crack').then(crack).catch(function () { document.getElementById('crackKpi').innerHTML = '<div class="empty">Energy data is unavailable right now.</div>'; });
+  var L = { crude: true, gas: true, products: true, refineries: true, lng: true }, GEO = null;
+  function map() {
+    var x = MapKit.energyLayers(GEO, L);
+    WorldMap.draw(document.getElementById('infraMap'), { title: 'Major pipelines, refineries and LNG export terminals', routes: x.routes, points: x.points, legend: x.legend, flow: false });
+  }
+  MapKit.energyGeo().then(function (g) { GEO = g; document.getElementById('infraNote').textContent = g.note; map(); })
+    .catch(function () { document.getElementById('infraMap').innerHTML = '<div class="empty">The map data did not load.</div>'; });
+  document.getElementById('lyr').addEventListener('change', function (e) { var k = e.target.dataset.k; if (!k || !GEO) return; L[k] = e.target.checked; map(); });
+})();
+</script>
 <script src="/js/ml-strip.js" defer></script>
 </body>
 </html>

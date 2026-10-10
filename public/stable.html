@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%23d99a16%22/%3E%3C/svg%3E">
-<title>Stablecoins · Gold Intelligence Terminal</title>
+<title>Crypto · Gold Intelligence Terminal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,300..700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/terminal.css">
@@ -12,6 +12,17 @@
 #s-hero{grid-column:span 4} #s-charts{grid-column:span 8}
 #s-majors{grid-column:span 7} #s-peg{grid-column:span 5}
 #s-news{grid-column:span 7} #s-gold{grid-column:span 5}
+#c-kpi{grid-column:1/-1} #c-norm{grid-column:span 7} #c-corr{grid-column:span 5} #c-sup{grid-column:span 6} #c-why{grid-column:span 6}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:10px}
+.kv .kpi{background:var(--panel3);border-radius:10px;padding:10px 12px} .kv .kpi b{font-size:20px} .kv .kpi small{display:block}
+.chartbox{position:relative;height:250px} .chartbox canvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
+.chartbox .tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);padding:8px 10px;font:400 12.5px/1.5 var(--sans);white-space:nowrap;z-index:5;display:none}
+.chartbox .tip .k{color:var(--dim)}
+.lg{display:flex;flex-wrap:wrap;gap:6px 16px;font:400 12.5px var(--sans);color:var(--mut);margin:8px 0 0}
+.lg i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:3px;margin-right:6px}
+.why{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.why div{background:var(--panel3);border-radius:10px;padding:12px 14px} .why h4{font:500 14px var(--sans);margin:0 0 4px} .why p{font-size:13.5px;line-height:1.55;color:var(--mut)}
+.cnote{font-size:13.5px;color:var(--mut);line-height:1.55;margin-top:8px}
 #s-charts .ch-wrap{height:clamp(260px,24vw,380px)}
 #s-hero .bigpx{color:var(--txt)}
 #pegHealth{font-size:14px;line-height:1.7;color:var(--mut)}
@@ -34,7 +45,7 @@
 <script src="/js/shell.js"></script>
 <div id="tape"><div class="tape-in"><span id="tapeA"></span><span id="tapeB"></span></div></div>
 <main>
-  <div class="pagehead"><div><h1>Stablecoins</h1><p>Peg health, supply and the gold to USDT ratio, from the hourly CoinGecko pull stored in D1.</p></div></div>
+  <div class="pagehead"><div><h1>Crypto: stablecoins and Bitcoin</h1><p>Whether the dollar tokens hold their peg, how much new supply is coming in, and how Bitcoin trades against gold, stocks and the dollar. From the hourly CoinGecko pull stored in D1.</p></div></div>
   <div class="grid sgrid">
   <section id="s-hero" class="panel">
     <div class="p-hd"><span class="ttl">USDT - Tether</span>
@@ -61,6 +72,34 @@
     <div class="p-hd"><span class="ttl">Peg deviation</span></div>
     <div class="p-bd" id="pegMap"></div>
   </section>
+  <section id="c-kpi" class="panel">
+    <div class="p-hd"><span class="ttl">Bitcoin vs gold</span><span class="src">CoinGecko · Yahoo futures · 60-day windows</span></div>
+    <div class="p-bd"><div class="kv" id="cKpi"><div class="empty">Loading…</div></div></div>
+  </section>
+  <section id="c-norm" class="panel">
+    <div class="p-hd"><span class="ttl">One year, indexed to 100</span></div>
+    <div class="p-bd"><div class="chartbox"><canvas id="cvNorm"></canvas><div class="tip" id="tpNorm"></div></div>
+      <div class="lg"><span><i style="background:var(--cyan)"></i>Bitcoin</span><span><i style="background:var(--gold)"></i>Gold</span><span><i style="background:var(--blue)"></i>S&amp;P 500</span></div></div>
+  </section>
+  <section id="c-corr" class="panel">
+    <div class="p-hd"><span class="ttl">Who Bitcoin moves with</span><span class="src">Rolling 60-day correlation of daily returns</span></div>
+    <div class="p-bd"><div class="chartbox"><canvas id="cvCorr"></canvas><div class="tip" id="tpCorr"></div></div>
+      <div class="lg"><span><i style="background:var(--gold)"></i>with gold</span><span><i style="background:var(--blue)"></i>with S&amp;P 500</span><span><i style="background:var(--dn)"></i>with the dollar</span><span><i style="background:var(--up)"></i>with stablecoin supply growth</span></div>
+      <p class="cnote" id="corrNote"></p></div>
+  </section>
+  <section id="c-sup" class="panel">
+    <div class="p-hd"><span class="ttl">Stablecoin supply</span><span class="src">USDT, USDC, DAI, USDe, FDUSD, PYUSD · $ billions</span></div>
+    <div class="p-bd"><div class="chartbox"><canvas id="cvSup"></canvas><div class="tip" id="tpSup"></div></div><p class="cnote" id="supNote"></p></div>
+  </section>
+  <section id="c-why" class="panel">
+    <div class="p-hd"><span class="ttl">The short version</span></div>
+    <div class="p-bd why">
+      <div><h4>What a stablecoin is</h4><p>A token meant to stay worth $1. The issuer holds dollars, mostly short Treasury bills, against every coin. If holders doubt the reserves, the price slips below $1: that gap is the peg risk shown above.</p></div>
+      <div><h4>Why the supply matters</h4><p>New stablecoins are minted when money comes into crypto. A rising supply is cash waiting to buy; a shrinking one means money leaving. The issuers are now large buyers of T-bills, so this links to the Treasury desk too.</p></div>
+      <div><h4>Bitcoin vs gold</h4><p>Both are pitched as money no government can print. Gold has 5,000 years of history and central banks buy it; Bitcoin is younger, smaller and far more volatile. Compare the two volatility numbers above.</p></div>
+      <div><h4>Reading correlation</h4><p>+1 means two assets move together day by day, −1 opposite, 0 unrelated. When Bitcoin's correlation with the S&amp;P is high it trades like a tech stock; when it rises with gold it trades like a hedge.</p></div>
+    </div>
+  </section>
   <section id="s-news" class="panel">
     <div class="p-hd"><span class="ttl">Crypto and stablecoin news</span><a class="src" href="/news.html">All news</a></div>
     <div class="p-bd"><div id="nfBody"></div><ul class="nwl hide" id="nwList"></ul></div>
@@ -71,7 +110,7 @@
   </section>
   </div>
 </main>
-<footer id="status"><span>Stablecoin desk</span><span class="mid">Not financial advice. Every value shows its source.</span></footer>
+<footer id="status"><span>Crypto desk</span><span class="mid">Not financial advice. Every value shows its source.</span></footer>
 <script>
 (function(){
 var _fetch=window.fetch;
@@ -81,6 +120,7 @@ if(!localStorage.getItem('git-token')){location.replace('/login.html');}
 </script>
 <script src="/js/chartkit.js"></script>
 <script src="/js/stable.js"></script>
+<script src="/js/crypto.js"></script>
 <script src="/js/newsfeed.js"></script>
 <script>NewsFeed.mount(document.getElementById('nfBody'), { topic: 'crypto', limit: 8, filters: false });</script>
 <script src="/js/ml-strip.js" defer></script>

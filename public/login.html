@@ -128,6 +128,7 @@ function submit(){
       localStorage.setItem('git-token', res.data.token);
       localStorage.setItem('git-name', res.data.name || n);
       localStorage.setItem('git-role', res.data.role || 'operator');
+      if (res.data.tier) localStorage.setItem('git-tier', res.data.tier); else localStorage.removeItem('git-tier');
       show('Access granted - redirecting...', true);
       setTimeout(function(){ location.href = '/'; }, 600);
     } else {
