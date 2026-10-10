@@ -10,23 +10,26 @@ import { AppCache } from '../cache';
 import { fetchJson, fetchText } from '../providers/provider';
 
 /* ---------------- CFTC COT ---------------- */
-export interface Cot { asOf: string; netPctOI: number; pct3y: number; netLong: number; oi: number; chg4w: number | null; weeks: number }
+export interface Cot { asOf: string; netPctOI: number; pct3y: number; netLong: number; oi: number; chg4w: number | null; weeks: number; hist?: [string, number, number][] }
 export async function cotGold(env: Env): Promise<Cot | null> {
   try {
-    const r = await new AppCache(env).wrap('cot:gold', 12 * 3600, async () => {
+    const r = await new AppCache(env).wrap('cot:gold:v2', 12 * 3600, async () => {
       const url = 'https://publicreporting.cftc.gov/resource/72hh-3qpy.json?cftc_contract_market_code=088691'
         + '&$select=report_date_as_yyyy_mm_dd,open_interest_all,m_money_positions_long_all,m_money_positions_short_all'
-        + '&$order=report_date_as_yyyy_mm_dd%20DESC&$limit=160';
+        + '&$order=report_date_as_yyyy_mm_dd%20DESC&$limit=520';
       const rows = (await fetchJson(url, {}, 12000)) as any[];
       const pts = rows.map(x => ({ d: String(x.report_date_as_yyyy_mm_dd).slice(0, 10), oi: +x.open_interest_all, net: +x.m_money_positions_long_all - +x.m_money_positions_short_all }))
         .filter(p => p.oi > 0 && isFinite(p.net)).reverse();
       if (pts.length < 20) throw new Error('cot: thin history ' + pts.length);
       const share = pts.map(p => p.net / p.oi);
       const last = share[share.length - 1];
-      const pct = Math.round(share.filter(s => s <= last).length / share.length * 100);
+      const w3 = share.slice(-156);
+      const pct = Math.round(w3.filter(s => s <= last).length / w3.length * 100);
       const p4 = pts.length > 4 ? pts[pts.length - 5].net : null;
       const L = pts[pts.length - 1];
-      return { asOf: L.d, netPctOI: +(last * 100).toFixed(1), pct3y: pct, netLong: L.net, oi: L.oi, chg4w: p4 == null ? null : L.net - p4, weeks: pts.length } as Cot;
+      // hist: [report date, net % of OI, net contracts] for the feature table backfill
+      return { asOf: L.d, netPctOI: +(last * 100).toFixed(1), pct3y: pct, netLong: L.net, oi: L.oi, chg4w: p4 == null ? null : L.net - p4, weeks: Math.min(156, pts.length),
+        hist: pts.map(p => [p.d, +(p.net / p.oi * 100).toFixed(2), p.net] as [string, number, number]) } as Cot;
     });
     return r.v;
   } catch (e) { console.error('COT_FAIL', String((e as Error).message).slice(0, 120)); return null; }
@@ -59,7 +62,7 @@ export async function refreshInsiders(env: Env, maxDocs = 15): Promise<{ ok: boo
     } catch (e) { console.error('SEC_SUBMISSIONS_FAIL', tk, String((e as Error).message).slice(0, 80)); }
   }
   todo.sort((a, b) => b.filed - a.filed);
-  const stmts: D1PreparedStatement[] = [];
+  const rows: unknown[][] = [];
   let parsed = 0;
   for (const t of todo.slice(0, maxDocs)) {
     try {
@@ -72,15 +75,18 @@ export async function refreshInsiders(env: Env, maxDocs = 15): Promise<{ ok: boo
         const sh = parseFloat(tag(b, 'transactionShares') ?? ''), px = parseFloat(tag(b, 'transactionPricePerShare') ?? '');
         const ad = tag(b, 'transactionAcquiredDisposedCode');
         const dt = Date.parse(tag(b, 'transactionDate') ?? '');
-        stmts.push(env.DB.prepare('INSERT OR IGNORE INTO insider_tx (acc, line, ticker, filed, tx_date, who, code, ad, shares, price) VALUES (?,?,?,?,?,?,?,?,?,?)')
-          .bind(t.acc, line++, t.tk, t.filed, isFinite(dt) ? dt : null, who.slice(0, 80), code, ad, isFinite(sh) ? sh : null, isFinite(px) ? px : null));
+        rows.push([t.acc, line++, t.tk, t.filed, isFinite(dt) ? dt : null, who.slice(0, 80), code, ad, isFinite(sh) ? sh : null, isFinite(px) ? px : null]);
       }
       // a filing with only derivative lines still gets a marker row so it isn't fetched again
-      if (!blocks.length) stmts.push(env.DB.prepare('INSERT OR IGNORE INTO insider_tx (acc, line, ticker, filed, who, code) VALUES (?,?,?,?,?,?)').bind(t.acc, 0, t.tk, t.filed, who.slice(0, 80), 'X'));
+      if (!blocks.length) rows.push([t.acc, 0, t.tk, t.filed, null, who.slice(0, 80), 'X', null, null, null]);
       parsed++;
     } catch (e) { console.error('SEC_FORM4_FAIL', t.tk, t.acc, String((e as Error).message).slice(0, 80)); }
   }
-  if (stmts.length) await env.DB.batch(stmts.slice(0, 90));
+  if (rows.length) await env.DB.prepare(
+    `INSERT OR IGNORE INTO insider_tx (acc, line, ticker, filed, tx_date, who, code, ad, shares, price)
+     SELECT json_extract(value,'$[0]'), json_extract(value,'$[1]'), json_extract(value,'$[2]'), json_extract(value,'$[3]'), json_extract(value,'$[4]'),
+            json_extract(value,'$[5]'), json_extract(value,'$[6]'), json_extract(value,'$[7]'), json_extract(value,'$[8]'), json_extract(value,'$[9]')
+     FROM json_each(?)`).bind(JSON.stringify(rows)).run();
   return { ok: true, parsed };
 }
 

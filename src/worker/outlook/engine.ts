@@ -16,7 +16,25 @@ import { readSeries } from '../store/ingest';
 import { cotGold, insiderSummary, crowdGold, type Cot, type Insiders, type Crowd } from './sources';
 
 type Pt = { t: number; v: number };
-export interface Factor { key: string; group: 'econ' | 'gold'; label: string; w: number; s: number | null; pts: number; reading: string; source: string; asOf: string | null }
+export interface Factor { key: string; group: 'econ' | 'gold'; label: string; w: number; s: number | null; pts: number; reading: string; source: string; asOf: string | null; cat?: string; mult?: number }
+/* input categories: an admin can turn each one up or down (0–2×) on the Loops page */
+export const CATS = ['price', 'behavior', 'macro', 'sentiment', 'regulatory', 'weather'] as const;
+export type Cat = typeof CATS[number];
+const CAT: Record<string, Cat> = {
+  'econ:curve': 'macro', 'econ:credit': 'macro', 'econ:claims': 'macro', 'econ:sahm': 'macro', 'econ:consumer': 'sentiment', 'econ:cuau': 'price',
+  'econ:freight': 'macro', 'econ:transits': 'macro', 'econ:stocks': 'price', 'econ:vix': 'behavior', 'econ:dollar': 'macro', 'econ:policy': 'regulatory', 'econ:weather': 'weather',
+  'gold:value': 'macro', 'gold:stretch': 'behavior', 'gold:trend': 'price', 'gold:realyield': 'macro', 'gold:dollar': 'macro', 'gold:positioning': 'behavior',
+  'gold:crowd': 'sentiment', 'gold:insiders': 'regulatory', 'gold:backdrop': 'macro', 'gold:miners': 'price', 'gold:policy': 'regulatory',
+};
+export async function readCatWeights(env: Env): Promise<Record<Cat, number>> {
+  const r = await new AppCache(env).read<Record<Cat, number>>('outlook:weights').catch(() => null);
+  const w = {} as Record<Cat, number>;
+  for (const c of CATS) { const v = r?.v?.[c]; w[c] = typeof v === 'number' && isFinite(v) ? Math.max(0, Math.min(2, v)) : 1; }
+  return w;
+}
+function applyCats(fs: Factor[], w: Record<Cat, number>) {
+  for (const f of fs) { const c = CAT[f.group + ':' + f.key] ?? 'macro'; f.cat = c; f.mult = w[c]; f.w = +(f.w * w[c]).toFixed(3); f.pts = f.s == null ? 0 : +(f.s * f.w).toFixed(2); }
+}
 export interface Outlook {
   ts: number; day: string;
   econ: { score: number; phase: string; factors: Factor[]; coverage: string };
@@ -25,6 +43,7 @@ export interface Outlook {
   outlooks: { key: string; title: string; dir: 'up' | 'down' | 'flat'; call: string; conf: string; horizon: string; why: string[] }[];
   missing: { title: string; detail: string; tone: 'pos' | 'neg' | 'neu' }[];
   narrative: { text: string; engine: string };
+  weights?: Record<string, number>;
   ml: { p: number; dir: string } | null;
   inputs: Record<string, string>;
 }
@@ -70,7 +89,9 @@ function goldCore(c: number[], i: number, ry: (number | null)[], dx: (number | n
 
 export async function buildOutlook(env: Env): Promise<Outlook> {
   const now = Date.now();
-  const A = await readSeries(env, ['CURVE', 'CREDIT', 'CLAIMS', 'COPPER', 'SPX', 'VIX', 'BDRY', 'GDX', 'SILVER', 'BE10Y', 'GVZ', 'OIL'], now - 420 * DAY);
+  const A = await readSeries(env, ['CURVE', 'CREDIT', 'CLAIMS', 'COPPER', 'SPX', 'VIX', 'BDRY', 'GDX', 'SILVER', 'BE10Y', 'GVZ', 'OIL', 'EPU'], now - 420 * DAY);
+  const catW = await readCatWeights(env);
+  const wx = (await new AppCache(env).read<any>('wx:hist').catch(() => null))?.v ?? null;
   const B = await readSeries(env, ['GOLD', 'TIPS10Y', 'DXY', 'UNRATE', 'CONSENT', 'NQH2O', 'CPI_ALL'], now - 760 * DAY);
   const S = { ...A, ...B };
   const [cot, ins, crowd, ship, drought, mlSnap] = await Promise.all([
@@ -155,6 +176,23 @@ export async function buildOutlook(env: Env): Promise<Outlook> {
   }
   const dxy3 = chg(S.DXY ?? [], 91);
   E.push(mk('econ', 'dollar', 'Dollar (3 months)', 0.4, dxy3 == null ? null : clamp(-dxy3 / 0.05), dxy3 == null ? 'No dollar data yet.' : `Dollar index ${pct(dxy3)} over 3 months. A rising dollar tightens money for the rest of the world.`, 'Yahoo DX-Y.NYB', last(S.DXY ?? [])?.t ?? null));
+  // policy / regulatory uncertainty (Baker-Bloom-Davis news index, daily) vs its 1-year range
+  const epuP = S.EPU ?? [];
+  let epuPct: number | null = null, epu7: number | null = null;
+  if (epuP.length > 120) {
+    const v = epuP.map(p => p.v), k = Math.min(5, v.length);
+    epu7 = v.slice(-k).reduce((a, b) => a + b, 0) / k;
+    epuPct = rank(v.slice(-252), epu7);
+  }
+  E.push(mk('econ', 'policy', 'Policy and regulatory uncertainty', 0.6, epuPct == null ? null : clamp((0.5 - epuPct) / 0.5) * 0.8,
+    epuPct == null ? 'Policy-uncertainty index loads with the next FRED pull.' : `US economic policy uncertainty (news-based index) is at the ${ord(epuPct * 100)} percentile of the past year (5-day avg ${Math.round(epu7!)}). Tariff, regulation and fiscal fights delay hiring and investment.`, 'FRED USEPUINDXD', last(epuP)?.t ?? null));
+  {
+    let tA: number | null = null, pA: number | null = null;
+    if (wx && Array.isArray(wx.t) && wx.t.length) { for (let i = wx.t.length - 1; i >= 0 && (tA == null || pA == null); i--) { if (tA == null && wx.t[i] != null) tA = wx.t[i]; if (pA == null && wx.p[i] != null) pA = wx.p[i]; } }
+    const s = tA == null && pA == null ? null : clamp(-Math.max(0, Math.abs(tA ?? 0) - 1.5) / 3 - Math.max(0, -(pA ?? 0)) / 25, -1, 0.2);
+    E.push(mk('econ', 'weather', 'Weather stress', 0.3, s, s == null ? 'Weather history builds on the first weekly archive pull.' : `US load-centre temperatures ${num(Math.abs(tA ?? 0), 1)}°C ${(tA ?? 0) >= 0 ? 'above' : 'below'} normal over 7 days; Plains rain ${num(Math.abs(pA ?? 0), 0)} mm/week ${(pA ?? 0) >= 0 ? 'above' : 'below'} normal. Extremes raise energy bills and hurt crops.`, 'Open-Meteo', wx ? iso(wx.built) : null));
+  }
+  applyCats(E, catW);
   const ec = score(E);
   const cNow = last(curve)?.v ?? 0, credD = dlt(S.CREDIT ?? [], 91) ?? 0;
   const phase = ec.score >= 6.5 && cNow >= 0 ? 'Expansion'
@@ -211,6 +249,9 @@ export async function buildOutlook(env: Env): Promise<Outlook> {
     const a = chg(S.GDX ?? [], 91), b = chg(gold, 91), r = a != null && b != null ? (1 + a) / (1 + b) - 1 : null;
     G.push(mk('gold', 'miners', 'Miners vs metal', 0.6, r == null ? null : clamp(r / 0.1), r == null ? 'No miner data yet.' : `Miners (GDX) ${pct(r)} vs gold over 3 months. Miners leading the metal has often confirmed a durable move; lagging warns it's thin.`, 'Yahoo GDX', last(S.GDX ?? [])?.t ?? null));
   }
+  G.push(mk('gold', 'policy', 'Policy uncertainty', 0.5, epuPct == null ? null : clamp((epuPct - 0.5) / 0.5) * 0.8,
+    epuPct == null ? 'Policy-uncertainty index loads with the next FRED pull.' : `Policy uncertainty at the ${ord(epuPct * 100)} percentile of the year. Gold is the asset people buy when the rules feel up for grabs.`, 'FRED USEPUINDXD', last(epuP)?.t ?? null));
+  applyCats(G, catW);
   const gs = score(G);
   const stretchF = G.find(f => f.key === 'stretch');
   const stance = gs.score >= 6.8 ? (stretchF && stretchF.s != null && stretchF.s < -0.4 ? 'Accumulate on dips' : 'Accumulate') : gs.score >= 4.5 ? 'Hold' : 'Trim or wait';
@@ -342,6 +383,7 @@ export async function buildOutlook(env: Env): Promise<Outlook> {
     gold: { score: gs.score, stance, stanceNote, horizon: '3–12 months', price: gL?.v ?? null, factors: G.sort((a, b) => Math.abs(b.pts) - Math.abs(a.pts)), coverage: gs.coverage, flips, odds },
     outlooks, missing, narrative,
     ml: mlSnap && typeof mlSnap.p === 'number' ? { p: mlSnap.p, dir: mlSnap.direction ?? (mlSnap.p >= 0.5 ? 'UP' : 'DOWN') } : null,
+    weights: catW,
     inputs: { cot: cot ? 'CFTC ' + cot.asOf : 'unavailable', insiders: ins ? ins.filings + ' Form 4 filings, 90 days' : 'off', crowd: crowd ? crowd.n + ' stories, 14 days' : 'thin', shipping: ship?.chokeAsOf ?? 'unavailable', drought: drought?.mapDate ?? 'unavailable' },
   };
   await env.DB.prepare(
