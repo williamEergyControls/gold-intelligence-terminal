@@ -10,15 +10,17 @@
    ================================================================ */
 import type { Env } from '../types';
 import { AppCache } from '../cache';
+import { tagThemes, mergeThemes } from './themes';
 
+export type SourceCls = 'independent' | 'mainstream';
 export interface SourceRow {
-  id: number; kind: 'rss' | 'youtube'; url: string; name: string; topics: string; enabled: number; favorite: number;
+  id: number; kind: 'rss' | 'youtube'; url: string; name: string; topics: string; enabled: number; favorite: number; cls: SourceCls | null;
   last_fetch: number | null; last_ok: number | null; last_error: string | null; items: number; fails: number; created_at: number | null;
 }
 export interface FeedItem {
   id: string; url: string; title: string; source: string; kind: 'rss' | 'youtube' | 'gdelt'; favorite: boolean;
   published: number; summary: string | null; aiSummary: boolean; sentiment: 'bull' | 'bear' | 'neutral' | null;
-  assets: string[]; idea: Idea | null; thumb: string | null; topics: string[];
+  assets: string[]; idea: Idea | null; thumb: string | null; topics: string[]; cls: SourceCls; themes: string[];
 }
 export interface Idea { asset: string; bias: 'long' | 'short' | 'watch'; horizon: string; why: string; risk: string }
 
@@ -32,7 +34,9 @@ export const ASSETS = ['XAU', 'XAG', 'DXY', 'EURUSD', 'USDJPY', 'GBPUSD', 'USDCN
 
 /* verified 2026-10-02 (feeds fetched, recent items present). youtube ids cross-checked on channel pages. */
 const YT = (id: string) => 'https://www.youtube.com/feeds/videos.xml?channel_id=' + id;
-export const DEFAULT_SOURCES: { kind: 'rss' | 'youtube'; url: string; name: string; topics: string }[] = [
+/* since = seed version that added the source (existing installs get only the newer ones, once).
+   fav = starts as a favorite. cls defaults: rss → mainstream, youtube → independent unless listed as mainstream. */
+export const DEFAULT_SOURCES: { kind: 'rss' | 'youtube'; url: string; name: string; topics: string; cls?: SourceCls; fav?: boolean; since?: number }[] = [
   { kind: 'rss', url: 'https://feeds.content.dowjones.io/public/rss/RSSMarketsMain', name: 'WSJ Markets', topics: 'markets,macro' },
   { kind: 'rss', url: 'https://feeds.content.dowjones.io/public/rss/mw_topstories', name: 'MarketWatch', topics: 'markets' },
   { kind: 'rss', url: 'https://www.nasdaq.com/feed/rssoutbound?category=Markets', name: 'Nasdaq Markets', topics: 'markets' },
@@ -51,12 +55,18 @@ export const DEFAULT_SOURCES: { kind: 'rss' | 'youtube'; url: string; name: stri
   { kind: 'rss', url: 'https://www.coindesk.com/arc/outboundfeeds/rss/', name: 'CoinDesk', topics: 'crypto' },
   { kind: 'rss', url: 'https://www.theblock.co/rss.xml', name: 'The Block', topics: 'crypto' },
   { kind: 'rss', url: 'https://www.circleofblue.org/feed/', name: 'Circle of Blue', topics: 'water' },
-  { kind: 'youtube', url: YT('UC9ijza42jVR3T6b8bColgvg'), name: 'Kitco NEWS', topics: 'gold' },
-  { kind: 'youtube', url: YT('UCrp_UI8XtuYfpiqluWLD7Lw'), name: 'CNBC Television', topics: 'markets,macro' },
-  { kind: 'youtube', url: YT('UCIALMKvObZNtJ6AmdCLP7Lg'), name: 'Bloomberg Television', topics: 'markets,macro' },
-  { kind: 'youtube', url: YT('UCEAZeUIeJs0IjQiqTCdVSIg'), name: 'Yahoo Finance', topics: 'markets' },
-  { kind: 'youtube', url: YT('UChqUTb7kYRX8-EiaN3XFrSQ'), name: 'Reuters', topics: 'markets,macro' },
+  { kind: 'youtube', url: YT('UC9ijza42jVR3T6b8bColgvg'), name: 'Kitco NEWS', topics: 'gold', cls: 'mainstream' },
+  { kind: 'youtube', url: YT('UCrp_UI8XtuYfpiqluWLD7Lw'), name: 'CNBC Television', topics: 'markets,macro', cls: 'mainstream' },
+  { kind: 'youtube', url: YT('UCIALMKvObZNtJ6AmdCLP7Lg'), name: 'Bloomberg Television', topics: 'markets,macro', cls: 'mainstream' },
+  { kind: 'youtube', url: YT('UCEAZeUIeJs0IjQiqTCdVSIg'), name: 'Yahoo Finance', topics: 'markets', cls: 'mainstream' },
+  { kind: 'youtube', url: YT('UChqUTb7kYRX8-EiaN3XFrSQ'), name: 'Reuters', topics: 'markets,macro', cls: 'mainstream' },
+  // v3.4: independent channels and podcasts (ids verified 2026-10-08: handle page → /channel/ page round trip)
+  { kind: 'youtube', url: YT('UCTq1zHztiV69Ur8t6jco4CQ'), name: 'S2 Underground', topics: 'macro,energy,shipping', cls: 'independent', fav: true, since: 2 },
+  { kind: 'youtube', url: YT('UCkrwgzhIBKccuDsi_SvZtnQ'), name: 'Forward Guidance', topics: 'macro,markets,gold', cls: 'independent', fav: true, since: 2 },
+  { kind: 'youtube', url: YT('UCeyqw1Ns_cnhSJh5XvXPWgw'), name: 'Monetary Matters', topics: 'macro,markets', cls: 'independent', fav: true, since: 2 },
+  { kind: 'youtube', url: YT('UCT_yBgKSiwb3WP4ACPnF5nA'), name: "What's Going on With Shipping", topics: 'shipping,energy', cls: 'independent', fav: true, since: 2 },
 ];
+const SEED_VER = 2;
 
 /* ---------- keyword topic tagger (cheap, deterministic) ---------- */
 const KW: [string, RegExp][] = [
@@ -163,18 +173,27 @@ async function fetchFeed(url: string, kind: 'rss' | 'youtube'): Promise<string> 
 }
 
 /* ---------- seed + crawl ---------- */
+/* seed: an empty table gets every default; an older install gets only the sources added after its seed
+   version (once — a default you delete later is not re-added). marker lives in schema_meta. */
 let seeded = false;
 export async function ensureSources(env: Env): Promise<void> {
   if (seeded) return;
+  let mk: { v: string } | null;
+  try { mk = await env.DB.prepare(`SELECT v FROM schema_meta WHERE k='news_seed'`).first<{ v: string }>(); }
+  catch { return; }   // unreadable marker: try again next isolate rather than re-adding sources an admin removed
+  const have = mk ? Number(mk.v) : 1;
+  if (mk && have >= SEED_VER) { seeded = true; return; }
   const n = await env.DB.prepare('SELECT COUNT(*) n FROM news_sources').first<{ n: number }>();
-  if (!n?.n) {
-    const now = Date.now();
+  const list = !n?.n ? DEFAULT_SOURCES : DEFAULT_SOURCES.filter(s => (s.since ?? 1) > have);
+  if (list.length) {
     await env.DB.prepare(
-      `INSERT OR IGNORE INTO news_sources(kind,url,name,topics,enabled,favorite,added_by,created_at)
-       SELECT json_extract(value,'$.kind'), json_extract(value,'$.url'), json_extract(value,'$.name'), json_extract(value,'$.topics'), 1, 0, 'default', ?
+      `INSERT OR IGNORE INTO news_sources(kind,url,name,topics,enabled,favorite,added_by,created_at,cls)
+       SELECT json_extract(value,'$.kind'), json_extract(value,'$.url'), json_extract(value,'$.name'), json_extract(value,'$.topics'), 1,
+              json_extract(value,'$.fav'), 'default', ?, json_extract(value,'$.cls')
        FROM json_each(?)`
-    ).bind(now, JSON.stringify(DEFAULT_SOURCES)).run();
+    ).bind(Date.now(), JSON.stringify(list.map(s => ({ ...s, fav: s.fav ? 1 : 0, cls: s.cls ?? (s.kind === 'rss' ? 'mainstream' : 'independent') })))).run();
   }
+  await env.DB.prepare(`INSERT INTO schema_meta (k, v) VALUES ('news_seed', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v`).bind(String(SEED_VER)).run().catch(() => { });
   seeded = true;
 }
 
@@ -215,6 +234,7 @@ export async function crawlCycle(env: Env, opts: { max?: number; ids?: number[] 
       rows.push({
         id: await sha1hex(url), sid: s.id, url, title: it.title, pub: Math.min(it.published, now), raw: it.desc || null,
         thumb: it.thumb, topics: tagTopics(it.title + ' ' + it.desc, s.topics).join(','),
+        themes: tagThemes(it.title + ' ' + it.desc).join(',') || null,
       });
     }
     states.push(env.DB.prepare('UPDATE news_sources SET last_fetch=?, last_ok=?, last_error=NULL, fails=0, items=? WHERE id=?').bind(now, now, fresh.length, s.id));
@@ -222,9 +242,10 @@ export async function crawlCycle(env: Env, opts: { max?: number; ids?: number[] 
   let added = 0;
   if (rows.length) {
     const res = await env.DB.prepare(
-      `INSERT OR IGNORE INTO news_items(id,source_id,url,title,published,fetched,summary_raw,thumb,topics)
+      `INSERT OR IGNORE INTO news_items(id,source_id,url,title,published,fetched,summary_raw,thumb,topics,themes)
        SELECT json_extract(value,'$.id'), json_extract(value,'$.sid'), json_extract(value,'$.url'), json_extract(value,'$.title'),
-              json_extract(value,'$.pub'), ?, json_extract(value,'$.raw'), json_extract(value,'$.thumb'), json_extract(value,'$.topics')
+              json_extract(value,'$.pub'), ?, json_extract(value,'$.raw'), json_extract(value,'$.thumb'), json_extract(value,'$.topics'),
+              json_extract(value,'$.themes')
        FROM json_each(?)`
     ).bind(now, JSON.stringify(rows)).run();
     added = res.meta?.changes ?? 0;
@@ -236,12 +257,12 @@ export async function crawlCycle(env: Env, opts: { max?: number; ids?: number[] 
 /* ---------- AI digest ---------- */
 const SYS = `You are the news editor of a markets research terminal. For each numbered item write a neutral summary of 1-2 sentences using only facts stated in the item. Then, only if the item clearly implies a directional view on one liquid market, add a trade idea; otherwise idea is null. Never invent numbers, prices or dates. Allowed asset codes: ${ASSETS.join(', ')}.
 Reply with ONLY a JSON array, one object per item, in order:
-{"i":0,"summary":"...","sentiment":"bull|bear|neutral","assets":["XAU"],"idea":{"asset":"XAU","bias":"long|short|watch","horizon":"days|weeks","why":"one sentence","risk":"what would prove it wrong"}}
-sentiment is for the first asset in assets. No markdown, no extra text.`;
+{"i":0,"summary":"...","sentiment":"bull|bear|neutral","assets":["XAU"],"themes":["red sea shipping","fed rate cuts"],"idea":{"asset":"XAU","bias":"long|short|watch","horizon":"days|weeks","why":"one sentence","risk":"what would prove it wrong"}}
+sentiment is for the first asset in assets. themes: 1-3 short lowercase noun phrases naming the story (not the outlet). No markdown, no extra text.`;
 const MODELS = ['@cf/meta/llama-3.1-8b-instruct', '@cf/meta/llama-3.2-3b-instruct'];
 
 function clean(s: unknown, max: number): string { return String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, max); }
-export function validateDigest(o: any): { summary: string; sentiment: 'bull' | 'bear' | 'neutral'; assets: string[]; idea: Idea | null } | null {
+export function validateDigest(o: any): { summary: string; sentiment: 'bull' | 'bear' | 'neutral'; assets: string[]; idea: Idea | null; themes: string[] } | null {
   if (!o || typeof o !== 'object') return null;
   const summary = clean(o.summary, 420);
   if (summary.length < 20) return null;
@@ -258,15 +279,16 @@ export function validateDigest(o: any): { summary: string; sentiment: 'bull' | '
       if (!assets.includes(asset)) assets.unshift(asset);
     }
   }
-  return { summary, sentiment, assets, idea };
+  const themes = (Array.isArray(o.themes) ? o.themes : []).map((t: unknown) => clean(t, 40).toLowerCase()).filter((t: string) => t.length >= 3).slice(0, 3);
+  return { summary, sentiment, assets, idea, themes };
 }
 
 export async function digestBatch(env: Env, n = AI_BATCH): Promise<{ done: number; engine: string | null; error?: string }> {
   if (env.AI_ENABLED === 'false' || !env.AI) return { done: 0, engine: null, error: 'AI disabled' };
   const rs = (await env.DB.prepare(
-    `SELECT i.id, i.title, i.summary_raw, s.name FROM news_items i JOIN news_sources s ON s.id=i.source_id
+    `SELECT i.id, i.title, i.summary_raw, i.themes, s.name FROM news_items i JOIN news_sources s ON s.id=i.source_id
      WHERE i.ai_at IS NULL AND i.published > ? ORDER BY s.favorite DESC, i.published DESC LIMIT ?`
-  ).bind(Date.now() - 3 * 864e5, n).all<{ id: string; title: string; summary_raw: string | null; name: string }>()).results ?? [];
+  ).bind(Date.now() - 3 * 864e5, n).all<{ id: string; title: string; summary_raw: string | null; themes: string | null; name: string }>()).results ?? [];
   if (!rs.length) return { done: 0, engine: null };
   const user = rs.map((r, i) => `${i}. [${r.name}] ${r.title}${r.summary_raw ? ' — ' + r.summary_raw.slice(0, 520) : ''}`).join('\n\n');
   let arr: any[] | null = null, engine: string | null = null, lastErr = '';
@@ -286,8 +308,9 @@ export async function digestBatch(env: Env, n = AI_BATCH): Promise<{ done: numbe
   const stmts = rs.map((r, i) => {
     const v = arr ? validateDigest(arr.find(o => Number(o?.i) === i) ?? arr[i]) : null;
     // ai_at is stamped even on failure so one bad item never blocks the queue
-    return env.DB.prepare('UPDATE news_items SET ai_at=?, ai_summary=?, ai_json=?, sentiment=? WHERE id=?')
-      .bind(now, v?.summary ?? null, v ? JSON.stringify({ assets: v.assets, idea: v.idea, engine }) : JSON.stringify({ err: lastErr || 'invalid' }), v?.sentiment ?? null, r.id);
+    return env.DB.prepare('UPDATE news_items SET ai_at=?, ai_summary=?, ai_json=?, sentiment=?, themes=? WHERE id=?')
+      .bind(now, v?.summary ?? null, v ? JSON.stringify({ assets: v.assets, idea: v.idea, themes: v.themes, engine }) : JSON.stringify({ err: lastErr || 'invalid' }),
+        v?.sentiment ?? null, v ? (mergeThemes(r.themes, v.themes) || null) : r.themes, r.id);
   });
   await env.DB.batch(stmts);
   return { done: rs.length, engine, error: arr ? undefined : lastErr };
@@ -300,7 +323,7 @@ export async function pruneNews(env: Env): Promise<number> {
 
 /* ---------- readers ---------- */
 const GDELT_TOPIC: Record<string, string[]> = { gold: ['gold', 'mining'], macro: ['macro'], fx: ['macro'], energy: ['energy'], agri: ['agri'], markets: ['macro', 'gold'], all: ['gold', 'macro', 'energy', 'agri'] };
-interface ItemRow { id: string; url: string; title: string; published: number; summary_raw: string | null; thumb: string | null; topics: string | null; ai_summary: string | null; ai_json: string | null; sentiment: string | null; name: string; kind: string; favorite: number }
+interface ItemRow { id: string; url: string; title: string; published: number; summary_raw: string | null; thumb: string | null; topics: string | null; ai_summary: string | null; ai_json: string | null; sentiment: string | null; name: string; kind: string; favorite: number; cls: string | null; themes: string | null }
 function toItem(r: ItemRow): FeedItem {
   let j: any = null; try { j = r.ai_json ? JSON.parse(r.ai_json) : null; } catch { j = null; }
   return {
@@ -308,18 +331,20 @@ function toItem(r: ItemRow): FeedItem {
     published: r.published, summary: r.ai_summary ?? r.summary_raw, aiSummary: !!r.ai_summary,
     sentiment: (r.sentiment as FeedItem['sentiment']) ?? null, assets: j?.assets ?? [], idea: j?.idea ?? null,
     thumb: r.thumb, topics: (r.topics ?? '').split(',').filter(Boolean),
+    cls: r.cls === 'independent' ? 'independent' : 'mainstream', themes: (r.themes ?? '').split(',').filter(Boolean),
   };
 }
 
-export async function newsFeed(env: Env, topic: string, limit: number, opts: { favOnly?: boolean; withGdelt?: boolean } = {}): Promise<{ items: FeedItem[]; topic: string; sources: number; favorites: number; updatedAt: number | null }> {
+export async function newsFeed(env: Env, topic: string, limit: number, opts: { favOnly?: boolean; withGdelt?: boolean; indOnly?: boolean } = {}): Promise<{ items: FeedItem[]; topic: string; sources: number; favorites: number; updatedAt: number | null }> {
   await ensureSources(env);
   const t = topic === 'all' || !(TOPICS as readonly string[]).includes(topic) ? 'all' : topic;
   const where: string[] = ['i.published > ?'];
   const args: unknown[] = [Date.now() - 7 * 864e5];
   if (t !== 'all') { where.push(`(',' || i.topics || ',') LIKE ?`); args.push('%,' + t + ',%'); }
   if (opts.favOnly) where.push('s.favorite=1');
+  if (opts.indOnly) where.push(`s.cls='independent'`);
   const rs = (await env.DB.prepare(
-    `SELECT i.id,i.url,i.title,i.published,i.summary_raw,i.thumb,i.topics,i.ai_summary,i.ai_json,i.sentiment,s.name,s.kind,s.favorite
+    `SELECT i.id,i.url,i.title,i.published,i.summary_raw,i.thumb,i.topics,i.ai_summary,i.ai_json,i.sentiment,i.themes,s.name,s.kind,s.favorite,s.cls
      FROM news_items i JOIN news_sources s ON s.id=i.source_id WHERE ${where.join(' AND ')}
      ORDER BY i.published DESC LIMIT ?`
   ).bind(...args, Math.min(80, limit * 2)).all<ItemRow>()).results ?? [];
@@ -335,7 +360,7 @@ export async function newsFeed(env: Env, topic: string, limit: number, opts: { f
   // favorites float up within the same ~6h window
   items.sort((a, b) => (b.published + (b.favorite ? 6 * 36e5 : 0)) - (a.published + (a.favorite ? 6 * 36e5 : 0)));
   items = items.slice(0, limit);
-  if (opts.withGdelt !== false && items.length < limit) {
+  if (opts.withGdelt !== false && !opts.indOnly && items.length < limit) {
     try {
       const boot = await new AppCache(env).read<any>('boot:15M');
       const pools: any[] = [];
@@ -345,7 +370,7 @@ export async function newsFeed(env: Env, topic: string, limit: number, opts: { f
         const k = String(n.title).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().slice(0, 70);
         if (seen.has(k) || !n.url || n.url === '#') continue;
         seen.add(k);
-        items.push({ id: 'g:' + n.id, url: n.url, title: n.title, source: String(n.source).replace(/^GDELT · /, ''), kind: 'gdelt', favorite: false, published: n.publishedTs, summary: null, aiSummary: false, sentiment: n.sentiment ?? null, assets: [], idea: null, thumb: null, topics: [t] });
+        items.push({ id: 'g:' + n.id, url: n.url, title: n.title, source: String(n.source).replace(/^GDELT · /, ''), kind: 'gdelt', favorite: false, published: n.publishedTs, summary: null, aiSummary: false, sentiment: n.sentiment ?? null, assets: [], idea: null, thumb: null, topics: [t], cls: 'mainstream', themes: tagThemes(n.title) });
       }
     } catch { /* gdelt fill is optional */ }
   }
@@ -357,7 +382,7 @@ export async function newsIdeas(env: Env, limit: number, topic?: string): Promis
   const args: unknown[] = [Date.now() - 3 * 864e5];
   if (topic && topic !== 'all') { where.push(`(',' || i.topics || ',') LIKE ?`); args.push('%,' + topic + ',%'); }
   const rs = (await env.DB.prepare(
-    `SELECT i.id,i.url,i.title,i.published,i.summary_raw,i.thumb,i.topics,i.ai_summary,i.ai_json,i.sentiment,s.name,s.kind,s.favorite
+    `SELECT i.id,i.url,i.title,i.published,i.summary_raw,i.thumb,i.topics,i.ai_summary,i.ai_json,i.sentiment,i.themes,s.name,s.kind,s.favorite,s.cls
      FROM news_items i JOIN news_sources s ON s.id=i.source_id WHERE ${where.join(' AND ')} ORDER BY s.favorite DESC, i.published DESC LIMIT ?`
   ).bind(...args, limit * 3).all<ItemRow>()).results ?? [];
   const out: any[] = [];
@@ -429,21 +454,23 @@ export async function resolveSource(input: string): Promise<{ kind: 'rss' | 'you
   return { kind: 'rss', url: feedUrl, name: p.title || host };
 }
 
-export async function addSource(env: Env, input: { url: string; name?: string; topics?: string; favorite?: boolean }, by: string): Promise<{ id: number; kind: string; url: string; name: string }> {
+export async function addSource(env: Env, input: { url: string; name?: string; topics?: string; favorite?: boolean; cls?: string }, by: string): Promise<{ id: number; kind: string; url: string; name: string }> {
   await ensureSources(env);
   const r = await resolveSource(String(input.url ?? ''));
   const topics = String(input.topics ?? '').split(',').map(s => s.trim().toLowerCase()).filter(t => (TOPICS as readonly string[]).includes(t)).join(',') || 'markets';
   const name = clean(input.name, 60) || r.name.slice(0, 60);
   const fav = input.favorite === false ? 0 : 1;
+  const cls: SourceCls = input.cls === 'mainstream' || input.cls === 'independent' ? input.cls : r.kind === 'youtube' ? 'independent' : 'mainstream';
   await env.DB.prepare(
-    `INSERT INTO news_sources(kind,url,name,topics,enabled,favorite,added_by,created_at) VALUES(?,?,?,?,1,?,?,?)
-     ON CONFLICT(url) DO UPDATE SET name=excluded.name, topics=excluded.topics, enabled=1, favorite=excluded.favorite`
-  ).bind(r.kind, r.url, name, topics, fav, by, Date.now()).run();
+    `INSERT INTO news_sources(kind,url,name,topics,enabled,favorite,added_by,created_at,cls) VALUES(?,?,?,?,1,?,?,?,?)
+     ON CONFLICT(url) DO UPDATE SET name=excluded.name, topics=excluded.topics, enabled=1, favorite=excluded.favorite, cls=excluded.cls`
+  ).bind(r.kind, r.url, name, topics, fav, by, Date.now(), cls).run();
   const row = await env.DB.prepare('SELECT id FROM news_sources WHERE url=?').bind(r.url).first<{ id: number }>();
   return { id: row?.id ?? 0, kind: r.kind, url: r.url, name };
 }
-export async function updateSource(env: Env, id: number, patch: { enabled?: boolean; favorite?: boolean; topics?: string }): Promise<void> {
+export async function updateSource(env: Env, id: number, patch: { enabled?: boolean; favorite?: boolean; topics?: string; cls?: string }): Promise<void> {
   const sets: string[] = [], args: unknown[] = [];
+  if (patch.cls === 'independent' || patch.cls === 'mainstream') { sets.push('cls=?'); args.push(patch.cls); }
   if (patch.enabled != null) { sets.push('enabled=?'); args.push(patch.enabled ? 1 : 0); }
   if (patch.favorite != null) { sets.push('favorite=?'); args.push(patch.favorite ? 1 : 0); }
   if (patch.topics != null) { sets.push('topics=?'); args.push(String(patch.topics).split(',').map(s => s.trim().toLowerCase()).filter(t => (TOPICS as readonly string[]).includes(t)).join(',') || 'markets'); }
