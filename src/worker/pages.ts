@@ -2,6 +2,30 @@ import type { Env, Quote } from './types';
 import { AppCache } from './cache';
 import * as yahoo from './providers/yahoo';
 import { eiaRows, type EiaRow } from './providers/eia';
+import { readSeries } from './store/ingest';
+
+/* 3-2-1 crack spread, $/bbl: 3 bbl crude → 2 bbl gasoline + 1 bbl distillate.
+   (2 × RBOB × 42 + 1 × HO × 42 − 3 × WTI) / 3. RBOB and HO quote in $/gal (42 gal per bbl).
+   a quote above $20/gal is a cents print or a bad tick → scaled or dropped, never shown as-is. */
+export function crack321(cl: number, rb: number, ho: number): number | null {
+  const g = (x: number) => (x > 20 && x < 2000 ? x / 100 : x);
+  rb = g(rb); ho = g(ho);
+  if (!(cl > 5 && cl < 400 && rb > 0.3 && rb < 15 && ho > 0.3 && ho < 15)) return null;
+  const v = (2 * rb * 42 + ho * 42 - 3 * cl) / 3;
+  return v > -40 && v < 150 ? +v.toFixed(2) : null;
+}
+async function crackHistory(env: Env): Promise<{ t: number; v: number; rb: number; ho: number; cl: number }[]> {
+  const S = await readSeries(env, ['OIL', 'RBOB', 'HEATOIL'], Date.now() - 400 * 864e5);
+  const rb = new Map((S.RBOB ?? []).map(p => [p.t, p.v])), ho = new Map((S.HEATOIL ?? []).map(p => [p.t, p.v]));
+  const out: { t: number; v: number; rb: number; ho: number; cl: number }[] = [];
+  for (const p of S.OIL ?? []) {
+    const r = rb.get(p.t), h = ho.get(p.t);
+    if (r == null || h == null) continue;
+    const v = crack321(p.v, r, h);
+    if (v != null) out.push({ t: p.t, v, rb: r, ho: h, cl: p.v });
+  }
+  return out;
+}
 
 const ENERGY: { sym: string; name: string; unit: string }[] = [
   { sym: 'CL1', name: 'WTI Crude Front', unit: '$/bbl' },
@@ -35,6 +59,26 @@ async function getQuotes(env: Env, syms: { sym: string; name: string; unit: stri
   });
 }
 
+/** crack spread KPI + 1-year history. live legs from the quote batch when there is one, else the warehouse close */
+export async function crackBlock(env: Env, legs: { cl: number; rb: number; ho: number } | null) {
+  const live = legs ? crack321(legs.cl, legs.rb, legs.ho) : null;
+  let hist: Awaited<ReturnType<typeof crackHistory>> = [];
+  // daily closes: one shared 6 h copy for the energy page and /api/energy/crack (≈ 750 rows per rebuild, 4 a day)
+  try { hist = (await new AppCache(env).wrap('crack:hist', 21600, () => crackHistory(env))).v; } catch (e) { console.error('CRACK_HIST_FAIL', String((e as Error)?.message ?? e).slice(0, 120)); }
+  const lastH = hist.length ? hist[hist.length - 1] : null;
+  const crackNow = live ?? lastH?.v ?? null;
+  const at = (days: number) => { const t = Date.now() - days * 864e5; for (let i = hist.length - 1; i >= 0; i--) if (hist[i].t <= t) return hist[i].v; return null; };
+  const vals = hist.map(h => h.v).sort((a, b) => a - b);
+  const pct = crackNow != null && vals.length > 50 ? Math.round(100 * vals.filter(v => v <= crackNow).length / vals.length) : null;
+  return {
+    now: crackNow, live: live != null, asOf: live != null ? Date.now() : lastH?.t ?? null,
+    m1: at(30), y1: at(365), pct1y: pct,
+    legs: live != null ? legs : lastH ? { cl: lastH.cl, rb: lastH.rb, ho: lastH.ho } : null,
+    series: hist.map(h => ({ t: h.t, v: h.v })),
+    formula: '(2 × RBOB × 42 + 1 × ULSD × 42 − 3 × WTI) ÷ 3, in $ per barrel of crude',
+  };
+}
+
 export async function buildEnergyPage(env: Env): Promise<any> {
   const monitor = await getQuotes(env, ENERGY, 'page:energy:q');
   const get = (s: string) => monitor.find(q => q.symbol === s);
@@ -46,10 +90,8 @@ export async function buildEnergyPage(env: Env): Promise<any> {
   if (cl && bz) {
     spreads.push({ label: 'Brent-WTI Spread', value: (bz.price - cl.price).toFixed(2) + ' $/bbl', change: null });
   }
-  if (cl && xb && ho) {
-    const prod = ((2 * xb.price + 1 * ho.price) * 42) / 3;
-    spreads.push({ label: '3-2-1 Crack Spread', value: (prod - cl.price).toFixed(2) + ' $/bbl [CALC]', change: null });
-  }
+  const crack = await crackBlock(env, cl && xb && ho ? { cl: cl.price, rb: xb.price, ho: ho.price } : null);
+  if (crack.now != null) spreads.push({ label: '3-2-1 crack spread', value: crack.now.toFixed(2) + ' $/bbl', change: null });
 
   // EIA weekly — own 6h cache so the 15-min page rebuild never re-hits EIA
   let eia: EiaRow[] = [];
@@ -67,6 +109,7 @@ export async function buildEnergyPage(env: Env): Promise<any> {
       .map(q => ({ symbol: q.symbol, name: q.name ?? q.symbol, price: q.price, changePct: q.changePct ?? 0, note: q.unit })),
     ratios: xau && cl ? [{ label: 'GOLD / OIL', value: +(xau.price / cl.price).toFixed(1), unit: 'barrels per ounce' }] : [],
     spreads,
+    crack,
     eia,
     news: [],
     calendar: [

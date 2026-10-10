@@ -69,15 +69,33 @@ export async function authLogin(env: Env, name: string, password: string): Promi
   return { ok: true, token, name: name.trim(), role: row.role || 'operator' };
 }
 
-export interface AuthUser { valid: boolean; id?: number; name?: string; role?: string }
+/* tiers: admin (everything) · pro (Pro desks while pro_until is empty or in the future) · free.
+   roles are set only by an admin (Admin → Users). role 'operator' = free account. */
+export type Tier = 'admin' | 'pro' | 'free';
+export interface AuthUser { valid: boolean; id?: number; name?: string; role?: string; tier?: Tier; proUntil?: number | null }
+
+export function tierOf(role: string | null | undefined, proUntil: number | null | undefined, now = Date.now()): Tier {
+  if (role === 'admin') return 'admin';
+  if (role === 'pro' && (proUntil == null || proUntil > now)) return 'pro';
+  return 'free';
+}
 
 export async function authVerify(env: Env, token: string): Promise<AuthUser> {
   if (!token || token.length !== 64) return { valid: false };
-  const row = await env.DB.prepare(
-    'SELECT u.id, u.name, u.role FROM sessions s JOIN users u ON s.user_id=u.id WHERE s.token=? AND s.expires_at>?'
-  ).bind(token, Date.now()).first<{ id: number; name: string; role: string | null }>();
+  let row: { id: number; name: string; role: string | null; pro_until?: number | null } | null;
+  try {
+    row = await env.DB.prepare(
+      'SELECT u.id, u.name, u.role, u.pro_until FROM sessions s JOIN users u ON s.user_id=u.id WHERE s.token=? AND s.expires_at>?'
+    ).bind(token, Date.now()).first();
+  } catch {
+    // pro_until not migrated yet: old shape, everybody non-admin is free
+    row = await env.DB.prepare(
+      'SELECT u.id, u.name, u.role FROM sessions s JOIN users u ON s.user_id=u.id WHERE s.token=? AND s.expires_at>?'
+    ).bind(token, Date.now()).first();
+  }
   if (!row) return { valid: false };
-  return { valid: true, id: row.id, name: row.name, role: row.role || 'operator' };
+  const role = row.role || 'operator';
+  return { valid: true, id: row.id, name: row.name, role, tier: tierOf(role, row.pro_until ?? null), proUntil: row.pro_until ?? null };
 }
 
 export async function authLogout(env: Env, token: string): Promise<void> {

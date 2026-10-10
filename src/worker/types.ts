@@ -108,4 +108,6 @@ export interface Env {
   METALS_TTL?: string;
   ADMIN_TOKEN?: string;
   INGEST_BUDGET?: string;
+  /** Google Search Console HTML-file method: the exact file name Google gives you, e.g. google1a2b3c4d5e6f7a8b.html */
+  GOOGLE_SITE_VERIFICATION?: string;
 }

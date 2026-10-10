@@ -13,6 +13,7 @@ interface Envelope<T> { v: T; ts: number; ttl: number }
 const micro = new Map<string, Envelope<unknown>>();
 let tableReady = false;
 const MAX_ROW = 1_900_000; // D1 row/value cap is 2 MB
+const MICRO_MS = 15000;
 
 async function ensureTable(db: D1Database): Promise<void> {
   if (tableReady) return;
@@ -24,31 +25,41 @@ export class AppCache {
   constructor(private env: Env) {}
 
   async read<T>(k: string): Promise<{ v: T; ageMs: number; ttl: number } | null> {
-    const m = micro.get(k) as Envelope<T> | undefined;
-    if (m && Date.now() - m.ts < m.ttl * 1000) return { v: m.v, ageMs: Date.now() - m.ts, ttl: m.ttl };
+    const m = micro.get(k) as (Envelope<T> & { seen?: number }) | undefined;
+    // the isolate copy is trusted for 15 s at most: crons and requests run in different isolates,
+    // so durable state (ledger, evolution, weights) must be re-checked against D1 after that
+    if (m && Date.now() - (m.seen ?? m.ts) < MICRO_MS && Date.now() - m.ts < m.ttl * 1000) return { v: m.v, ageMs: Date.now() - m.ts, ttl: m.ttl };
     let raw: Envelope<T> | null = null;
     try {
       await ensureTable(this.env.DB);
+      if (m) {
+        // cheap check first: same timestamp in D1 → keep the parsed copy (no transfer, no JSON.parse)
+        const h = await this.env.DB.prepare('SELECT ts, ttl FROM cache_kv WHERE k = ?').bind(k).first<{ ts: number; ttl: number }>();
+        if (h && h.ts === m.ts) { m.seen = Date.now(); return { v: m.v, ageMs: Date.now() - m.ts, ttl: m.ttl }; }
+        // our copy is newer and its D1 write failed (daily cap, outage, too big): keep it rather than roll back
+        if ((m as any).dirty && (!h || h.ts < m.ts)) { m.seen = Date.now(); return { v: m.v, ageMs: Date.now() - m.ts, ttl: m.ttl }; }
+        if (!h) { micro.delete(k); return null; }
+      }
       const r = await this.env.DB.prepare('SELECT v, ts, ttl FROM cache_kv WHERE k = ?').bind(k).first<{ v: string; ts: number; ttl: number }>();
       if (r) raw = { v: JSON.parse(r.v) as T, ts: r.ts, ttl: r.ttl };
     } catch (e) {
       // D1 down or over its daily limit: the pre-v3.1 KV copy is still a valid last-good value
       console.error('CACHE_D1_READ_FAIL', k, String((e as Error)?.message ?? e).slice(0, 120));
       try { raw = (await this.env.CACHE.get(k, 'json')) as Envelope<T> | null; } catch { raw = null; }
+      if (!raw && m) return { v: m.v, ageMs: Date.now() - m.ts, ttl: m.ttl };
     }
-    const best = raw && (!m || raw.ts > m.ts) ? raw : m ?? null;
-    if (!best) return null;
-    micro.set(k, best);
-    return { v: best.v, ageMs: Date.now() - best.ts, ttl: best.ttl };
+    if (!raw) return null;
+    micro.set(k, { ...raw, seen: Date.now() } as Envelope<unknown>);
+    return { v: raw.v, ageMs: Date.now() - raw.ts, ttl: raw.ttl };
   }
 
   /** never throws: a failed write still leaves the value in this isolate */
   async write(k: string, v: unknown, ttlSec: number): Promise<boolean> {
     const e: Envelope<unknown> = { v, ts: Date.now(), ttl: ttlSec };
-    micro.set(k, e);
+    micro.set(k, { ...e, seen: Date.now() } as Envelope<unknown>);
     try {
       const s = JSON.stringify(v);
-      if (s.length > MAX_ROW) { console.error('CACHE_TOO_BIG', k, s.length); return false; }
+      if (s.length > MAX_ROW) { (micro.get(k) as any).dirty = true; console.error('CACHE_TOO_BIG', k, s.length); return false; }
       await ensureTable(this.env.DB);
       await this.env.DB.prepare(
         `INSERT INTO cache_kv (k, v, ts, ttl) VALUES (?1, ?2, ?3, ?4)
@@ -56,6 +67,7 @@ export class AppCache {
       ).bind(k, s, e.ts, ttlSec).run();
       return true;
     } catch (err) {
+      (micro.get(k) as any).dirty = true;
       console.error('CACHE_D1_WRITE_FAIL', k, String((err as Error)?.message ?? err).slice(0, 120));
       return false;
     }

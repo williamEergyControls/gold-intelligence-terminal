@@ -19,7 +19,7 @@ import { ensureSecrets, persistHealthRows, secretStates, healthErrors } from './
 import { ensureSchema } from './schema';
 import { trainAndStore, predictAndStore, gradeOutcomes } from './ml/pipeline';
 import { authRegister, authLogin, authVerify, authLogout, requireAuth } from './auth';
-import { buildEnergyPage, buildAgriPage } from './pages';
+import { buildEnergyPage, buildAgriPage, crackBlock } from './pages';
 import { goldapiIoSeed } from './providers/goldapiio';
 import { runProbes, storeProbes, probeHistory, lastProbes, type ProbeResult } from './admin/probes';
 import { adminML, adminDB, adminKV, adminUsers, setUserRole, unlockUser, revokeSessions, pruneDB } from './admin/data';
@@ -33,9 +33,19 @@ import { mlStrip } from './ml/strip';
 import { crawlCycle, digestBatch, newsFeed, newsIdeas, listSources, addSource, updateSource, deleteSource, pruneNews } from './news/crawler';
 import { calendar, refreshFred } from './calendar';
 import { refreshDrought, readDrought } from './providers/drought';
-import { tick, dailyRollup, ledgerSummary, HS, type H } from './forecast/ledger';
+import { tick, ledgerSummary, ledgerStatus, HS, type H } from './forecast/ledger';
+import { evoStep, evoSummary } from './forecast/evo';
+import { maintenance, maintState } from './forecast/maint';
+import { listTables, queryRows, toCsv } from './data/explorer';
+import { CATS, readCatWeights } from './outlook/engine';
 import { buildOutlook, readOutlook } from './outlook/engine';
 import { refreshInsiders } from './outlook/sources';
+import { seoRoute } from './seo';
+import { buildTreasury } from './treasury';
+import { buildBtc } from './crypto';
+import { chartCatalog, chartData, listCharts, saveChart, deleteChart, sharedChart, RANGES } from './charts';
+import { buildRadar } from './news/radar';
+import { ytStep, listEpisodes } from './news/transcripts';
 
 const JH = { 'content-type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store' };
 const TFS: Tf[] = ['5M', '15M', '1H', '1D', '1W'];
@@ -44,6 +54,7 @@ const qMemo = new Map<string, { v: any; ts: number }>();
 let probeMemo: { ts: number; forced: boolean; rs: ProbeResult[] } | null = null;
 let volMemo: { ts: number; v: unknown } | null = null;
 const SERIES_IDS = new Set(Object.keys(SERIES));
+const PRO_PATHS = ['/api/outlook', '/api/forecast', '/api/loops', '/api/evo', '/api/data', '/api/charts', '/api/news/radar', '/api/news/episodes'];
 function ingestBudget(env: Env): number { const n = parseInt(env.INGEST_BUDGET ?? '10', 10); return isFinite(n) && n > 0 ? Math.min(n, 40) : 10; }
 
 function allow(key: string, max: number, windowMs: number): boolean {
@@ -93,7 +104,7 @@ export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(req.url);
     const path = url.pathname;
-    if (!path.startsWith('/api/')) return new Response('Not found', { status: 404 });
+    if (!path.startsWith('/api/')) return seoRoute(req, env, url) ?? new Response('Not found', { status: 404 });
     const ip = req.headers.get('CF-Connecting-IP') ?? 'local';
     if (!allow(ip, 240, 60000)) return json({ error: 'RATE_LIMITED' }, 429);
 
@@ -113,7 +124,9 @@ export default {
         if (!allow('login:' + ip, 20, 60000)) return json({ error: 'RATE_LIMITED' }, 429);
         const b = await readBody(req);
         const r = await authLogin(env, String(b.name || ''), String(b.password || ''));
-        return r.ok ? json({ ok: true, token: r.token, name: r.name, role: r.role }, 200) : json({ error: r.error }, 401);
+        if (!r.ok) return json({ error: r.error }, 401);
+        const me = await authVerify(env, r.token!);   // tier (pro expiry) so a Pro user never sees a locked page first
+        return json({ ok: true, token: r.token, name: r.name, role: r.role, tier: me.tier ?? null }, 200);
       }
       if (path === '/api/auth/logout' && req.method === 'POST') {
         const b = await readBody(req);
@@ -123,7 +136,7 @@ export default {
       if (path === '/api/auth/me') {
         const t = req.headers.get('x-session') || url.searchParams.get('token') || '';
         const r = await authVerify(env, t);
-        return json(r.valid ? { valid: true, id: r.id, name: r.name, role: r.role } : { valid: false }, 200);
+        return json(r.valid ? { valid: true, id: r.id, name: r.name, role: r.role, tier: r.tier, proUntil: r.proUntil ?? null } : { valid: false }, 200);
       }
       if (path === '/api/health') {
         // read-only: never triggers an upstream build from an unauthenticated route
@@ -135,6 +148,13 @@ export default {
       // ===================== AUTH REQUIRED =====================
       const auth = await requireAuth(req, env);
       if (!auth.valid) return json({ error: 'UNAUTHORIZED', hint: 'sign in first' }, 401);
+
+      // ===================== PRO GATE =====================
+      // Pro desks (outlook, ledger, loops, evolution, data explorer, chart builder, narrative radar,
+      // podcast digests). the page shows a locked card; the server is what actually enforces it.
+      if (PRO_PATHS.some(p => path === p || path.startsWith(p + '/')) && auth.tier === 'free') {
+        return json({ error: 'PRO_REQUIRED', tier: auth.tier, hint: 'Pro access is granted by the site admin' }, 403);
+      }
 
       if (path === '/api/bootstrap') {
         const tf = parseTf(url.searchParams.get('tf'));
@@ -176,6 +196,19 @@ export default {
       if (path === '/api/page/energy') {
         const r = await new AppCache(env).wrap('page:energy', 900, () => buildEnergyPage(env));
         return json({ ...r.v, stale: r.stale }, 200);
+      }
+      if (path === '/api/page/treasury') {
+        const r = await new AppCache(env).wrap('page:treasury', 10800, () => buildTreasury(env));   // FRED + Fiscal Data are daily: 3 h keeps reads ~80k rows/day
+        return json({ ...r.v, stale: r.stale }, 200);
+      }
+      if (path === '/api/energy/crack') {
+        // independent of the quote batch: the warehouse close keeps this alive when Yahoo is down
+        return json((await new AppCache(env).wrap('energy:crack', 900, async () => {
+          const q = (await new AppCache(env).read<any[]>('page:energy:q'))?.v ?? [];
+          const g = (s: string) => q.find((x: any) => x.symbol === s)?.price;
+          const cl = g('CL1'), rb = g('XB1'), ho = g('HO1');
+          return crackBlock(env, cl && rb && ho ? { cl, rb, ho } : null);
+        })).v, 200);
       }
       if (path === '/api/page/agri') {
         const r = await new AppCache(env).wrap('page:agri', 900, () => buildAgriPage(env));
@@ -257,6 +290,7 @@ export default {
         }));
         return json({ source: 'CoinGecko (public API) · stored in D1, refreshed hourly', retrievedAt: new Date(snaps.stable.ts).toISOString(), frequency: 'daily close + latest print', unit: 'USD', totalMcap: st.extras?.totalMcap ?? null, coins }, 200);
       }
+      if (path === '/api/markets/btc') return json((await new AppCache(env).wrap('btc:v1', 10800, () => buildBtc(env))).v, 200);
       if (path === '/api/ml/history') {
         const rs = await memo('ml:hist', 300000, async () => (await env.DB.prepare(
           `SELECT p.ts, p.p_up, p.direction, p.regime, o.realized_ret, o.correct FROM predictions p
@@ -329,13 +363,40 @@ export default {
       if (path === '/api/news/feed') {
         const topic = (url.searchParams.get('topic') || 'all').toLowerCase().replace(/[^a-z]/g, '').slice(0, 12);
         const limit = Math.min(40, Math.max(3, parseInt(url.searchParams.get('limit') || '12', 10) || 12));
-        const r = await memo('nf:' + topic + ':' + limit + ':' + (url.searchParams.get('fav') || ''), 30000, () => newsFeed(env, topic, limit, { favOnly: url.searchParams.get('fav') === '1' }));
+        const fav = url.searchParams.get('fav') === '1', ind = url.searchParams.get('ind') === '1';
+        const r = await memo('nf:' + topic + ':' + limit + ':' + fav + ind, 30000, () => newsFeed(env, topic, limit, { favOnly: fav, indOnly: ind }));
         return json(r, 200);
       }
       if (path === '/api/news/ideas') {
         const topic = (url.searchParams.get('topic') || 'all').toLowerCase().replace(/[^a-z]/g, '').slice(0, 12);
         const limit = Math.min(12, Math.max(1, parseInt(url.searchParams.get('limit') || '6', 10) || 6));
         return json(await memo('ni:' + topic + ':' + limit, 60000, () => newsIdeas(env, limit, topic)), 200);
+      }
+      /* ---- chart builder (Pro) ---- */
+      if (path === '/api/charts/series') return json(await memo('chcat', 300000, () => chartCatalog(env)), 200);
+      if (path === '/api/charts/data') {
+        if (!allow('chd:' + (auth.id ?? ip), 40, 600000)) return json({ error: 'RATE_LIMITED', hint: 'max 40 chart loads per 10 min' }, 429);
+        const ids = [...new Set((url.searchParams.get('ids') || '').toUpperCase().split(',').filter(x => SERIES_IDS.has(x)))].slice(0, 6);
+        if (!ids.length) return json({ error: 'PICK_A_SERIES' }, 400);
+        const r = url.searchParams.get('range') || '1y';
+        return json(await chartData(env, ids, RANGES[r] ?? 366), 200);
+      }
+      if (path === '/api/charts/shared') {
+        const c = await sharedChart(env, url.searchParams.get('s') || '');
+        return c ? json(c, 200) : json({ error: 'NOT_FOUND' }, 404);
+      }
+      if (path === '/api/charts' && req.method === 'GET') return json(await listCharts(env, auth.id ?? -1), 200);
+      if (path === '/api/charts' && req.method === 'POST') {
+        if (!allow('chs:' + (auth.id ?? ip), 30, 600000)) return json({ error: 'RATE_LIMITED' }, 429);
+        const r = await saveChart(env, auth.id ?? -1, await readBody(req));
+        return json(r, r.ok ? 200 : 400);
+      }
+      if (path === '/api/charts/delete' && req.method === 'POST') { const b = await readBody(req); return json(await deleteChart(env, auth.id ?? -1, Number(b.id)), 200); }
+      /* ---- narrative radar + podcast digests (Pro) ---- */
+      if (path === '/api/news/radar') return json((await new AppCache(env).wrap('news:radar', 3600, () => buildRadar(env))).v, 200);
+      if (path === '/api/news/episodes') {
+        const limit = Math.min(30, Math.max(1, parseInt(url.searchParams.get('limit') || '12', 10) || 12));
+        return json(await memo('eps:' + limit, 60000, () => listEpisodes(env, limit)), 200);
       }
       /* ---- outlook (3–12 month synthesis) + forecast ledger ---- */
       if (path === '/api/outlook') {
@@ -346,7 +407,50 @@ export default {
       if (path === '/api/forecast') {
         const h = (url.searchParams.get('h') || '1d') as H;
         if (!HS.includes(h)) return json({ error: 'BAD_HORIZON', allowed: HS }, 400);
-        return json(await memo('fc:' + h, 30000, () => ledgerSummary(env, h)), 200);
+        // shared D1 cache: computed at most once per window across all isolates and viewers
+        const ttl = h === '1m' ? 60 : h === '30m' ? 120 : 300;
+        return json((await new AppCache(env).wrap('fcsum:' + h, ttl, () => ledgerSummary(env, h))).v, 200);
+      }
+      /* ---- loops (status of every loop), evolution, data explorer ---- */
+      if (path === '/api/loops') {
+        return json((await new AppCache(env).wrap('loops:sum', 60, async () => {
+          const [led, mlRow, out, maint, cats] = await Promise.all([
+            ledgerStatus(env),
+            env.CACHE.get('ml:snap', 'json').catch(() => null) as Promise<any>,
+            env.DB.prepare('SELECT day, ts, econ, gold, stance FROM outlook_log ORDER BY day DESC LIMIT 1').first<any>().catch(() => null),
+            maintState(env), readCatWeights(env),
+          ]);
+          const [model, acc, fx] = await Promise.all([
+            env.DB.prepare('SELECT trained_at, metrics FROM ml_models WHERE active=1 ORDER BY id DESC LIMIT 1').first<{ trained_at: number; metrics: string }>().catch(() => null),
+            env.DB.prepare('SELECT COUNT(*) n, SUM(correct) c FROM prediction_outcomes').first<{ n: number; c: number }>().catch(() => null),
+            // row count comes from the maintenance state (counted once a day), not a COUNT(*) every 30 s
+            env.DB.prepare('SELECT (SELECT day FROM fx_daily ORDER BY day DESC LIMIT 1) last, (SELECT day FROM fx_daily ORDER BY day ASC LIMIT 1) first').first<{ last: string; first: string }>().then(r => r ? { ...r, n: (maint as any)?.fxN ?? null } : null).catch(() => null),
+          ]);
+          return {
+            ts: Date.now(), ledger: led,
+            ml: { snap: mlRow ? { ts: mlRow.ts, p: mlRow.p, direction: mlRow.direction, regime: mlRow.regime?.state ?? null, agents: (mlRow.agents ?? []).map((a: any) => ({ name: a.name, p: a.p })) } : null,
+              model: model ? { trainedAt: model.trained_at, metrics: JSON.parse(model.metrics) } : null, live: acc?.n ? { n: acc.n, rate: (acc.c ?? 0) / acc.n } : null },
+            outlook: out, maint, cats: { names: CATS, weights: cats }, features: fx,
+          };
+        })).v, 200);
+      }
+      if (path === '/api/evo') return json((await new AppCache(env).wrap('evo:sum', 60, () => evoSummary(env))).v, 200);
+      if (path === '/api/data/tables') return json(await memo('dtables', 60000, () => listTables(env)), 200);
+      if (path === '/api/data/rows') {
+        if (!allow('data:' + (auth.name ?? ip), 30, 60000)) return json({ error: 'RATE_LIMITED' }, 429);
+        let filters: { col: string; op: string; v: string }[] = [];
+        try { filters = JSON.parse(url.searchParams.get('f') || '[]'); } catch { filters = []; }
+        const csv = url.searchParams.get('format') === 'csv';
+        if (csv && !allow('csv:' + (auth.name ?? ip), 20, 600000)) return json({ error: 'RATE_LIMITED', hint: 'max 20 exports per 10 min' }, 429);
+        try {
+          const r = await queryRows(env, {
+            t: url.searchParams.get('t') || '', cols: (url.searchParams.get('cols') || '').split(',').filter(Boolean),
+            order: url.searchParams.get('order') || undefined, dir: url.searchParams.get('dir') || undefined,
+            limit: Number(url.searchParams.get('limit') || 100), offset: Number(url.searchParams.get('offset') || 0), filters,
+          }, csv ? 5000 : 500);
+          if (csv) return new Response(toCsv(r.cols, r.rows), { status: 200, headers: { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="${r.table}.csv"`, 'cache-control': 'no-store' } });
+          return json(r, 200);
+        } catch (e) { return json({ error: 'BAD_QUERY', detail: errMsg(e, 120) }, 400); }
       }
       if (path === '/api/calendar') {
         return json(await calendar(env), 200);
@@ -361,14 +465,20 @@ export default {
         if (!q || q.length < 2) return json({ results: [] }, 200);
         const results: any[] = [];
         const PAGES = [
+          { t: 'Loops', u: '/loops.html', k: 'loops ml model evolution neural network genome fitness ledger weights how forecasts are made' },
+          { t: 'Treasury desk', u: '/treasury.html', k: 'treasury yield curve 2s10s inversion bonds debt deficit interest tga real yield breakeven fed' },
+          { t: 'Chart builder', u: '/chart.html', k: 'chart builder custom compare correlation series plot index z-score save share' },
+          { t: 'Site map', u: '/sitemap.html', k: 'site map sitemap pages desks all' },
+          { t: 'Narrative radar', u: '/news.html#n-radar', k: 'radar narrative podcast independent mainstream youtube themes digest transcript' },
+          { t: 'Data explorer', u: '/data.html', k: 'data table columns features csv export database explorer fx_daily ticks forecasts' },
           { t: 'Outlook', u: '/outlook.html', k: 'outlook economy cycle score gold buy hold sell forecast odds cot insider shipping water long term ledger accuracy' },
           { t: 'Gold desk', u: '/gold.html', k: 'gold xau price chart why miners heatmap' },
-          { t: 'Energy desk', u: '/energy.html', k: 'energy oil wti brent natural gas eia' },
+          { t: 'Energy desk', u: '/energy.html', k: 'energy oil wti brent natural gas eia crack spread refinery pipeline lng map' },
           { t: 'Agri desk', u: '/agri.html', k: 'agri corn wheat soybean cattle water usda' },
           { t: 'FX desk', u: '/fx.html', k: 'fx forex dollar dxy euro currency' },
           { t: 'Water desk', u: '/water.html', k: 'water drought river usgs nq' },
           { t: 'Land desk', u: '/land.html', k: 'land farm acre rent usda' },
-          { t: 'Stablecoin desk', u: '/stable.html', k: 'stablecoin tether usdt crypto peg' },
+          { t: 'Crypto desk', u: '/stable.html', k: 'stablecoin tether usdt crypto peg bitcoin btc correlation' },
           { t: 'Shipping desk', u: '/shipping.html', k: 'shipping freight port baltic suez' },
           { t: 'AI analyst', u: '/ai.html', k: 'ai analyst ml question deep' },
           { t: 'Volatility desk', u: '/vol.html', k: 'vol volatility vix move garch treasury yields fx stablecoin depeg insurance stocks stress' },
@@ -407,7 +517,7 @@ export default {
         if (!allow('srcadd:' + actorId, 20, 600000)) return json({ error: 'RATE_LIMITED' }, 429);
         const b = await readBody(req);
         try {
-          const r = await addSource(env, { url: String(b.url || ''), name: b.name, topics: b.topics, favorite: b.favorite !== false }, auth.name ?? 'admin');
+          const r = await addSource(env, { url: String(b.url || ''), name: b.name, topics: b.topics, favorite: b.favorite !== false, cls: b.cls }, auth.name ?? 'admin');
           // first crawl of the new source right away so the admin sees items (or the error)
           const c = await crawlCycle(env, { ids: [r.id] }).catch(e => ({ fetched: 0, added: 0, errors: [errMsg(e)] }));
           return json({ ok: true, source: r, crawl: c }, 200);
@@ -415,7 +525,7 @@ export default {
       }
       if (path === '/api/admin/news/sources/update' && req.method === 'POST') {
         const b = await readBody(req);
-        await updateSource(env, Number(b.id), { enabled: b.enabled, favorite: b.favorite, topics: b.topics });
+        await updateSource(env, Number(b.id), { enabled: b.enabled, favorite: b.favorite, topics: b.topics, cls: b.cls });
         return json({ ok: true }, 200);
       }
       if (path === '/api/admin/news/sources/delete' && req.method === 'POST') {
@@ -423,12 +533,39 @@ export default {
         await deleteSource(env, Number(b.id));
         return json({ ok: true }, 200);
       }
+      if (path === '/api/admin/news/ytstep' && req.method === 'POST') {
+        if (!allow('yt:' + actorId, 20, 600000)) return json({ error: 'RATE_LIMITED' }, 429);
+        return json(await ytStep(env), 200);
+      }
       if (path === '/api/admin/news/crawl' && req.method === 'POST') {
         if (!allow('crawl:' + actorId, 6, 600000)) return json({ error: 'RATE_LIMITED', hint: 'max 6 manual crawls per 10 min' }, 429);
         const b = await readBody(req);
         const c = await crawlCycle(env, { ids: Array.isArray(b.ids) ? b.ids.map(Number) : undefined, max: 10 });
         const d = b.digest === false ? null : await digestBatch(env);
         return json({ ok: true, crawl: c, digest: d }, 200);
+      }
+      if (path === '/api/admin/outlook/weights') {
+        if (req.method === 'POST') {
+          const b = await readBody(req); const w: Record<string, number> = {};
+          for (const c of CATS) { const v = Number(b?.[c]); w[c] = isFinite(v) ? Math.max(0, Math.min(2, Math.round(v * 20) / 20)) : 1; }
+          await new AppCache(env).write('outlook:weights', w, 3650 * 86400);
+          const o = await buildOutlook(env);
+          return json({ ok: true, weights: w, econ: o.econ.score, gold: o.gold.score, stance: o.gold.stance }, 200);
+        }
+        return json({ names: CATS, weights: await readCatWeights(env) }, 200);
+      }
+      if (path === '/api/admin/maint/run' && req.method === 'POST') {
+        if (!allow('maint:' + actorId, 10, 600000)) return json({ error: 'RATE_LIMITED' }, 429);
+        const b = await readBody(req);
+        return json(await maintenance(env, typeof b.job === 'string' ? b.job : undefined), 200);
+      }
+      if (path === '/api/admin/storage/deep' && req.method === 'POST') {
+        // one unit per request: 10 years of daily history for the feature table (Free CPU budget)
+        if (!allow('deep:' + actorId, 12, 600000)) return json({ error: 'RATE_LIMITED' }, 429);
+        const b = await readBody(req);
+        const OK = ['yahoo:GC=F', 'yahoo:DX-Y.NYB', 'yahoo:^VIX', 'yahoo:CL=F', 'fred:DFII10', 'fred:T10Y3M', 'fred:BAA10Y', 'fred:USEPUINDXD'];
+        if (!OK.includes(String(b.key))) return json({ error: 'BAD_KEY', allowed: OK }, 400);
+        return json(await runIngest(env, 1, [String(b.key)], true), 200);
       }
       if (path === '/api/admin/outlook/build' && req.method === 'POST') {
         if (!allow('outlook:' + actorId, 6, 600000)) return json({ error: 'RATE_LIMITED' }, 429);
@@ -542,7 +679,9 @@ export default {
       if (path === '/api/admin/users') return json({ ...(await adminUsers(env)), me: { id: auth.id, name: auth.name } }, 200);
       if (path === '/api/admin/users/role' && req.method === 'POST') {
         const b = await readBody(req);
-        const r = await setUserRole(env, actorId, Number(b.id), String(b.role || ''));
+        // proUntil: 'YYYY-MM-DD' (end of that day UTC) or empty = no end date
+        const pu = typeof b.proUntil === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(b.proUntil) ? Date.parse(b.proUntil + 'T23:59:59Z') : null;
+        const r = await setUserRole(env, actorId, Number(b.id), String(b.role || ''), pu);
         return json(r, r.ok ? 200 : 400);
       }
       if (path === '/api/admin/users/unlock' && req.method === 'POST') {
@@ -603,7 +742,16 @@ export default {
       catch (e) { console.error('TICK_FAIL', errMsg(e)); }
       const mm = new Date(controller.scheduledTime).getUTCMinutes();
       if (mm % 10 === 5) { await ingestCycle(env, controller.scheduledTime); return; }
-      if (mm % 10 === 0) await warm(env);
+      if (mm % 10 === 0) { await warm(env); return; }
+      // :x7 = maintenance slot (one daily job at most), every other minute = one evolution step
+      // idle maintenance slots (most of the day) run one podcast/video digest step instead
+      if (mm % 10 === 7) {
+        let idle = false;
+        try { const m = await maintenance(env); if (m.job !== 'idle') console.log('MAINT', m.job, m.out); else idle = true; } catch (e) { console.error('MAINT_FAIL', errMsg(e)); }
+        if (idle) { try { const y = await ytStep(env); if (y.step !== 'idle' && y.step !== 'off') console.log('YT', y.step, y.vid ?? '', y.note ?? ''); } catch (e) { console.error('YT_FAIL', errMsg(e)); } }
+        return;
+      }
+      try { await evoStep(env, controller.scheduledTime); } catch (e) { console.error('EVO_FAIL', errMsg(e)); }
     })());
   },
 };
@@ -699,8 +847,6 @@ async function hourly(env: Env): Promise<void> {
 
   // 0) forecast ledger roll-up just after midnight UTC, SEC Form 4 pull at 12 UTC (both cheap)
   const hr = new Date().getUTCHours();
-  if (hr === 0) { try { console.log('FC_ROLLUP', JSON.stringify((await dailyRollup(env)).rows)); } catch (e) { console.error('FC_ROLLUP_FAIL', errMsg(e)); } }
-  if (hr === 12) { try { console.log('INSIDERS', JSON.stringify(await refreshInsiders(env))); } catch (e) { console.error('INSIDERS_FAIL', errMsg(e)); } }
 
   // 1) live API probes (free endpoints only — quota APIs are admin-forced)
   try { await storeProbes(env, await runProbes(env, false)); }
